@@ -94,7 +94,7 @@ struct FamilySetupView: View {
             
         case .join:
             // オフラインモードでは既存の家族をコードで検索
-            if let family = families.first(where: { $0.inviteCode == inviteCode }) {
+            if families.first(where: { $0.inviteCode == inviteCode }) != nil {
                 // 既にこの家族がローカルにある
                 errorMessage = nil
                 router.popToRoot()
