@@ -35,6 +35,7 @@
 		026 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126 /* BarcodeScannerView.swift */; };
 		027 /* ProductSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 127 /* ProductSearchService.swift */; };
 		028 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128 /* APIConfig.swift */; };
+		029 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 129 /* Secrets.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -67,6 +68,7 @@
 		126 /* BarcodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
 		127 /* ProductSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchService.swift; sourceTree = "<group>"; };
 		128 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
+		129 /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Secrets.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -98,6 +100,7 @@
 				313 /* Services */,
 				314 /* Config */,
 				119 /* Assets.xcassets */,
+				129 /* Secrets.plist */,
 			);
 			path = Stockpile;
 			sourceTree = "<group>";
@@ -287,6 +290,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				019 /* Assets.xcassets in Resources */,
+				029 /* Secrets.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

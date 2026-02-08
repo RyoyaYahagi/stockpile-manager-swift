@@ -69,19 +69,19 @@ actor ProductSearchService {
             throw ProductSearchError.invalidJANCode
         }
         
-        // 設定されているAPIから検索
-        guard APIConfig.isProductSearchAvailable else {
-            throw ProductSearchError.noAPIConfigured
+        // 1. Open Food Facts API（無料・登録不要）
+        if let product = try? await searchOpenFoodFacts(janCode: cleanedCode) {
+            return product
         }
         
-        // 1. 楽天APIで検索
+        // 2. 楽天APIにフォールバック
         if APIConfig.isRakutenConfigured {
             if let product = try? await searchRakuten(janCode: cleanedCode) {
                 return product
             }
         }
         
-        // 2. Yahoo APIにフォールバック
+        // 3. Yahoo APIにフォールバック
         if APIConfig.isYahooConfigured {
             if let product = try? await searchYahoo(janCode: cleanedCode) {
                 return product
@@ -100,48 +100,124 @@ actor ProductSearchService {
         return isValidLength && isNumeric
     }
     
-    // MARK: - 楽天API
+    // MARK: - Open Food Facts API
     
-    /// 楽天 商品価格ナビ製品検索API
-    /// https://webservice.rakuten.co.jp/documentation/ichiba-product-search
-    private func searchRakuten(janCode: String) async throws -> ProductInfo? {
-        let appId = APIConfig.rakutenAppId
+    /// Open Food Facts API（無料・登録不要）
+    /// https://world.openfoodfacts.org/data
+    private func searchOpenFoodFacts(janCode: String) async throws -> ProductInfo? {
+        let url = URL(string: "https://world.openfoodfacts.org/api/v0/product/\(janCode).json")!
         
-        // URL構築
-        var components = URLComponents(string: "https://app.rakuten.co.jp/services/api/Product/Search/20170426")!
-        components.queryItems = [
-            URLQueryItem(name: "format", value: "json"),
-            URLQueryItem(name: "productCode", value: janCode),
-            URLQueryItem(name: "applicationId", value: appId)
-        ]
-        
-        guard let url = components.url else {
-            return nil
-        }
+        print("[ProductSearch] Open Food Facts: \(url.absoluteString)")
         
         let (data, response) = try await session.data(from: url)
         
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
+            print("[ProductSearch] Open Food Facts: HTTP error")
+            return nil
+        }
+        
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let status = json["status"] as? Int, status == 1,
+              let product = json["product"] as? [String: Any] else {
+            print("[ProductSearch] Open Food Facts: Product not found")
+            return nil
+        }
+        
+        // 商品名を取得（日本語優先）
+        let productName = (product["product_name_ja"] as? String)
+            ?? (product["product_name"] as? String)
+            ?? (product["generic_name"] as? String)
+            ?? "不明な商品"
+        
+        let brands = product["brands"] as? String
+        let categories = product["categories"] as? String
+        let imageURLString = product["image_url"] as? String
+        let imageURL = imageURLString.flatMap { URL(string: $0) }
+        
+        // 商品名にブランドを追加
+        let fullName = brands != nil ? "\(brands!) \(productName)" : productName
+        
+        print("[ProductSearch] Open Food Facts: Found \(fullName)")
+        
+        return ProductInfo(
+            name: fullName,
+            description: nil,
+            category: categories,
+            imageURL: imageURL,
+            janCode: janCode,
+            source: .rakuten  // 後でSourceにopenFoodFactsを追加可能
+        )
+    }
+    
+    // MARK: - 楽天API
+    
+    /// 楽天市場商品検索API
+    /// https://webservice.rakuten.co.jp/documentation/ichiba-item-search
+    private func searchRakuten(janCode: String) async throws -> ProductInfo? {
+        let appId = APIConfig.rakutenAppId
+        let accessKey = APIConfig.rakutenAccessKey
+        
+        // URL構築（新しい楽天OpenAPI エンドポイント）
+        var components = URLComponents(string: "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601")!
+        components.queryItems = [
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "keyword", value: janCode),
+            URLQueryItem(name: "applicationId", value: appId),
+            URLQueryItem(name: "accessKey", value: accessKey),
+            URLQueryItem(name: "hits", value: "1")
+        ]
+        
+        guard let url = components.url else {
+            print("[ProductSearch] Failed to create URL")
+            return nil
+        }
+        
+        print("[ProductSearch] Requesting: \(url.absoluteString)")
+        
+        let (data, response) = try await session.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("[ProductSearch] Invalid response")
+            return nil
+        }
+        
+        print("[ProductSearch] HTTP Status: \(httpResponse.statusCode)")
+        
+        guard httpResponse.statusCode == 200 else {
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("[ProductSearch] Error response: \(responseString)")
+            }
             return nil
         }
         
         // JSONパース
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let products = json["Products"] as? [[String: Any]],
-              let firstProduct = products.first,
-              let productData = firstProduct["Product"] as? [String: Any],
-              let productName = productData["productName"] as? String else {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            print("[ProductSearch] Failed to parse JSON")
             return nil
         }
         
-        let description = productData["catchcopy"] as? String
-        let genreName = productData["genreName"] as? String
-        let imageURLString = (productData["mediumImageUrl"] as? String) ?? (productData["smallImageUrl"] as? String)
+        guard let items = json["Items"] as? [[String: Any]],
+              let firstItem = items.first,
+              let itemData = firstItem["Item"] as? [String: Any],
+              let itemName = itemData["itemName"] as? String else {
+            print("[ProductSearch] No items found in response")
+            if let responseString = String(data: data, encoding: .utf8)?.prefix(500) {
+                print("[ProductSearch] Response: \(responseString)")
+            }
+            return nil
+        }
+        
+        let description = itemData["itemCaption"] as? String
+        let genreName = itemData["genreName"] as? String
+        let imageURLString = (itemData["mediumImageUrls"] as? [[String: String]])?.first?["imageUrl"]
+            ?? (itemData["smallImageUrls"] as? [[String: String]])?.first?["imageUrl"]
         let imageURL = imageURLString.flatMap { URL(string: $0) }
         
+        print("[ProductSearch] Found: \(itemName)")
+        
         return ProductInfo(
-            name: productName,
+            name: itemName,
             description: description,
             category: genreName,
             imageURL: imageURL,

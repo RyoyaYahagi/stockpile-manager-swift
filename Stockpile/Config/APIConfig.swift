@@ -26,6 +26,19 @@ struct APIConfig {
         return ""
     }
     
+    /// 楽天アクセスキー
+    static var rakutenAccessKey: String {
+        if let value = ProcessInfo.processInfo.environment["RAKUTEN_ACCESS_KEY"], !value.isEmpty {
+            return value
+        }
+        
+        if let value = secretsValue(for: "RakutenAccessKey"), !value.isEmpty {
+            return value
+        }
+        
+        return ""
+    }
+    
     // MARK: - Yahoo API
     
     /// Yahoo Client ID
@@ -61,7 +74,7 @@ struct APIConfig {
     
     /// 楽天APIが利用可能かどうか
     static var isRakutenConfigured: Bool {
-        !rakutenAppId.isEmpty
+        !rakutenAppId.isEmpty && !rakutenAccessKey.isEmpty
     }
     
     /// Yahoo APIが利用可能かどうか
