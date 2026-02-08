@@ -26,6 +26,15 @@
 		017 /* InviteCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 117; };
 		018 /* ImportJSONView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118; };
 		019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 119; };
+		020 /* StorageLocationPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120; };
+		021 /* QRCodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121; };
+		022 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 122; };
+		023 /* NotificationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123; };
+		024 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124; };
+		025 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 125; };
+		026 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126; };
+		027 /* ProductSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 127; };
+		028 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +58,15 @@
 		117 /* InviteCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCodeView.swift; sourceTree = "<group>"; };
 		118 /* ImportJSONView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportJSONView.swift; sourceTree = "<group>"; };
 		119 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		120 /* StorageLocationPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLocationPicker.swift; sourceTree = "<group>"; };
+		121 /* QRCodeGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeGenerator.swift; sourceTree = "<group>"; };
+		122 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
+		123 /* NotificationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettings.swift; sourceTree = "<group>"; };
+		124 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		125 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
+		126 /* BarcodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
+		127 /* ProductSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchService.swift; sourceTree = "<group>"; };
+		128 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,6 +95,8 @@
 				304 /* Models */,
 				305 /* Views */,
 				306 /* Utilities */,
+				313 /* Services */,
+				314 /* Config */,
 				119 /* Assets.xcassets */,
 			);
 			path = Stockpile;
@@ -105,6 +125,7 @@
 				104 /* User.swift */,
 				105 /* Bag.swift */,
 				106 /* Item.swift */,
+				123 /* NotificationSettings.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -127,8 +148,26 @@
 			isa = PBXGroup;
 			children = (
 				107 /* Router.swift */,
+				121 /* QRCodeGenerator.swift */,
 			);
 			path = Utilities;
+			sourceTree = "<group>";
+		};
+		313 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				124 /* NotificationManager.swift */,
+				127 /* ProductSearchService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		314 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				128 /* APIConfig.swift */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 		307 /* Dashboard */ = {
@@ -162,6 +201,7 @@
 			children = (
 				115 /* SettingsView.swift */,
 				118 /* ImportJSONView.swift */,
+				125 /* NotificationSettingsView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -180,6 +220,9 @@
 				112 /* ExpiryBadge.swift */,
 				113 /* OCRCameraView.swift */,
 				117 /* InviteCodeView.swift */,
+				120 /* StorageLocationPicker.swift */,
+				122 /* QRScannerView.swift */,
+				126 /* BarcodeScannerView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -272,6 +315,15 @@
 				016 /* FamilySetupView.swift in Sources */,
 				017 /* InviteCodeView.swift in Sources */,
 				018 /* ImportJSONView.swift in Sources */,
+				020 /* StorageLocationPicker.swift in Sources */,
+				021 /* QRCodeGenerator.swift in Sources */,
+				022 /* QRScannerView.swift in Sources */,
+				023 /* NotificationSettings.swift in Sources */,
+				024 /* NotificationManager.swift in Sources */,
+				025 /* NotificationSettingsView.swift in Sources */,
+				026 /* BarcodeScannerView.swift in Sources */,
+				027 /* ProductSearchService.swift in Sources */,
+				028 /* APIConfig.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

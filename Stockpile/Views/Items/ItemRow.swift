@@ -10,22 +10,29 @@ struct ItemRow: View {
             ExpiryBadge(status: item.expiryStatus)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.name)
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-                
-                HStack(spacing: 8) {
-                    if let bag = item.bag {
-                        Label(bag.name, systemImage: "bag")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                HStack(spacing: 4) {
+                    Text(item.name)
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
                     
-                    if item.quantity > 1 {
-                        Text("×\(item.quantity)")
+                    Text("×\(item.quantity)")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                
+                HStack(spacing: 4) {
+                    Image(systemName: "folder")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let bag = item.bag {
+                        Text(bag.name)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    } else {
+                        Text("未分類")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
                     }
                 }
             }

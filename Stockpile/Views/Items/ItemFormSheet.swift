@@ -21,6 +21,7 @@ struct ItemFormSheet: View {
     let mode: Mode
     
     @Query private var bags: [Bag]
+    @Query private var notificationSettingsArray: [NotificationSettings]
     
     @State private var name: String = ""
     @State private var quantity: Int = 1
@@ -29,8 +30,9 @@ struct ItemFormSheet: View {
     @State private var selectedBagId: UUID?
     @State private var locationNote: String = ""
     @State private var showOCRCamera = false
+    @State private var showBarcodeScanner = false
     
-    init(mode: Mode) {
+    init(mode: Mode, preselectedBagId: UUID? = nil) {
         self.mode = mode
         
         // 編集モードの場合、初期値を設定
@@ -41,6 +43,9 @@ struct ItemFormSheet: View {
             _hasExpiry = State(initialValue: item.expiryDate != nil)
             _selectedBagId = State(initialValue: item.bag?.id)
             _locationNote = State(initialValue: item.locationNote ?? "")
+        } else {
+            // 追加モードの場合、プリセット収納場所を設定
+            _selectedBagId = State(initialValue: preselectedBagId)
         }
     }
     
@@ -55,7 +60,54 @@ struct ItemFormSheet: View {
                 Section {
                     TextField("品名", text: $name)
                     
-                    Stepper("数量: \(quantity)", value: $quantity, in: 1...999)
+                    // バーコードスキャンボタン（追加モードのみ）
+                    if case .add = mode {
+                        Button {
+                            showBarcodeScanner = true
+                        } label: {
+                            Label("バーコードで登録", systemImage: "barcode.viewfinder")
+                        }
+                    }
+                    
+                    HStack {
+                        Text("数量")
+                        Spacer()
+                        
+                        // -ボタン
+                        Button {
+                            if quantity > 1 { quantity -= 1 }
+                        } label: {
+                            Image(systemName: "minus")
+                                .frame(width: 28, height: 28)
+                                .background(Color(.systemGray5))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        
+                        // 数量入力フィールド
+                        TextField("", value: $quantity, format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.center)
+                            .frame(width: 50)
+                            .padding(.vertical, 4)
+                            .background(Color(.systemGray6))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .onChange(of: quantity) { oldValue, newValue in
+                                if newValue < 1 { quantity = 1 }
+                                if newValue > 9999 { quantity = 9999 }
+                            }
+                        
+                        // +ボタン
+                        Button {
+                            if quantity < 9999 { quantity += 1 }
+                        } label: {
+                            Image(systemName: "plus")
+                                .frame(width: 28, height: 28)
+                                .background(Color(.systemGray5))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 } header: {
                     Text("基本情報")
                 }
@@ -120,6 +172,12 @@ struct ItemFormSheet: View {
                     }
                 }
             }
+            .sheet(isPresented: $showBarcodeScanner) {
+                BarcodeScannerView { product in
+                    // スキャン結果を品名に反映
+                    name = product.name
+                }
+            }
         }
     }
     
@@ -128,6 +186,13 @@ struct ItemFormSheet: View {
         let trimmedNote = locationNote.trimmingCharacters(in: .whitespacesAndNewlines)
         
         let selectedBag = bags.first { $0.id == selectedBagId }
+        
+        // 通知設定を取得または作成
+        let notificationSettings = notificationSettingsArray.first ?? {
+            let settings = NotificationSettings()
+            modelContext.insert(settings)
+            return settings
+        }()
         
         switch mode {
         case .add:
@@ -140,12 +205,27 @@ struct ItemFormSheet: View {
             newItem.bag = selectedBag
             modelContext.insert(newItem)
             
+            // 通知をスケジュール
+            Task {
+                await NotificationManager.shared.scheduleNotifications(for: newItem, settings: notificationSettings)
+            }
+            
         case .edit(let item):
+            // 既存の通知をキャンセル
+            Task {
+                await NotificationManager.shared.cancelNotifications(for: item)
+            }
+            
             item.name = trimmedName
             item.quantity = quantity
             item.expiryDate = hasExpiry ? expiryDate : nil
             item.locationNote = trimmedNote.isEmpty ? nil : trimmedNote
             item.bag = selectedBag
+            
+            // 新しい通知をスケジュール
+            Task {
+                await NotificationManager.shared.scheduleNotifications(for: item, settings: notificationSettings)
+            }
         }
         
         dismiss()

@@ -17,6 +17,7 @@ struct SettingsView: View {
             // 家族セクション
             Section {
                 if let family = currentFamily {
+                    // 家族名を表示（CloudKitなしのシンプル版）
                     HStack {
                         Label("家族名", systemImage: "person.3")
                         Spacer()
@@ -24,10 +25,12 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     
-                    Button {
-                        router.present(.inviteCode(family.inviteCode))
-                    } label: {
-                        Label("招待コード", systemImage: "qrcode")
+                    // メンバー数
+                    HStack {
+                        Label("メンバー", systemImage: "person.2")
+                        Spacer()
+                        Text("\(family.members.count)人")
+                            .foregroundStyle(.secondary)
                     }
                 } else {
                     Button {
@@ -47,6 +50,15 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("管理")
+            }
+            
+            // 通知セクション
+            Section {
+                NavigationLink(value: Destination.notificationSettings) {
+                    Label("通知", systemImage: "bell")
+                }
+            } header: {
+                Text("通知")
             }
             
             // データセクション

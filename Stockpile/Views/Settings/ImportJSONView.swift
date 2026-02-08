@@ -85,7 +85,9 @@ struct ImportJSONView: View {
           {
             "name": "缶詰",
             "quantity": 3,
-            "expiryDate": "2025-12-31"
+            "expiryDate": "2025-12-31",
+            "bagName": "非常袋",
+            "locationNote": "棚の上"
           }
         ]
         """
@@ -147,6 +149,7 @@ struct ImportJSONView: View {
             let name: String
             let quantity: Int?
             let expiryDate: String?
+            let bagName: String?
             let locationNote: String?
         }
         
@@ -156,14 +159,37 @@ struct ImportJSONView: View {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         
+        // 既存のBagを取得
+        let bagDescriptor = FetchDescriptor<Bag>()
+        let existingBags = (try? modelContext.fetch(bagDescriptor)) ?? []
+        var bagCache: [String: Bag] = [:]
+        for bag in existingBags {
+            bagCache[bag.name] = bag
+        }
+        
         return importItems.map { importItem in
             let expiryDate = importItem.expiryDate.flatMap { dateFormatter.date(from: $0) }
-            return Item(
+            let item = Item(
                 name: importItem.name,
                 quantity: importItem.quantity ?? 1,
                 expiryDate: expiryDate,
                 locationNote: importItem.locationNote
             )
+            
+            // Bagの関連付け
+            if let bagName = importItem.bagName, !bagName.isEmpty {
+                if let existingBag = bagCache[bagName] {
+                    item.bag = existingBag
+                } else {
+                    // 新規Bagを作成
+                    let newBag = Bag(name: bagName)
+                    modelContext.insert(newBag)
+                    bagCache[bagName] = newBag
+                    item.bag = newBag
+                }
+            }
+            
+            return item
         }
     }
 }

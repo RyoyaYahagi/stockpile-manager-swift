@@ -69,9 +69,18 @@ final class Item {
             return .noExpiry
         }
         
-        let now = Date()
         let calendar = Calendar.current
-        let days = calendar.dateComponents([.day], from: now, to: expiryDate).day ?? 0
+        
+        // 今日と期限日の日付成分のみで比較（時刻を無視）
+        let todayComponents = calendar.dateComponents([.year, .month, .day], from: Date())
+        let expiryComponents = calendar.dateComponents([.year, .month, .day], from: expiryDate)
+        
+        guard let today = calendar.date(from: todayComponents),
+              let normalizedExpiry = calendar.date(from: expiryComponents) else {
+            return .noExpiry
+        }
+        
+        let days = calendar.dateComponents([.day], from: today, to: normalizedExpiry).day ?? 0
         
         if days < 0 {
             return .expired
@@ -87,8 +96,19 @@ final class Item {
     /// 期限までの日数を取得
     var daysUntilExpiry: Int? {
         guard let expiryDate = expiryDate else { return nil }
+        
         let calendar = Calendar.current
-        return calendar.dateComponents([.day], from: Date(), to: expiryDate).day
+        
+        // 今日と期限日の日付成分のみで計算（時刻を無視）
+        let todayComponents = calendar.dateComponents([.year, .month, .day], from: Date())
+        let expiryComponents = calendar.dateComponents([.year, .month, .day], from: expiryDate)
+        
+        guard let today = calendar.date(from: todayComponents),
+              let normalizedExpiry = calendar.date(from: expiryComponents) else {
+            return nil
+        }
+        
+        return calendar.dateComponents([.day], from: today, to: normalizedExpiry).day
     }
     
     /// 期限の表示用文字列

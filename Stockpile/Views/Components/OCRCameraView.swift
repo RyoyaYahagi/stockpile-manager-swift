@@ -1,5 +1,5 @@
 import SwiftUI
-import AVFoundation
+@preconcurrency import AVFoundation
 import Vision
 
 /// OCRカメラビュー（賞味期限読み取り）
@@ -7,56 +7,84 @@ struct OCRCameraView: View {
     @Environment(\.dismiss) private var dismiss
     let onDateDetected: (Date?) -> Void
     
-    @State private var detectedText = ""
-    @State private var detectedDate: Date?
-    @State private var isProcessing = false
+    @State private var viewModel = OCRCameraViewModel()
+    
+    private var isCameraAvailable: Bool {
+        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil
+    }
     
     var body: some View {
         NavigationStack {
             ZStack {
-                CameraPreview(onImageCaptured: processImage)
-                
-                VStack {
-                    Spacer()
-                    
-                    // 検出結果表示
-                    VStack(spacing: 12) {
-                        if isProcessing {
-                            ProgressView("読み取り中...")
-                                .padding()
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                        } else if let date = detectedDate {
-                            VStack(spacing: 8) {
-                                Text("検出された日付")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(date, style: .date)
-                                    .font(.title2.bold())
-                            }
-                            .padding()
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                            
-                            Button {
-                                onDateDetected(date)
-                                dismiss()
-                            } label: {
-                                Text("この日付を使用")
-                                    .font(.headline)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(.blue, in: RoundedRectangle(cornerRadius: 12))
-                                    .foregroundStyle(.white)
-                            }
-                            .padding(.horizontal)
-                        } else if !detectedText.isEmpty {
-                            Text("日付が検出できませんでした")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .padding()
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                        }
+                if isCameraAvailable {
+                    CameraView(onImageCaptured: { image in
+                        viewModel.processImage(image)
+                    })
+                    .ignoresSafeArea()
+                } else {
+                    // カメラ利用不可（シミュレーター等）
+                    VStack(spacing: 16) {
+                        Image(systemName: "camera.slash")
+                            .font(.system(size: 60))
+                            .foregroundStyle(.secondary)
+                        Text("カメラを利用できません")
+                            .font(.headline)
+                        Text("実機でお試しください")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
-                    .padding(.bottom, 40)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                }
+                
+                if isCameraAvailable {
+                    VStack {
+                        Spacer()
+                        
+                        // 検出結果表示
+                        VStack(spacing: 12) {
+                            if viewModel.isProcessing {
+                                ProgressView("読み取り中...")
+                                    .padding()
+                                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                            } else if let date = viewModel.detectedDate {
+                                VStack(spacing: 8) {
+                                    Text("検出された日付")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(date, style: .date)
+                                        .font(.title2.bold())
+                                }
+                                .padding()
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                
+                                Button {
+                                    onDateDetected(date)
+                                    dismiss()
+                                } label: {
+                                    Text("この日付を使用")
+                                        .font(.headline)
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
+                                        .background(.blue, in: RoundedRectangle(cornerRadius: 12))
+                                        .foregroundStyle(.white)
+                                }
+                                .padding(.horizontal)
+                            } else if !viewModel.detectedText.isEmpty {
+                                VStack(spacing: 8) {
+                                    Text("日付が検出できませんでした")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    Text("もう一度撮影してください")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .padding()
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                            }
+                        }
+                        .padding(.bottom, 20)
+                    }
                 }
             }
             .navigationTitle("賞味期限を読み取り")
@@ -70,108 +98,315 @@ struct OCRCameraView: View {
             }
         }
     }
+}
+
+// MARK: - ViewModel
+
+@Observable
+@MainActor
+final class OCRCameraViewModel {
+    var detectedText = ""
+    var detectedDate: Date?
+    var isProcessing = false
     
-    private func processImage(_ image: UIImage) {
+    func processImage(_ image: UIImage) {
         isProcessing = true
+        detectedText = ""
+        detectedDate = nil
         
         guard let cgImage = image.cgImage else {
             isProcessing = false
             return
         }
         
-        let request = VNRecognizeTextRequest { request, error in
-            DispatchQueue.main.async {
-                isProcessing = false
-                
-                guard let observations = request.results as? [VNRecognizedTextObservation] else {
-                    return
-                }
-                
-                let text = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
-                detectedText = text
-                detectedDate = extractDate(from: text)
+        // バックグラウンドスレッドでOCR処理
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.recognitionLanguages = ["ja-JP", "en-US"]
+            
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            
+            var resultText = ""
+            do {
+                try handler.perform([request])
+                let observations = request.results ?? []
+                resultText = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+            } catch {
+                resultText = ""
             }
-        }
-        
-        request.recognitionLevel = .accurate
-        request.recognitionLanguages = ["ja-JP", "en-US"]
-        
-        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            try? handler.perform([request])
+            
+            let date = Self.extractDate(from: resultText)
+            
+            // メインスレッドでUI更新
+            DispatchQueue.main.async {
+                self?.isProcessing = false
+                self?.detectedText = resultText
+                self?.detectedDate = date
+            }
         }
     }
     
     /// テキストから日付を抽出
-    private func extractDate(from text: String) -> Date? {
-        let patterns = [
+    nonisolated static func extractDate(from text: String) -> Date? {
+        // テキストを正規化
+        let normalizedText = normalizeText(text)
+        
+        // 年月日パターンで候補を探す
+        var candidates: [(year: Int, month: Int, day: Int, position: Int)] = []
+        candidates.append(contentsOf: findFullDates(in: normalizedText))
+        
+        // 年月のみパターン（日なし）で候補を探す（月末として扱う）
+        candidates.append(contentsOf: findYearMonthDates(in: normalizedText))
+        
+        // 候補がない場合
+        guard !candidates.isEmpty else { return nil }
+        
+        // 「賞味期限」の位置を探す
+        let expiryKeywords = ["賞味期限", "消費期限", "期限", "EXP", "BB"]
+        var keywordPosition: Int = Int.max
+        
+        for keyword in expiryKeywords {
+            if let range = normalizedText.range(of: keyword, options: .caseInsensitive) {
+                let pos = normalizedText.distance(from: normalizedText.startIndex, to: range.lowerBound)
+                keywordPosition = min(keywordPosition, pos)
+            }
+        }
+        
+        // キーワードの後にある最も近い日付を選択
+        let bestCandidate: (year: Int, month: Int, day: Int, position: Int)
+        
+        if keywordPosition != Int.max {
+            let candidatesAfterKeyword = candidates.filter { $0.position > keywordPosition }
+            if let closest = candidatesAfterKeyword.min(by: { $0.position < $1.position }) {
+                bestCandidate = closest
+            } else {
+                bestCandidate = candidates[0]
+            }
+        } else {
+            bestCandidate = candidates[0]
+        }
+        
+        var components = DateComponents()
+        components.year = bestCandidate.year
+        components.month = bestCandidate.month
+        components.day = bestCandidate.day
+        
+        return Calendar.current.date(from: components)
+    }
+    
+    /// テキストの正規化
+    nonisolated private static func normalizeText(_ text: String) -> String {
+        var result = text
+        
+        // 全角数字を半角に
+        let fullWidthDigits = ["０", "１", "２", "３", "４", "５", "６", "７", "８", "９"]
+        let halfWidthDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+        for (full, half) in zip(fullWidthDigits, halfWidthDigits) {
+            result = result.replacingOccurrences(of: full, with: half)
+        }
+        
+        // 改行をスペースに
+        result = result.replacingOccurrences(of: "\n", with: " ")
+        result = result.replacingOccurrences(of: "\r", with: " ")
+        
+        return result
+    }
+    
+    /// 年月日の完全な日付を探す
+    nonisolated private static func findFullDates(in text: String) -> [(year: Int, month: Int, day: Int, position: Int)] {
+        var results: [(year: Int, month: Int, day: Int, position: Int)] = []
+        
+        let patterns: [(pattern: String, isReiwa: Bool)] = [
+            // YYYY. M. D（スペースあり）
+            (#"(\d{4})\s*[.]\s*(\d{1,2})\s*[.]\s*(\d{1,2})"#, false),
             // YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD
-            #"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})"#,
+            (#"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})"#, false),
             // YYYY年MM月DD日
-            #"(\d{4})年(\d{1,2})月(\d{1,2})日"#,
-            // YY.MM.DD
-            #"(\d{2})\.(\d{1,2})\.(\d{1,2})"#,
+            (#"(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日"#, false),
+            // YY.MM.DD（2桁年）
+            (#"(\d{2})[.]\s*(\d{1,2})[.]\s*(\d{1,2})"#, false),
+            // YY/MM/DD（2桁年）
+            (#"(\d{2})/(\d{1,2})/(\d{1,2})"#, false),
+            // 令和YY年MM月DD日
+            (#"令和\s*(\d{1,2})年\s*(\d{1,2})月\s*(\d{1,2})日"#, true),
+            // R YY.MM.DD or RYY.MM.DD
+            (#"[Rr]\s*(\d{1,2})[.\s]+(\d{1,2})[.\s]+(\d{1,2})"#, true),
         ]
         
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern),
-               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) {
-                
-                let yearRange = Range(match.range(at: 1), in: text)!
-                let monthRange = Range(match.range(at: 2), in: text)!
-                let dayRange = Range(match.range(at: 3), in: text)!
+        for (pattern, isReiwa) in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            
+            let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+            
+            for match in matches {
+                guard let yearRange = Range(match.range(at: 1), in: text),
+                      let monthRange = Range(match.range(at: 2), in: text),
+                      let dayRange = Range(match.range(at: 3), in: text) else {
+                    continue
+                }
                 
                 var year = Int(text[yearRange]) ?? 0
                 let month = Int(text[monthRange]) ?? 0
                 let day = Int(text[dayRange]) ?? 0
                 
-                // 2桁年を4桁に変換
-                if year < 100 {
+                // 令和年を西暦に変換
+                if isReiwa {
+                    year = year + 2018  // 令和1年 = 2019年
+                } else if year < 100 {
                     year += 2000
                 }
                 
-                var components = DateComponents()
-                components.year = year
-                components.month = month
-                components.day = day
+                // 妥当性チェック
+                guard year >= 2020 && year <= 2040,
+                      month >= 1 && month <= 12,
+                      day >= 1 && day <= 31 else {
+                    continue
+                }
                 
-                return Calendar.current.date(from: components)
+                results.append((year, month, day, match.range.location))
             }
         }
         
-        return nil
+        return results
+    }
+    
+    /// 年月のみの日付を探す（日は月末として扱う）
+    nonisolated private static func findYearMonthDates(in text: String) -> [(year: Int, month: Int, day: Int, position: Int)] {
+        var results: [(year: Int, month: Int, day: Int, position: Int)] = []
+        
+        let patterns: [(pattern: String, isReiwa: Bool)] = [
+            // YYYY年MM月（日なし）
+            (#"(\d{4})年\s*(\d{1,2})月(?!\s*\d)"#, false),
+            // YYYY.MM or YYYY/MM（日なし）
+            (#"(\d{4})[./](\d{1,2})(?![./\d])"#, false),
+            // 令和YY年MM月（日なし）
+            (#"令和\s*(\d{1,2})年\s*(\d{1,2})月(?!\s*\d)"#, true),
+            // R YY.MM（日なし）
+            (#"[Rr]\s*(\d{1,2})[.\s]+(\d{1,2})(?![.\d])"#, true),
+        ]
+        
+        for (pattern, isReiwa) in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            
+            let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+            
+            for match in matches {
+                guard let yearRange = Range(match.range(at: 1), in: text),
+                      let monthRange = Range(match.range(at: 2), in: text) else {
+                    continue
+                }
+                
+                var year = Int(text[yearRange]) ?? 0
+                let month = Int(text[monthRange]) ?? 0
+                
+                // 令和年を西暦に変換
+                if isReiwa {
+                    year = year + 2018
+                } else if year < 100 {
+                    year += 2000
+                }
+                
+                // 妥当性チェック
+                guard year >= 2020 && year <= 2040,
+                      month >= 1 && month <= 12 else {
+                    continue
+                }
+                
+                // 月末日を計算
+                let day = lastDayOfMonth(year: year, month: month)
+                
+                results.append((year, month, day, match.range.location))
+            }
+        }
+        
+        return results
+    }
+    
+    /// 月末日を取得
+    nonisolated private static func lastDayOfMonth(year: Int, month: Int) -> Int {
+        var components = DateComponents()
+        components.year = year
+        components.month = month + 1
+        components.day = 0
+        
+        if let date = Calendar.current.date(from: components) {
+            return Calendar.current.component(.day, from: date)
+        }
+        
+        // フォールバック
+        let daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        if month >= 1 && month <= 12 {
+            if month == 2 && isLeapYear(year) {
+                return 29
+            }
+            return daysInMonth[month - 1]
+        }
+        return 28
+    }
+    
+    /// うるう年判定
+    nonisolated private static func isLeapYear(_ year: Int) -> Bool {
+        return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
     }
 }
 
-/// カメラプレビュー
-struct CameraPreview: UIViewRepresentable {
+// MARK: - Camera View (UIViewControllerRepresentable)
+
+struct CameraView: UIViewControllerRepresentable {
     let onImageCaptured: (UIImage) -> Void
     
-    func makeUIView(context: Context) -> CameraPreviewView {
-        let view = CameraPreviewView()
-        view.onImageCaptured = onImageCaptured
-        return view
+    func makeUIViewController(context: Context) -> CameraViewController {
+        let vc = CameraViewController()
+        vc.onImageCaptured = onImageCaptured
+        return vc
     }
     
-    func updateUIView(_ uiView: CameraPreviewView, context: Context) {}
+    func updateUIViewController(_ uiViewController: CameraViewController, context: Context) {}
 }
 
-class CameraPreviewView: UIView {
+// MARK: - Camera ViewController
+
+@MainActor
+class CameraViewController: UIViewController {
     var onImageCaptured: ((UIImage) -> Void)?
     
     private var captureSession: AVCaptureSession?
     private var previewLayer: AVCaptureVideoPreviewLayer?
-    private let output = AVCapturePhotoOutput()
+    private let photoOutput = AVCapturePhotoOutput()
+    private var captureButton: UIButton?
     
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        setupCamera()
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+        checkCameraPermission()
     }
     
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setupCamera()
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        previewLayer?.frame = view.bounds
+        
+        // シャッターボタンの位置更新
+        if let button = captureButton {
+            button.center = CGPoint(x: view.bounds.midX, y: view.bounds.height - 80)
+        }
+    }
+    
+    private func checkCameraPermission() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            setupCamera()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        self?.setupCamera()
+                    }
+                }
+            }
+        default:
+            break
+        }
     }
     
     private func setupCamera() {
@@ -187,48 +422,86 @@ class CameraPreviewView: UIView {
             session.addInput(input)
         }
         
-        if session.canAddOutput(output) {
-            session.addOutput(output)
+        if session.canAddOutput(photoOutput) {
+            session.addOutput(photoOutput)
         }
         
         let previewLayer = AVCaptureVideoPreviewLayer(session: session)
         previewLayer.videoGravity = .resizeAspectFill
-        layer.addSublayer(previewLayer)
+        previewLayer.frame = view.bounds
+        view.layer.addSublayer(previewLayer)
         
         self.previewLayer = previewLayer
         self.captureSession = session
         
-        DispatchQueue.global(qos: .userInitiated).async {
+        // シャッターボタンを追加
+        setupCaptureButton()
+        
+        // セッション開始（メインスレッドでセッションにアクセスするため変数に保存）
+        startCameraSession()
+    }
+    
+    private func startCameraSession() {
+        guard let session = captureSession else { return }
+        Task.detached {
             session.startRunning()
         }
+    }
+    
+    private func setupCaptureButton() {
+        let button = UIButton(type: .system)
+        button.frame = CGRect(x: 0, y: 0, width: 80, height: 80)
+        button.center = CGPoint(x: view.bounds.midX, y: view.bounds.height - 80)
         
-        // 3秒後に自動撮影
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-            self?.capturePhoto()
-        }
+        // 外側の円
+        let outerCircle = UIView(frame: button.bounds)
+        outerCircle.backgroundColor = .clear
+        outerCircle.layer.borderColor = UIColor.white.cgColor
+        outerCircle.layer.borderWidth = 4
+        outerCircle.layer.cornerRadius = 40
+        outerCircle.isUserInteractionEnabled = false
+        button.addSubview(outerCircle)
+        
+        // 内側の円
+        let innerCircle = UIView(frame: CGRect(x: 5, y: 5, width: 70, height: 70))
+        innerCircle.backgroundColor = .white
+        innerCircle.layer.cornerRadius = 35
+        innerCircle.isUserInteractionEnabled = false
+        button.addSubview(innerCircle)
+        
+        button.addTarget(self, action: #selector(captureButtonTapped), for: .touchUpInside)
+        
+        view.addSubview(button)
+        self.captureButton = button
     }
     
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        previewLayer?.frame = bounds
-    }
-    
-    func capturePhoto() {
+    @objc private func captureButtonTapped() {
         let settings = AVCapturePhotoSettings()
-        output.capturePhoto(with: settings, delegate: self)
+        photoOutput.capturePhoto(with: settings, delegate: self)
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        stopCameraSession()
+    }
+    
+    private func stopCameraSession() {
+        guard let session = captureSession else { return }
+        Task.detached {
+            session.stopRunning()
+        }
     }
 }
 
-@MainActor
-extension CameraPreviewView: AVCapturePhotoCaptureDelegate {
+extension CameraViewController: AVCapturePhotoCaptureDelegate {
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         guard let data = photo.fileDataRepresentation(),
               let image = UIImage(data: data) else {
             return
         }
         
-        Task { @MainActor in
-            self.onImageCaptured?(image)
+        Task { @MainActor [weak self] in
+            self?.onImageCaptured?(image)
         }
     }
 }

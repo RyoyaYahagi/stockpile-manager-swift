@@ -102,6 +102,10 @@ struct ItemDetailView: View {
             titleVisibility: .visible
         ) {
             Button("削除", role: .destructive) {
+                // 通知をキャンセル
+                Task {
+                    await NotificationManager.shared.cancelNotifications(for: item)
+                }
                 modelContext.delete(item)
                 router.pop()
             }

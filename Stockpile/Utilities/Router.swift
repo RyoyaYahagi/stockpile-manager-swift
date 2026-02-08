@@ -6,6 +6,7 @@ enum Destination: Hashable {
     case bagList
     case settings
     case familySetup
+    case notificationSettings
 }
 
 /// アプリ全体のルーティングを管理
@@ -15,11 +16,12 @@ final class Router {
     var presentedSheet: Sheet?
     
     enum Sheet: Identifiable {
-        case addItem
+        case addItem(bagId: UUID? = nil)
         case editItem(Item)
         case addBag
         case inviteCode(String)
         case importJSON
+        case qrScanner
         
         var id: String {
             switch self {
@@ -28,6 +30,7 @@ final class Router {
             case .addBag: return "addBag"
             case .inviteCode: return "inviteCode"
             case .importJSON: return "importJSON"
+            case .qrScanner: return "qrScanner"
             }
         }
     }
