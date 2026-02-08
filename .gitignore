@@ -1,0 +1,26 @@
+# Secrets
+Secrets.plist
+
+# Xcode
+*.xcuserstate
+xcuserdata/
+DerivedData/
+*.xcscmblueprint
+*.xccheckout
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Swift Package Manager
+.build/
+Package.resolved
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
+Carthage/Checkouts/
