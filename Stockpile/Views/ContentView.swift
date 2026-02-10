@@ -3,6 +3,7 @@ import SwiftData
 
 extension Notification.Name {
     static let didTapNotification = Notification.Name("didTapNotification")
+    static let didAcceptCloudKitShare = Notification.Name("didAcceptCloudKitShare")
 }
 
 @MainActor
@@ -42,6 +43,8 @@ struct ContentView: View {
                         SettingsView()
                     case .familySetup:
                         FamilySetupView()
+                    case .familySettings(let family):
+                        FamilySettingsView(family: family)
                     case .notificationSettings:
                         NotificationSettingsView()
                     }
@@ -66,6 +69,10 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .didTapNotification)) { notification in
             _ = NotificationTapRelay.consumePending()
             handleNotificationTap(notification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didAcceptCloudKitShare)) { _ in
+            router.dismissSheet()
+            router.popToRoot()
         }
     }
     

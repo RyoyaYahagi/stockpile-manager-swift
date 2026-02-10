@@ -6,6 +6,7 @@ enum Destination: Hashable {
     case bagList
     case settings
     case familySetup
+    case familySettings(Family)
     case notificationSettings
 }
 
