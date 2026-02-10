@@ -151,6 +151,27 @@ final class NotificationManager: ObservableObject {
         print("📋 Scheduled \(groupedNotifications.count) grouped notifications")
     }
     
+    /// SwiftDataストアから設定とアイテムを再取得して通知を再スケジュール
+    func rescheduleAllNotifications(using modelContext: ModelContext) async {
+        let settingsDescriptor = FetchDescriptor<NotificationSettings>(
+            sortBy: [SortDescriptor(\.createdAt)]
+        )
+        
+        let settings: NotificationSettings
+        if let existing = try? modelContext.fetch(settingsDescriptor).first {
+            settings = existing
+        } else {
+            let created = NotificationSettings.createDefault()
+            modelContext.insert(created)
+            settings = created
+        }
+        
+        let itemDescriptor = FetchDescriptor<Item>()
+        let allItems = (try? modelContext.fetch(itemDescriptor)) ?? []
+        
+        await rescheduleAllNotifications(items: allItems, settings: settings)
+    }
+    
     /// グループ化された通知をスケジュール
     private func scheduleGroupedNotification(
         notificationItems: [NotificationItem],

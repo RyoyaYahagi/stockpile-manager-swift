@@ -64,6 +64,7 @@ struct ContentView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didTapNotification)) { notification in
+            _ = NotificationTapRelay.consumePending()
             handleNotificationTap(notification)
         }
     }

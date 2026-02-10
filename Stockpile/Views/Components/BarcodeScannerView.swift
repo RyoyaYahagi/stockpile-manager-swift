@@ -212,7 +212,7 @@ struct BarcodeScannerView: View {
             
             HStack(spacing: 12) {
                 Button("手動で入力") {
-                    dismiss()
+                    showManualEntry = true
                 }
                 .buttonStyle(.borderedProminent)
                 
