@@ -5,6 +5,25 @@ extension Notification.Name {
     static let didTapNotification = Notification.Name("didTapNotification")
 }
 
+@MainActor
+enum NotificationTapRelay {
+    private static var pendingUserInfo: [AnyHashable: Any]?
+    
+    static func storeAndPost(_ userInfo: [AnyHashable: Any]) {
+        pendingUserInfo = userInfo
+        NotificationCenter.default.post(
+            name: .didTapNotification,
+            object: nil,
+            userInfo: userInfo
+        )
+    }
+    
+    static func consumePending() -> [AnyHashable: Any]? {
+        defer { pendingUserInfo = nil }
+        return pendingUserInfo
+    }
+}
+
 struct ContentView: View {
     @State private var router = Router()
     @Environment(\.modelContext) private var modelContext
@@ -32,6 +51,17 @@ struct ContentView: View {
         .sheet(item: $router.presentedSheet) { sheet in
             sheetContent(for: sheet)
                 .environment(router)
+        }
+        .task {
+            if let pendingUserInfo = NotificationTapRelay.consumePending() {
+                handleNotificationTap(
+                    Notification(
+                        name: .didTapNotification,
+                        object: nil,
+                        userInfo: pendingUserInfo
+                    )
+                )
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .didTapNotification)) { notification in
             handleNotificationTap(notification)
