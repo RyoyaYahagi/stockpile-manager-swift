@@ -66,7 +66,7 @@ struct ContentView: View {
         router.dismissSheet()
         
         // 単一アイテムの場合 → アイテム詳細へ遷移
-        if let itemId = userInfo["itemId"] as? UUID {
+        if let itemId = extractItemId(from: userInfo["itemId"]) {
             if let item = items.first(where: { $0.id == itemId }) {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     router.popToRoot()
@@ -82,10 +82,21 @@ struct ContentView: View {
             }
         }
     }
+    
+    private func extractItemId(from rawValue: Any?) -> UUID? {
+        if let uuid = rawValue as? UUID {
+            return uuid
+        }
+        
+        if let uuidString = rawValue as? String {
+            return UUID(uuidString: uuidString)
+        }
+        
+        return nil
+    }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Family.self, User.self, Bag.self, Item.self], inMemory: true)
+        .modelContainer(for: [Family.self, User.self, Bag.self, Item.self, NotificationSettings.self], inMemory: true)
 }
-

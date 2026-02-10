@@ -12,6 +12,7 @@ struct BarcodeScannerView: View {
     @State private var showPermissionAlert = false
     @State private var showManualEntry = false
     @State private var manualCode = ""
+    @State private var scannerSessionID = UUID()
     
     let onProductSelected: (ProductInfo) -> Void
     
@@ -39,6 +40,7 @@ struct BarcodeScannerView: View {
             ZStack {
                 if hasPermission {
                     BarcodeScannerRepresentable(scannedCode: $scannedCode)
+                        .id(scannerSessionID)
                         .ignoresSafeArea()
                     
                     // オーバーレイUI
@@ -285,6 +287,7 @@ struct BarcodeScannerView: View {
         productInfo = nil
         searchState = .idle
         manualCode = ""
+        scannerSessionID = UUID()
     }
 }
 

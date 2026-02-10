@@ -11,7 +11,8 @@ struct StockpileApp: App {
             Family.self,
             User.self,
             Bag.self,
-            Item.self
+            Item.self,
+            NotificationSettings.self
         ])
     }
 }

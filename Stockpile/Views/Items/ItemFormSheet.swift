@@ -235,5 +235,5 @@ struct ItemFormSheet: View {
 #Preview("Add") {
     ItemFormSheet(mode: .add)
         .environment(Router())
-        .modelContainer(for: [Item.self, Bag.self], inMemory: true)
+        .modelContainer(for: [Item.self, Bag.self, NotificationSettings.self], inMemory: true)
 }
