@@ -53,6 +53,19 @@ struct StockpileApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     
     private let sharedModelContainer: ModelContainer = {
+        // 初回起動時のStore作成前にApplication Supportを保証して、
+        // CoreDataの一時的な「path not found」ログを抑制する。
+        if let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            do {
+                try FileManager.default.createDirectory(
+                    at: appSupportURL,
+                    withIntermediateDirectories: true
+                )
+            } catch {
+                print("⚠️ Application Support directory creation failed: \(error)")
+            }
+        }
+        
         let configuration = ModelConfiguration(cloudKitDatabase: .none)
         
         do {
