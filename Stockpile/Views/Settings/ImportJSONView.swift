@@ -132,6 +132,7 @@ struct ImportJSONView: View {
                 for item in items {
                     modelContext.insert(item)
                 }
+                try modelContext.save()
                 
                 importResult = .success(count: items.count)
                 
