@@ -32,6 +32,9 @@ final class FamilySharingService {
 
     /// 共有を開始し、招待を作成
     func startSharing(family: Family) async throws -> CKShare {
+#if targetEnvironment(simulator)
+        throw SharingError.cloudKitUnavailableOnSimulator
+#else
         let status = try await cloudKitService.checkAccountStatus()
         guard status == .available else {
             throw SharingError.notSignedIn
@@ -44,10 +47,14 @@ final class FamilySharingService {
             createdAt: family.createdAt
         )
 
-        let share = try await cloudKitService.createShare(familyInfo: familyInfo)
-        _ = try await cloudKitService.createInvite(familyInfo: familyInfo, share: share)
-
-        return share
+        do {
+            let share = try await cloudKitService.createShare(familyInfo: familyInfo)
+            _ = try await cloudKitService.createInvite(familyInfo: familyInfo, share: share)
+            return share
+        } catch {
+            throw mapCloudKitError(error)
+        }
+#endif
     }
 
     /// 招待コードの有効期限を延長
@@ -171,6 +178,9 @@ final class FamilySharingService {
         case invalidShareURL
         case familyNotFound
         case alreadyInFamily
+        case cloudKitUnavailableOnSimulator
+        case invalidContainerConfiguration
+        case cloudKitFailure(String)
 
         var errorDescription: String? {
             switch self {
@@ -184,7 +194,37 @@ final class FamilySharingService {
                 return "家族が見つかりません"
             case .alreadyInFamily:
                 return "既にこの家族に参加しています"
+            case .cloudKitUnavailableOnSimulator:
+                return "シミュレータではCloudKit共有を開始できません。実機で確認してください。"
+            case .invalidContainerConfiguration:
+                return "CloudKitコンテナ設定が不一致です。Bundle IDとiCloudコンテナの紐づけを確認してください。"
+            case .cloudKitFailure(let detail):
+                return "CloudKitエラー: \(detail)"
             }
         }
+    }
+    
+    private func mapCloudKitError(_ error: Error) -> SharingError {
+        if let sharingError = error as? SharingError {
+            return sharingError
+        }
+        
+        if let ckError = error as? CKError {
+            switch ckError.code {
+            case .notAuthenticated:
+                return .notSignedIn
+            case .badContainer, .permissionFailure:
+                return .invalidContainerConfiguration
+            default:
+                break
+            }
+        }
+        
+        let message = (error as NSError).localizedDescription
+        if message.localizedCaseInsensitiveContains("Invalid bundle ID for container") {
+            return .invalidContainerConfiguration
+        }
+        
+        return .cloudKitFailure(message)
     }
 }
