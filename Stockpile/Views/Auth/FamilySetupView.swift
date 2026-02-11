@@ -10,8 +10,8 @@ struct FamilySetupView: View {
     @State private var familyName = ""
     @State private var inviteCode = ""
     @State private var errorMessage: String?
-    
-    @Query private var families: [Family]
+    @State private var showQRScanner = false
+    @State private var isJoining = false
     
     enum SetupMode {
         case create
@@ -32,7 +32,7 @@ struct FamilySetupView: View {
             Section {
                 Picker("セットアップ方法", selection: $selectedMode) {
                     Text("新規作成").tag(SetupMode.create)
-                    Text("招待コードで参加").tag(SetupMode.join)
+                    Text("参加する").tag(SetupMode.join)
                 }
                 .pickerStyle(.segmented)
                 .listRowBackground(Color.clear)
@@ -40,32 +40,20 @@ struct FamilySetupView: View {
             
             switch selectedMode {
             case .create:
-                Section {
-                    TextField("家族名", text: $familyName)
-                } header: {
-                    Text("家族名")
-                } footer: {
-                    Text("家族グループの名前を入力してください（例: 山田家）")
-                }
+                createFamilySection
                 
             case .join:
-                Section {
-                    TextField("招待コード（6桁）", text: $inviteCode)
-                        .textInputAutocapitalization(.characters)
-                        .onChange(of: inviteCode) { _, newValue in
-                            inviteCode = String(newValue.prefix(6)).uppercased()
-                        }
-                } header: {
-                    Text("招待コード")
-                } footer: {
-                    Text("家族から共有された6桁の招待コードを入力してください")
-                }
+                joinFamilySection
             }
             
             if let error = errorMessage {
                 Section {
-                    Text(error)
-                        .foregroundStyle(.red)
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(error)
+                            .foregroundStyle(.red)
+                    }
                 }
             }
             
@@ -73,36 +61,126 @@ struct FamilySetupView: View {
                 Button(action: submit) {
                     HStack {
                         Spacer()
-                        Text(selectedMode == .create ? "家族を作成" : "家族に参加")
-                            .fontWeight(.semibold)
+                        if isJoining {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                        } else {
+                            Text(selectedMode == .create ? "家族を作成" : "家族に参加")
+                                .fontWeight(.semibold)
+                        }
                         Spacer()
                     }
                 }
-                .disabled(!isValid)
+                .disabled(!isValid || isJoining)
             }
         }
         .navigationTitle("家族セットアップ")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showQRScanner) {
+            QRScannerView { scannedCode in
+                inviteCode = scannedCode
+                Task {
+                    await joinWithCode(scannedCode)
+                }
+            }
+        }
+    }
+    
+    private var createFamilySection: some View {
+        Section {
+            TextField("家族名", text: $familyName)
+        } header: {
+            Text("家族名")
+        } footer: {
+            Text("家族グループの名前を入力してください（例: 山田家）")
+        }
+    }
+    
+    private var joinFamilySection: some View {
+        Group {
+            Section {
+                Button {
+                    showQRScanner = true
+                } label: {
+                    HStack {
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.title2)
+                        VStack(alignment: .leading) {
+                            Text("QRコードをスキャン")
+                                .font(.body)
+                            Text("共有されたQRコードを読み取ります")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            
+            Section {
+                TextField("招待コード（6桁）", text: $inviteCode)
+                    .textInputAutocapitalization(.characters)
+                    .font(.system(.body, design: .monospaced))
+                    .onChange(of: inviteCode) { _, newValue in
+                        inviteCode = String(newValue.prefix(6)).uppercased()
+                        errorMessage = nil
+                    }
+            } header: {
+                Text("または招待コードを入力")
+            } footer: {
+                Text("家族から共有された6桁の招待コードを入力してください")
+            }
+        }
     }
     
     private func submit() {
         switch selectedMode {
         case .create:
-            let family = Family(name: familyName.trimmingCharacters(in: .whitespacesAndNewlines))
-            modelContext.insert(family)
-            router.popToRoot()
-            
+            createFamily()
         case .join:
-            // オフラインモードでは既存の家族をコードで検索
-            if families.first(where: { $0.inviteCode == inviteCode }) != nil {
-                // 既にこの家族がローカルにある
-                errorMessage = nil
-                router.popToRoot()
-            } else {
-                // オフラインモードでは他デバイスの家族には参加できない
-                errorMessage = "オフラインモードでは招待コードでの参加はできません。同じデバイスで作成された家族のみ利用可能です。"
+            Task {
+                await joinWithCode(inviteCode)
             }
         }
+    }
+    
+    private func createFamily() {
+        let trimmedName = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let family = Family(name: trimmedName)
+        modelContext.insert(family)
+        router.popToRoot()
+    }
+    
+    private func joinWithCode(_ code: String) async {
+        isJoining = true
+        errorMessage = nil
+        
+        let sharingService = FamilySharingService(modelContext: modelContext)
+        
+        do {
+            let result = try await sharingService.joinFamilyWithCode(code)
+            
+            switch result {
+            case .success:
+                router.popToRoot()
+            case .alreadyMember:
+                router.popToRoot()
+            case .pendingSync:
+                router.popToRoot()
+            case .notFound:
+                errorMessage = "招待コードに一致する家族が見つかりません。コードを確認して再試行してください。"
+            case .expired:
+                errorMessage = "この招待コードは有効期限が切れています。新しい招待コードを発行してもらってください。"
+            case .error(let error):
+                errorMessage = error.localizedDescription
+            }
+        } catch {
+            errorMessage = "参加に失敗しました: \(error.localizedDescription)"
+        }
+        
+        isJoining = false
     }
 }
 

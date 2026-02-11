@@ -17,12 +17,13 @@ struct SettingsView: View {
             // 家族セクション
             Section {
                 if let family = currentFamily {
-                    // 家族名を表示（CloudKitなしのシンプル版）
-                    HStack {
-                        Label("家族名", systemImage: "person.3")
-                        Spacer()
-                        Text(family.name)
-                            .foregroundStyle(.secondary)
+                    NavigationLink(value: Destination.familySettings(family)) {
+                        HStack {
+                            Label("家族名", systemImage: "person.3")
+                            Spacer()
+                            Text(family.name)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     
                     // メンバー数
@@ -41,6 +42,10 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("家族")
+            } footer: {
+                if currentFamily != nil {
+                    Text("家族設定から招待コードの発行と共有を行えます。")
+                }
             }
             
             // 収納場所セクション

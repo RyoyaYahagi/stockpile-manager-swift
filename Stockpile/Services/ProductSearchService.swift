@@ -10,6 +10,7 @@ struct ProductInfo: Sendable {
     
     /// 検索ソース
     enum Source: String, Sendable {
+        case openFoodFacts = "Open Food Facts"
         case rakuten = "楽天"
         case yahoo = "Yahoo"
         case manual = "手動入力"
@@ -146,7 +147,7 @@ actor ProductSearchService {
             category: categories,
             imageURL: imageURL,
             janCode: janCode,
-            source: .rakuten  // 後でSourceにopenFoodFactsを追加可能
+            source: .openFoodFacts
         )
     }
     

@@ -3,6 +3,26 @@ import SwiftData
 
 extension Notification.Name {
     static let didTapNotification = Notification.Name("didTapNotification")
+    static let didAcceptCloudKitShare = Notification.Name("didAcceptCloudKitShare")
+}
+
+@MainActor
+enum NotificationTapRelay {
+    private static var pendingUserInfo: [AnyHashable: Any]?
+    
+    static func storeAndPost(_ userInfo: [AnyHashable: Any]) {
+        pendingUserInfo = userInfo
+        NotificationCenter.default.post(
+            name: .didTapNotification,
+            object: nil,
+            userInfo: userInfo
+        )
+    }
+    
+    static func consumePending() -> [AnyHashable: Any]? {
+        defer { pendingUserInfo = nil }
+        return pendingUserInfo
+    }
 }
 
 struct ContentView: View {
@@ -23,6 +43,8 @@ struct ContentView: View {
                         SettingsView()
                     case .familySetup:
                         FamilySetupView()
+                    case .familySettings(let family):
+                        FamilySettingsView(family: family)
                     case .notificationSettings:
                         NotificationSettingsView()
                     }
@@ -33,8 +55,24 @@ struct ContentView: View {
             sheetContent(for: sheet)
                 .environment(router)
         }
+        .task {
+            if let pendingUserInfo = NotificationTapRelay.consumePending() {
+                handleNotificationTap(
+                    Notification(
+                        name: .didTapNotification,
+                        object: nil,
+                        userInfo: pendingUserInfo
+                    )
+                )
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .didTapNotification)) { notification in
+            _ = NotificationTapRelay.consumePending()
             handleNotificationTap(notification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didAcceptCloudKitShare)) { _ in
+            router.dismissSheet()
+            router.popToRoot()
         }
     }
     
@@ -66,7 +104,7 @@ struct ContentView: View {
         router.dismissSheet()
         
         // 単一アイテムの場合 → アイテム詳細へ遷移
-        if let itemId = userInfo["itemId"] as? UUID {
+        if let itemId = extractItemId(from: userInfo["itemId"]) {
             if let item = items.first(where: { $0.id == itemId }) {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     router.popToRoot()
@@ -82,10 +120,21 @@ struct ContentView: View {
             }
         }
     }
+    
+    private func extractItemId(from rawValue: Any?) -> UUID? {
+        if let uuid = rawValue as? UUID {
+            return uuid
+        }
+        
+        if let uuidString = rawValue as? String {
+            return UUID(uuidString: uuidString)
+        }
+        
+        return nil
+    }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Family.self, User.self, Bag.self, Item.self], inMemory: true)
+        .modelContainer(for: [Family.self, User.self, Bag.self, Item.self, NotificationSettings.self], inMemory: true)
 }
-

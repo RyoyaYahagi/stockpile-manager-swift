@@ -5,134 +5,138 @@ import UserNotifications
 /// 通知設定画面
 struct NotificationSettingsView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var settingsArray: [NotificationSettings]
     @StateObject private var notificationManager = NotificationManager.shared
     @Query private var items: [Item]
+    @State private var settings: NotificationSettings?
     
     @State private var showPendingNotifications = false
     @State private var pendingNotifications: [UNNotificationRequest] = []
     
-    private var settings: NotificationSettings {
-        if let existing = settingsArray.first {
-            return existing
-        }
-        let newSettings = NotificationSettings.createDefault()
-        modelContext.insert(newSettings)
-        return newSettings
-    }
-    
     var body: some View {
         Form {
-            // 通知権限セクション
-            Section {
-                authorizationStatusRow
-                
-                if notificationManager.authorizationStatus == .notDetermined {
-                    Button("通知を許可する") {
-                        Task {
-                            await notificationManager.requestAuthorization()
+            if let settings {
+                // 通知権限セクション
+                Section {
+                    authorizationStatusRow
+                    
+                    if notificationManager.authorizationStatus == .notDetermined {
+                        Button("通知を許可する") {
+                            Task {
+                                await notificationManager.requestAuthorization()
+                            }
+                        }
+                    } else if notificationManager.authorizationStatus == .denied {
+                        Button("設定アプリを開く") {
+                            openSettings()
                         }
                     }
-                } else if notificationManager.authorizationStatus == .denied {
-                    Button("設定アプリを開く") {
-                        openSettings()
+                } header: {
+                    Text("通知権限")
+                } footer: {
+                    if notificationManager.authorizationStatus == .denied {
+                        Text("通知を有効にするには、設定アプリから許可してください。")
                     }
                 }
-            } header: {
-                Text("通知権限")
-            } footer: {
-                if notificationManager.authorizationStatus == .denied {
-                    Text("通知を有効にするには、設定アプリから許可してください。")
-                }
-            }
-            
-            // 通知有効/無効
-            Section {
-                Toggle("通知を有効にする", isOn: Binding(
-                    get: { settings.isEnabled },
-                    set: { newValue in
-                        settings.isEnabled = newValue
-                        rescheduleNotifications()
-                    }
-                ))
-            }
-            
-            // 通知タイミング
-            Section {
-                Toggle("30日前に通知", isOn: Binding(
-                    get: { settings.notify30DaysBefore },
-                    set: { newValue in
-                        settings.notify30DaysBefore = newValue
-                        rescheduleNotifications()
-                    }
-                ))
-                .disabled(!settings.isEnabled)
                 
-                Toggle("7日前に通知", isOn: Binding(
-                    get: { settings.notify7DaysBefore },
-                    set: { newValue in
-                        settings.notify7DaysBefore = newValue
-                        rescheduleNotifications()
-                    }
-                ))
-                .disabled(!settings.isEnabled)
-                
-                Toggle("当日に通知", isOn: Binding(
-                    get: { settings.notifyOnDay },
-                    set: { newValue in
-                        settings.notifyOnDay = newValue
-                        rescheduleNotifications()
-                    }
-                ))
-                .disabled(!settings.isEnabled)
-            } header: {
-                Text("通知タイミング")
-            } footer: {
-                Text("備蓄品の期限が近づくと通知でお知らせします。")
-            }
-            
-            // 通知時刻
-            Section {
-                DatePicker(
-                    "通知時刻",
-                    selection: Binding(
-                        get: { timeFromComponents() },
+                // 通知有効/無効
+                Section {
+                    Toggle("通知を有効にする", isOn: Binding(
+                        get: { settings.isEnabled },
                         set: { newValue in
-                            updateNotificationTime(from: newValue)
+                            settings.isEnabled = newValue
+                            rescheduleNotifications(settings: settings)
                         }
-                    ),
-                    displayedComponents: .hourAndMinute
-                )
-                .disabled(!settings.isEnabled)
-            } header: {
-                Text("通知時刻")
-            } footer: {
-                Text("毎日この時刻に通知をお届けします。")
-            }
-            
-            // スケジュール済み通知（デバッグ用）
-            Section {
-                Button("スケジュール済み通知を確認") {
-                    Task {
-                        pendingNotifications = await notificationManager.getPendingNotifications()
-                        showPendingNotifications = true
-                    }
+                    ))
                 }
                 
-                Button("テスト通知（5秒後）") {
-                    Task {
-                        await sendTestNotification()
-                    }
+                // 通知タイミング
+                Section {
+                    Toggle("30日前に通知", isOn: Binding(
+                        get: { settings.notify30DaysBefore },
+                        set: { newValue in
+                            settings.notify30DaysBefore = newValue
+                            rescheduleNotifications(settings: settings)
+                        }
+                    ))
+                    .disabled(!settings.isEnabled)
+                    
+                    Toggle("7日前に通知", isOn: Binding(
+                        get: { settings.notify7DaysBefore },
+                        set: { newValue in
+                            settings.notify7DaysBefore = newValue
+                            rescheduleNotifications(settings: settings)
+                        }
+                    ))
+                    .disabled(!settings.isEnabled)
+                    
+                    Toggle("当日に通知", isOn: Binding(
+                        get: { settings.notifyOnDay },
+                        set: { newValue in
+                            settings.notifyOnDay = newValue
+                            rescheduleNotifications(settings: settings)
+                        }
+                    ))
+                    .disabled(!settings.isEnabled)
+                } header: {
+                    Text("通知タイミング")
+                } footer: {
+                    Text("備蓄品の期限が近づくと通知でお知らせします。")
                 }
                 
-                Button("すべての通知を再スケジュール") {
-                    rescheduleNotifications()
+                // 通知時刻
+                Section {
+                    DatePicker(
+                        "通知時刻",
+                        selection: Binding(
+                            get: { timeFromComponents(using: settings) },
+                            set: { newValue in
+                                updateNotificationTime(from: newValue, settings: settings)
+                            }
+                        ),
+                        displayedComponents: .hourAndMinute
+                    )
+                    .disabled(!settings.isEnabled)
+                } header: {
+                    Text("通知時刻")
+                } footer: {
+                    Text("毎日この時刻に通知をお届けします。")
                 }
-            } header: {
-                Text("デバッグ")
+                
+                // スケジュール済み通知（デバッグ用）
+                Section {
+                    Button("スケジュール済み通知を確認") {
+                        Task {
+                            pendingNotifications = await notificationManager.getPendingNotifications()
+                            showPendingNotifications = true
+                        }
+                    }
+                    
+                    Button("テスト通知（5秒後）") {
+                        Task {
+                            await sendTestNotification()
+                        }
+                    }
+                    
+                    Button("すべての通知を再スケジュール") {
+                        rescheduleNotifications(settings: settings)
+                    }
+                } header: {
+                    Text("デバッグ")
+                }
+            } else {
+                Section {
+                    HStack {
+                        Spacer()
+                        ProgressView("設定を読み込み中...")
+                        Spacer()
+                    }
+                }
             }
         }
         .navigationTitle("通知設定")
+        .task {
+            ensureSettingsLoaded()
+        }
         .onAppear {
             Task {
                 await notificationManager.refreshAuthorizationStatus()
@@ -205,7 +209,24 @@ struct NotificationSettingsView: View {
     
     // MARK: - Helpers
     
-    private func timeFromComponents() -> Date {
+    private func ensureSettingsLoaded() {
+        guard settings == nil else { return }
+        
+        let descriptor = FetchDescriptor<NotificationSettings>(
+            sortBy: [SortDescriptor(\.createdAt)]
+        )
+        
+        if let existing = try? modelContext.fetch(descriptor).first {
+            settings = existing
+            return
+        }
+        
+        let newSettings = NotificationSettings.createDefault()
+        modelContext.insert(newSettings)
+        settings = newSettings
+    }
+    
+    private func timeFromComponents(using settings: NotificationSettings) -> Date {
         let calendar = Calendar.current
         var components = DateComponents()
         components.hour = settings.notificationHour
@@ -213,14 +234,14 @@ struct NotificationSettingsView: View {
         return calendar.date(from: components) ?? Date()
     }
     
-    private func updateNotificationTime(from date: Date) {
+    private func updateNotificationTime(from date: Date, settings: NotificationSettings) {
         let calendar = Calendar.current
         settings.notificationHour = calendar.component(.hour, from: date)
         settings.notificationMinute = calendar.component(.minute, from: date)
-        rescheduleNotifications()
+        rescheduleNotifications(settings: settings)
     }
     
-    private func rescheduleNotifications() {
+    private func rescheduleNotifications(settings: NotificationSettings) {
         Task {
             await notificationManager.rescheduleAllNotifications(
                 items: items,

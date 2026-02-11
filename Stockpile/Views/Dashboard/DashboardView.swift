@@ -369,11 +369,10 @@ struct DashboardView: View {
             bagId: item.bag?.id
         )
         
-        // 通知をキャンセル
-        Task {
-            await NotificationManager.shared.cancelNotifications(for: item)
-        }
         modelContext.delete(item)
+        Task {
+            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
+        }
         
         // スナックバーを表示
         showUndoSnackbarWithTimeout()
@@ -407,6 +406,9 @@ struct DashboardView: View {
             newItem.bag = bags.first { $0.id == bagId }
         }
         modelContext.insert(newItem)
+        Task {
+            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
+        }
         
         dismissUndoSnackbar()
     }
@@ -434,11 +436,10 @@ struct DashboardView: View {
     
     private func deleteSelectedItems() {
         for item in items where selectedItems.contains(item.id) {
-            // 通知をキャンセル
-            Task {
-                await NotificationManager.shared.cancelNotifications(for: item)
-            }
             modelContext.delete(item)
+        }
+        Task {
+            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
         }
         selectedItems.removeAll()
         isSelectionMode = false
@@ -464,6 +465,9 @@ struct DashboardView: View {
             )
             newItem.bag = targetBag
             modelContext.insert(newItem)
+        }
+        Task {
+            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
         }
         selectedItems.removeAll()
         isSelectionMode = false
@@ -655,4 +659,3 @@ struct UndoSnackbar: View {
     .environment(Router())
     .modelContainer(for: [Family.self, User.self, Bag.self, Item.self], inMemory: true)
 }
-

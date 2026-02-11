@@ -21,7 +21,6 @@ struct ItemFormSheet: View {
     let mode: Mode
     
     @Query private var bags: [Bag]
-    @Query private var notificationSettingsArray: [NotificationSettings]
     
     @State private var name: String = ""
     @State private var quantity: Int = 1
@@ -187,13 +186,6 @@ struct ItemFormSheet: View {
         
         let selectedBag = bags.first { $0.id == selectedBagId }
         
-        // 通知設定を取得または作成
-        let notificationSettings = notificationSettingsArray.first ?? {
-            let settings = NotificationSettings()
-            modelContext.insert(settings)
-            return settings
-        }()
-        
         switch mode {
         case .add:
             let newItem = Item(
@@ -205,27 +197,16 @@ struct ItemFormSheet: View {
             newItem.bag = selectedBag
             modelContext.insert(newItem)
             
-            // 通知をスケジュール
-            Task {
-                await NotificationManager.shared.scheduleNotifications(for: newItem, settings: notificationSettings)
-            }
-            
         case .edit(let item):
-            // 既存の通知をキャンセル
-            Task {
-                await NotificationManager.shared.cancelNotifications(for: item)
-            }
-            
             item.name = trimmedName
             item.quantity = quantity
             item.expiryDate = hasExpiry ? expiryDate : nil
             item.locationNote = trimmedNote.isEmpty ? nil : trimmedNote
             item.bag = selectedBag
-            
-            // 新しい通知をスケジュール
-            Task {
-                await NotificationManager.shared.scheduleNotifications(for: item, settings: notificationSettings)
-            }
+        }
+        
+        Task {
+            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
         }
         
         dismiss()
@@ -235,5 +216,5 @@ struct ItemFormSheet: View {
 #Preview("Add") {
     ItemFormSheet(mode: .add)
         .environment(Router())
-        .modelContainer(for: [Item.self, Bag.self], inMemory: true)
+        .modelContainer(for: [Item.self, Bag.self, NotificationSettings.self], inMemory: true)
 }
