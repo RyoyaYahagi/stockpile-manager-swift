@@ -52,16 +52,27 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
 struct StockpileApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     
+    private let sharedModelContainer: ModelContainer = {
+        let configuration = ModelConfiguration(cloudKitDatabase: .none)
+        
+        do {
+            return try ModelContainer(
+                for: Family.self,
+                User.self,
+                Bag.self,
+                Item.self,
+                NotificationSettings.self,
+                configurations: configuration
+            )
+        } catch {
+            fatalError("Failed to create ModelContainer: \(error)")
+        }
+    }()
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [
-            Family.self,
-            User.self,
-            Bag.self,
-            Item.self,
-            NotificationSettings.self
-        ])
+        .modelContainer(sharedModelContainer)
     }
 }
