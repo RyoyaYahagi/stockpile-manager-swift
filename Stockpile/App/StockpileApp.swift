@@ -3,6 +3,7 @@ import SwiftData
 import UIKit
 import UserNotifications
 import CloudKit
+import FirebaseCore
 
 final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
     func application(
@@ -10,6 +11,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        configureFirebaseIfNeeded()
         return true
     }
     
@@ -45,6 +47,20 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
                 print("CloudKit共有の受諾に失敗: \(error)")
             }
         }
+    }
+
+    private func configureFirebaseIfNeeded() {
+        guard FirebaseApp.app() == nil else {
+            return
+        }
+
+        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+              let options = FirebaseOptions(contentsOfFile: path) else {
+            print("⚠️ GoogleService-Info.plist が見つからないためFirebase初期化をスキップしました。")
+            return
+        }
+
+        FirebaseApp.configure(options: options)
     }
 }
 

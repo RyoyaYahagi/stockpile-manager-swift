@@ -1,6 +1,8 @@
 import Foundation
 import SwiftData
 import CloudKit
+import FirebaseAuth
+import FirebaseFirestore
 
 /// 家族共有サービス
 /// 招待コードの生成・検証、家族への参加・離脱を管理
@@ -258,15 +260,12 @@ final class FirebaseMigrationService {
 
     enum MigrationError: LocalizedError {
         case firebaseNotConfigured
-        case authenticationFailed
         case uploadFailed(String)
 
         var errorDescription: String? {
             switch self {
             case .firebaseNotConfigured:
-                return "Firebase設定が不足しています。Secrets.plistにFirebaseProjectIdとFirebaseWebAPIKeyを設定してください。"
-            case .authenticationFailed:
-                return "Firebase匿名認証に失敗しました。"
+                return "Firebase設定が不足しています。GoogleService-Info.plistをターゲットに追加し、Firebase初期化を確認してください。"
             case .uploadFailed(let message):
                 return "Firebase移行に失敗しました: \(message)"
             }
@@ -411,21 +410,13 @@ final class FirebaseMigrationService {
             createdAt: family.createdAt
         )
 
-        let client = FirebaseRESTClient(
-            projectId: APIConfig.firebaseProjectId,
-            webAPIKey: APIConfig.firebaseWebAPIKey
-        )
+        let client = FirebaseSDKClient()
         try await client.migrateFamily(
             family: familySnapshot,
             bags: bagSnapshots,
             items: itemSnapshots
         )
     }
-}
-
-private struct FirebaseAuthResponse: Decodable {
-    let idToken: String
-    let localId: String
 }
 
 private struct FamilySnapshot: Sendable {
@@ -455,189 +446,135 @@ private struct ItemSnapshot: Sendable {
     let createdAt: Date
 }
 
-private final class FirebaseRESTClient {
+private final class FirebaseSDKClient {
     enum ClientError: LocalizedError {
-        case invalidRequest
-        case invalidResponse
-        case httpError(code: Int, body: String)
+        case notConfigured
+        case missingUser
 
         var errorDescription: String? {
             switch self {
-            case .invalidRequest:
-                return "Firebase APIリクエストの生成に失敗しました。"
-            case .invalidResponse:
-                return "Firebase APIレスポンスの解析に失敗しました。"
-            case .httpError(let code, let body):
-                return "Firebase APIエラー (\(code)): \(body)"
+            case .notConfigured:
+                return "Firebaseが初期化されていません。"
+            case .missingUser:
+                return "Firebaseユーザー情報を取得できませんでした。"
             }
         }
     }
 
-    private let projectId: String
-    private let webAPIKey: String
-    private let session: URLSession
+    private let auth: Auth
+    private let firestore: Firestore
 
-    init(projectId: String, webAPIKey: String, session: URLSession = .shared) {
-        self.projectId = projectId
-        self.webAPIKey = webAPIKey
-        self.session = session
+    init(auth: Auth = Auth.auth(), firestore: Firestore = Firestore.firestore()) {
+        self.auth = auth
+        self.firestore = firestore
     }
 
     func migrateFamily(family: FamilySnapshot, bags: [BagSnapshot], items: [ItemSnapshot]) async throws {
-        let auth = try await signInAnonymously()
+        guard APIConfig.isFirebaseConfigured else {
+            throw ClientError.notConfigured
+        }
+
+        let uid = try await ensureAnonymousUser()
         let now = Date()
         let expiresAt = now.addingTimeInterval(24 * 60 * 60)
 
         try await upsertDocument(
             path: "families/\(family.id)",
-            fields: [
-                "id": firestoreString(family.id),
-                "name": firestoreString(family.name),
-                "inviteCode": firestoreString(family.inviteCode),
-                "createdAt": firestoreTimestamp(family.createdAt),
-                "lineGroupId": firestoreOptionalString(family.lineGroupId),
-                "migratedAt": firestoreTimestamp(now)
-            ],
-            idToken: auth.idToken
+            data: [
+                "id": family.id,
+                "name": family.name,
+                "inviteCode": family.inviteCode,
+                "createdAt": family.createdAt,
+                "lineGroupId": family.lineGroupId ?? NSNull(),
+                "migratedAt": now
+            ]
         )
 
         try await upsertDocument(
-            path: "families/\(family.id)/members/\(auth.localId)",
-            fields: [
-                "uid": firestoreString(auth.localId),
-                "displayName": firestoreString("匿名ユーザー"),
-                "createdAt": firestoreTimestamp(now)
-            ],
-            idToken: auth.idToken
+            path: "families/\(family.id)/members/\(uid)",
+            data: [
+                "uid": uid,
+                "displayName": "匿名ユーザー",
+                "createdAt": now
+            ]
         )
 
         try await upsertDocument(
             path: "invites/\(family.inviteCode)",
-            fields: [
-                "familyId": firestoreString(family.id),
-                "familyName": firestoreString(family.name),
-                "inviteCode": firestoreString(family.inviteCode),
-                "createdBy": firestoreString(auth.localId),
-                "createdAt": firestoreTimestamp(now),
-                "expiresAt": firestoreTimestamp(expiresAt)
-            ],
-            idToken: auth.idToken
+            data: [
+                "familyId": family.id,
+                "familyName": family.name,
+                "inviteCode": family.inviteCode,
+                "createdBy": uid,
+                "createdAt": now,
+                "expiresAt": expiresAt
+            ]
         )
 
         for bag in bags {
             try await upsertDocument(
                 path: "families/\(family.id)/bags/\(bag.id)",
-                fields: [
-                    "id": firestoreString(bag.id),
-                    "familyId": firestoreString(family.id),
-                    "name": firestoreString(bag.name),
-                    "createdAt": firestoreTimestamp(bag.createdAt)
-                ],
-                idToken: auth.idToken
+                data: [
+                    "id": bag.id,
+                    "familyId": family.id,
+                    "name": bag.name,
+                    "createdAt": bag.createdAt
+                ]
             )
         }
 
         for item in items {
             try await upsertDocument(
                 path: "families/\(family.id)/items/\(item.id)",
-                fields: [
-                    "id": firestoreString(item.id),
-                    "familyId": firestoreString(family.id),
-                    "name": firestoreString(item.name),
-                    "quantity": firestoreInt(item.quantity),
-                    "expiryDate": firestoreOptionalTimestamp(item.expiryDate),
-                    "bagId": firestoreOptionalString(item.bagId),
-                    "locationNote": firestoreOptionalString(item.locationNote),
-                    "notified30": firestoreBool(item.notified30),
-                    "notified7": firestoreBool(item.notified7),
-                    "notified1": firestoreBool(item.notified1),
-                    "createdAt": firestoreTimestamp(item.createdAt)
-                ],
-                idToken: auth.idToken
+                data: [
+                    "id": item.id,
+                    "familyId": family.id,
+                    "name": item.name,
+                    "quantity": item.quantity,
+                    "expiryDate": item.expiryDate ?? NSNull(),
+                    "bagId": item.bagId ?? NSNull(),
+                    "locationNote": item.locationNote ?? NSNull(),
+                    "notified30": item.notified30,
+                    "notified7": item.notified7,
+                    "notified1": item.notified1,
+                    "createdAt": item.createdAt
+                ]
             )
         }
     }
 
-    private func signInAnonymously() async throws -> FirebaseAuthResponse {
-        guard let url = URL(string: "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=\(webAPIKey)") else {
-            throw ClientError.invalidRequest
+    private func ensureAnonymousUser() async throws -> String {
+        if let currentUser = auth.currentUser {
+            return currentUser.uid
         }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(
-            withJSONObject: ["returnSecureToken": true],
-            options: []
-        )
+        let userID: String = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+            auth.signInAnonymously { result, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
 
-        let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw ClientError.invalidResponse
+                guard let result else {
+                    continuation.resume(throwing: ClientError.missingUser)
+                    return
+                }
+                continuation.resume(returning: result.user.uid)
+            }
         }
-
-        guard (200..<300).contains(httpResponse.statusCode) else {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw ClientError.httpError(code: httpResponse.statusCode, body: body)
-        }
-
-        return try JSONDecoder().decode(FirebaseAuthResponse.self, from: data)
+        return userID
     }
 
-    private func upsertDocument(path: String, fields: [String: [String: Any]], idToken: String) async throws {
-        guard let url = URL(string: "https://firestore.googleapis.com/v1/projects/\(projectId)/databases/(default)/documents/\(path)") else {
-            throw ClientError.invalidRequest
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "PATCH"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONSerialization.data(
-            withJSONObject: ["fields": fields],
-            options: []
-        )
-
-        let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw ClientError.invalidResponse
-        }
-
-        guard (200..<300).contains(httpResponse.statusCode) else {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw ClientError.httpError(code: httpResponse.statusCode, body: body)
+    private func upsertDocument(path: String, data: [String: Any]) async throws {
+        let reference = firestore.document(path)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            reference.setData(data, merge: true) { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(returning: ())
+            }
         }
     }
-}
-
-private func firestoreString(_ value: String) -> [String: Any] {
-    ["stringValue": value]
-}
-
-private func firestoreOptionalString(_ value: String?) -> [String: Any] {
-    if let value, !value.isEmpty {
-        return ["stringValue": value]
-    }
-    return ["nullValue": NSNull()]
-}
-
-private func firestoreInt(_ value: Int) -> [String: Any] {
-    ["integerValue": String(value)]
-}
-
-private func firestoreBool(_ value: Bool) -> [String: Any] {
-    ["booleanValue": value]
-}
-
-private func firestoreTimestamp(_ value: Date) -> [String: Any] {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return ["timestampValue": formatter.string(from: value)]
-}
-
-private func firestoreOptionalTimestamp(_ value: Date?) -> [String: Any] {
-    guard let value else {
-        return ["nullValue": NSNull()]
-    }
-    return firestoreTimestamp(value)
 }
