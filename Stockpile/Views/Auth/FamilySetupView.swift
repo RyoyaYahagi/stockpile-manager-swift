@@ -11,6 +11,7 @@ struct FamilySetupView: View {
     @State private var inviteCode = ""
     @State private var errorMessage: String?
     @State private var showQRScanner = false
+    @State private var isCreating = false
     @State private var isJoining = false
     
     enum SetupMode {
@@ -25,6 +26,10 @@ struct FamilySetupView: View {
         case .join:
             return inviteCode.count == 6
         }
+    }
+
+    private var isSubmitting: Bool {
+        isCreating || isJoining
     }
     
     var body: some View {
@@ -61,7 +66,7 @@ struct FamilySetupView: View {
                 Button(action: submit) {
                     HStack {
                         Spacer()
-                        if isJoining {
+                        if isSubmitting {
                             ProgressView()
                                 .progressViewStyle(.circular)
                         } else {
@@ -71,7 +76,7 @@ struct FamilySetupView: View {
                         Spacer()
                     }
                 }
-                .disabled(!isValid || isJoining)
+                .disabled(!isValid || isSubmitting)
             }
         }
         .navigationTitle("家族セットアップ")
@@ -138,7 +143,9 @@ struct FamilySetupView: View {
     private func submit() {
         switch selectedMode {
         case .create:
-            createFamily()
+            Task {
+                await createFamily()
+            }
         case .join:
             Task {
                 await joinWithCode(inviteCode)
@@ -146,11 +153,29 @@ struct FamilySetupView: View {
         }
     }
     
-    private func createFamily() {
+    private func createFamily() async {
+        isCreating = true
+        defer { isCreating = false }
+
         let trimmedName = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+
         let family = Family(name: trimmedName)
         modelContext.insert(family)
-        router.popToRoot()
+        
+        do {
+            try modelContext.save()
+            let sharingService = FamilySharingService(modelContext: modelContext)
+            do {
+                try await sharingService.migrateInitialDataToFirebaseIfNeeded(for: family)
+            } catch {
+                // 家族作成自体は完了扱いにし、設定画面から再試行可能にする。
+                print("Firebase初回移行に失敗: \(error)")
+            }
+            router.popToRoot()
+        } catch {
+            errorMessage = "家族の作成に失敗しました: \(error.localizedDescription)"
+        }
     }
     
     private func joinWithCode(_ code: String) async {

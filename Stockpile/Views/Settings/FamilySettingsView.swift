@@ -12,6 +12,7 @@ struct FamilySettingsView: View {
     @State private var editedName = ""
     @State private var showLeaveConfirmation = false
     @State private var isStartingShare = false
+    @State private var isRetryingMigration = false
     @State private var shareError: String?
     @State private var showShareError = false
 
@@ -54,6 +55,8 @@ struct FamilySettingsView: View {
             } footer: {
                 Text("QRコードまたは6桁のコードを共有して、家族を招待できます。招待コードは24時間有効です。")
             }
+
+            firebaseMigrationSection
 
             Section {
                 ForEach(family.members) { member in
@@ -188,6 +191,95 @@ struct FamilySettingsView: View {
             }
 
             router.popToRoot()
+        }
+    }
+
+    @ViewBuilder
+    private var firebaseMigrationSection: some View {
+        let sharingService = FamilySharingService(modelContext: modelContext)
+        let status = sharingService.firebaseMigrationStatus(for: family)
+
+        Section {
+            switch status {
+            case .completed:
+                HStack {
+                    Label("初回移行", systemImage: "checkmark.seal.fill")
+                    Spacer()
+                    Text("完了")
+                        .foregroundStyle(.secondary)
+                }
+            case .notConfigured:
+                HStack {
+                    Label("初回移行", systemImage: "exclamationmark.triangle.fill")
+                    Spacer()
+                    Text("未設定")
+                        .foregroundStyle(.secondary)
+                }
+            case .notStarted:
+                HStack {
+                    Label("初回移行", systemImage: "arrow.clockwise")
+                    Spacer()
+                    Text("未実行")
+                        .foregroundStyle(.secondary)
+                }
+                Button {
+                    retryFirebaseMigration()
+                } label: {
+                    HStack {
+                        Text("Firebase移行を実行")
+                        Spacer()
+                        if isRetryingMigration {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                        }
+                    }
+                }
+                .disabled(isRetryingMigration)
+            case .pending(let lastError):
+                HStack {
+                    Label("初回移行", systemImage: "exclamationmark.triangle.fill")
+                    Spacer()
+                    Text("再試行待ち")
+                        .foregroundStyle(.orange)
+                }
+                if let lastError, !lastError.isEmpty {
+                    Text(lastError)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Button {
+                    retryFirebaseMigration()
+                } label: {
+                    HStack {
+                        Text("Firebase移行を再試行")
+                        Spacer()
+                        if isRetryingMigration {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                        }
+                    }
+                }
+                .disabled(isRetryingMigration)
+            }
+        } header: {
+            Text("Firebase同期")
+        } footer: {
+            Text("初回作成時にローカルデータをFirebaseへ移行します。移行後もローカルデータは保持されます。")
+        }
+    }
+
+    private func retryFirebaseMigration() {
+        isRetryingMigration = true
+
+        Task {
+            defer { isRetryingMigration = false }
+            do {
+                let sharingService = FamilySharingService(modelContext: modelContext)
+                try await sharingService.retryInitialFirebaseMigration(for: family)
+            } catch {
+                shareError = "Firebase移行に失敗しました: \(error.localizedDescription)"
+                showShareError = true
+            }
         }
     }
 }

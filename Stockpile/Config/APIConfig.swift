@@ -86,4 +86,45 @@ struct APIConfig {
     static var isProductSearchAvailable: Bool {
         isRakutenConfigured || isYahooConfigured
     }
+
+    // MARK: - Firebase
+
+    /// Firebase Project ID
+    static var firebaseProjectId: String {
+        if let value = ProcessInfo.processInfo.environment["FIREBASE_PROJECT_ID"], !value.isEmpty {
+            return value
+        }
+
+        if let value = secretsValue(for: "FirebaseProjectId"), !value.isEmpty {
+            return value
+        }
+
+        if let value = Bundle.main.infoDictionary?["FirebaseProjectId"] as? String, !value.isEmpty {
+            return value
+        }
+
+        return ""
+    }
+
+    /// Firebase Web API Key
+    static var firebaseWebAPIKey: String {
+        if let value = ProcessInfo.processInfo.environment["FIREBASE_WEB_API_KEY"], !value.isEmpty {
+            return value
+        }
+
+        if let value = secretsValue(for: "FirebaseWebAPIKey"), !value.isEmpty {
+            return value
+        }
+
+        if let value = Bundle.main.infoDictionary?["FirebaseWebAPIKey"] as? String, !value.isEmpty {
+            return value
+        }
+
+        return ""
+    }
+
+    /// Firebase移行に必要な設定が揃っているか
+    static var isFirebaseConfigured: Bool {
+        !firebaseProjectId.isEmpty && !firebaseWebAPIKey.isEmpty
+    }
 }
