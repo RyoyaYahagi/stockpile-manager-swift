@@ -446,6 +446,11 @@ private struct ItemSnapshot: Sendable {
     let createdAt: Date
 }
 
+private struct FirestoreWriteOperation {
+    let path: String
+    let data: [String: Any]
+}
+
 private final class FirebaseSDKClient {
     enum ClientError: LocalizedError {
         case notConfigured
@@ -478,69 +483,84 @@ private final class FirebaseSDKClient {
         let now = Date()
         let expiresAt = now.addingTimeInterval(24 * 60 * 60)
 
-        try await upsertDocument(
-            path: "families/\(family.id)",
-            data: [
-                "id": family.id,
-                "name": family.name,
-                "inviteCode": family.inviteCode,
-                "createdAt": family.createdAt,
-                "lineGroupId": family.lineGroupId ?? NSNull(),
-                "migratedAt": now
-            ]
+        var operations: [FirestoreWriteOperation] = []
+        operations.reserveCapacity(3 + bags.count + items.count)
+
+        operations.append(
+            FirestoreWriteOperation(
+                path: "families/\(family.id)",
+                data: [
+                    "id": family.id,
+                    "name": family.name,
+                    "inviteCode": family.inviteCode,
+                    "createdAt": family.createdAt,
+                    "lineGroupId": family.lineGroupId ?? NSNull(),
+                    "migratedAt": now
+                ]
+            )
         )
 
-        try await upsertDocument(
-            path: "families/\(family.id)/members/\(uid)",
-            data: [
-                "uid": uid,
-                "displayName": "匿名ユーザー",
-                "createdAt": now
-            ]
+        operations.append(
+            FirestoreWriteOperation(
+                path: "families/\(family.id)/members/\(uid)",
+                data: [
+                    "uid": uid,
+                    "displayName": "匿名ユーザー",
+                    "createdAt": now
+                ]
+            )
         )
 
-        try await upsertDocument(
-            path: "invites/\(family.inviteCode)",
-            data: [
-                "familyId": family.id,
-                "familyName": family.name,
-                "inviteCode": family.inviteCode,
-                "createdBy": uid,
-                "createdAt": now,
-                "expiresAt": expiresAt
-            ]
+        operations.append(
+            FirestoreWriteOperation(
+                path: "invites/\(family.inviteCode)",
+                data: [
+                    "familyId": family.id,
+                    "familyName": family.name,
+                    "inviteCode": family.inviteCode,
+                    "createdBy": uid,
+                    "createdAt": now,
+                    "expiresAt": expiresAt
+                ]
+            )
         )
 
         for bag in bags {
-            try await upsertDocument(
-                path: "families/\(family.id)/bags/\(bag.id)",
-                data: [
-                    "id": bag.id,
-                    "familyId": family.id,
-                    "name": bag.name,
-                    "createdAt": bag.createdAt
-                ]
+            operations.append(
+                FirestoreWriteOperation(
+                    path: "families/\(family.id)/bags/\(bag.id)",
+                    data: [
+                        "id": bag.id,
+                        "familyId": family.id,
+                        "name": bag.name,
+                        "createdAt": bag.createdAt
+                    ]
+                )
             )
         }
 
         for item in items {
-            try await upsertDocument(
-                path: "families/\(family.id)/items/\(item.id)",
-                data: [
-                    "id": item.id,
-                    "familyId": family.id,
-                    "name": item.name,
-                    "quantity": item.quantity,
-                    "expiryDate": item.expiryDate ?? NSNull(),
-                    "bagId": item.bagId ?? NSNull(),
-                    "locationNote": item.locationNote ?? NSNull(),
-                    "notified30": item.notified30,
-                    "notified7": item.notified7,
-                    "notified1": item.notified1,
-                    "createdAt": item.createdAt
-                ]
+            operations.append(
+                FirestoreWriteOperation(
+                    path: "families/\(family.id)/items/\(item.id)",
+                    data: [
+                        "id": item.id,
+                        "familyId": family.id,
+                        "name": item.name,
+                        "quantity": item.quantity,
+                        "expiryDate": item.expiryDate ?? NSNull(),
+                        "bagId": item.bagId ?? NSNull(),
+                        "locationNote": item.locationNote ?? NSNull(),
+                        "notified30": item.notified30,
+                        "notified7": item.notified7,
+                        "notified1": item.notified1,
+                        "createdAt": item.createdAt
+                    ]
+                )
             )
         }
+
+        try await commitWritesInBatches(operations)
     }
 
     private func ensureAnonymousUser() async throws -> String {
@@ -565,10 +585,29 @@ private final class FirebaseSDKClient {
         return userID
     }
 
-    private func upsertDocument(path: String, data: [String: Any]) async throws {
-        let reference = firestore.document(path)
+    private func commitWritesInBatches(_ operations: [FirestoreWriteOperation], batchSize: Int = 400) async throws {
+        guard !operations.isEmpty else {
+            return
+        }
+
+        var startIndex = operations.startIndex
+        while startIndex < operations.endIndex {
+            let endIndex = min(startIndex + batchSize, operations.endIndex)
+            let batch = firestore.batch()
+
+            for operation in operations[startIndex..<endIndex] {
+                let reference = firestore.document(operation.path)
+                batch.setData(operation.data, forDocument: reference, merge: true)
+            }
+
+            try await commitBatch(batch)
+            startIndex = endIndex
+        }
+    }
+
+    private func commitBatch(_ batch: WriteBatch) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            reference.setData(data, merge: true) { error in
+            batch.commit { error in
                 if let error {
                     continuation.resume(throwing: error)
                     return
