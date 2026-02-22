@@ -154,11 +154,41 @@ struct ImportJSONView: View {
             let locationNote: String?
         }
         
+        struct ItemSignature: Hashable {
+            let name: String
+            let quantity: Int
+            let expiryDate: String?
+            let locationNote: String?
+            let bagName: String?
+        }
+        
         let decoder = JSONDecoder()
         let importItems = try decoder.decode([ImportItem].self, from: data)
         
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
+        
+        func normalized(_ value: String?) -> String? {
+            guard let value else { return nil }
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        
+        func signature(
+            name: String,
+            quantity: Int,
+            expiryDate: Date?,
+            locationNote: String?,
+            bagName: String?
+        ) -> ItemSignature {
+            ItemSignature(
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                quantity: quantity,
+                expiryDate: expiryDate.map { dateFormatter.string(from: $0) },
+                locationNote: normalized(locationNote),
+                bagName: normalized(bagName)
+            )
+        }
         
         // 既存のBagを取得
         let bagDescriptor = FetchDescriptor<Bag>()
@@ -168,17 +198,44 @@ struct ImportJSONView: View {
             bagCache[bag.name] = bag
         }
         
-        return importItems.map { importItem in
+        // 既存のItemを重複判定用に読み込む
+        let itemDescriptor = FetchDescriptor<Item>()
+        let existingItems = (try? modelContext.fetch(itemDescriptor)) ?? []
+        var existingSignatures = Set(existingItems.map { item in
+            signature(
+                name: item.name,
+                quantity: item.quantity,
+                expiryDate: item.expiryDate,
+                locationNote: item.locationNote,
+                bagName: item.bag?.name
+            )
+        })
+        
+        var uniqueItems: [Item] = []
+        for importItem in importItems {
             let expiryDate = importItem.expiryDate.flatMap { dateFormatter.date(from: $0) }
+            let quantity = importItem.quantity ?? 1
+            let signature = signature(
+                name: importItem.name,
+                quantity: quantity,
+                expiryDate: expiryDate,
+                locationNote: importItem.locationNote,
+                bagName: importItem.bagName
+            )
+            
+            if existingSignatures.contains(signature) {
+                continue
+            }
+            
             let item = Item(
                 name: importItem.name,
-                quantity: importItem.quantity ?? 1,
+                quantity: quantity,
                 expiryDate: expiryDate,
                 locationNote: importItem.locationNote
             )
             
             // Bagの関連付け
-            if let bagName = importItem.bagName, !bagName.isEmpty {
+            if let bagName = normalized(importItem.bagName) {
                 if let existingBag = bagCache[bagName] {
                     item.bag = existingBag
                 } else {
@@ -190,8 +247,11 @@ struct ImportJSONView: View {
                 }
             }
             
-            return item
+            uniqueItems.append(item)
+            existingSignatures.insert(signature)
         }
+        
+        return uniqueItems
     }
 }
 
