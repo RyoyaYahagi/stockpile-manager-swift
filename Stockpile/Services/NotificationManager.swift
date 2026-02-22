@@ -37,6 +37,8 @@ final class NotificationManager: ObservableObject {
     static let shared = NotificationManager()
     
     @Published private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
+    private var pendingRescheduleWorkItem: DispatchWorkItem?
+    private let rescheduleDebounceInterval: TimeInterval = 0.25
     
     private init() {
         Task {
@@ -67,8 +69,25 @@ final class NotificationManager: ObservableObject {
     
     // MARK: - Scheduling (Grouped by Date)
     
+    /// 再スケジュール要求をデバウンスして実行
+    func requestReschedule(using modelContext: ModelContext) {
+        enqueueReschedule { [weak self] in
+            guard let self else { return }
+            await self.rescheduleAllNotifications(using: modelContext)
+        }
+    }
+    
+    /// 再スケジュール要求をデバウンスして実行（設定画面用）
+    func requestReschedule(items: [Item], settings: NotificationSettings) {
+        enqueueReschedule { [weak self] in
+            guard let self else { return }
+            await self.rescheduleAllNotifications(items: items, settings: settings)
+        }
+    }
+    
     /// すべてのアイテムの通知を再スケジュール（日付でグループ化）
     func rescheduleAllNotifications(items: [Item], settings: NotificationSettings) async {
+        cancelPendingReschedule()
         cancelAllNotifications()
         
         guard settings.isEnabled else { return }
@@ -148,11 +167,14 @@ final class NotificationManager: ObservableObject {
             )
         }
         
+        #if DEBUG
         print("📋 Scheduled \(groupedNotifications.count) grouped notifications")
+        #endif
     }
     
     /// SwiftDataストアから設定とアイテムを再取得して通知を再スケジュール
     func rescheduleAllNotifications(using modelContext: ModelContext) async {
+        cancelPendingReschedule()
         let settingsDescriptor = FetchDescriptor<NotificationSettings>(
             sortBy: [SortDescriptor(\.createdAt)]
         )
@@ -373,19 +395,19 @@ final class NotificationManager: ObservableObject {
         
         // 実際の通知発火日時を計算
         guard let scheduledDate = calendar.date(from: dateComponents) else {
+            #if DEBUG
             print("⚠️ Failed to create scheduled date for \(item.name)")
+            #endif
             return
         }
         
         let now = Date()
-        print("📅 Notification check for \(item.name) (\(suffix)):")
-        print("   - Scheduled: \(formatDate(scheduledDate))")
-        print("   - Current:   \(formatDate(now))")
-        print("   - Is future: \(scheduledDate > now)")
         
         // 過去の日時は通知しない
         guard scheduledDate > now else {
+            #if DEBUG
             print("⚠️ Skipped: \(item.name) (\(suffix)) - \(formatDate(scheduledDate)) is in the past")
+            #endif
             return
         }
         
@@ -407,9 +429,13 @@ final class NotificationManager: ObservableObject {
         
         do {
             try await UNUserNotificationCenter.current().add(request)
+            #if DEBUG
             print("✅ Scheduled: \(item.name) (\(suffix)) at \(formatDate(scheduledDate))")
+            #endif
         } catch {
+            #if DEBUG
             print("❌ Failed to schedule notification: \(error)")
+            #endif
         }
     }
     
@@ -427,6 +453,26 @@ final class NotificationManager: ObservableObject {
     /// すべての通知をキャンセル
     func cancelAllNotifications() {
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+    }
+    
+    private func enqueueReschedule(_ operation: @escaping @MainActor () async -> Void) {
+        pendingRescheduleWorkItem?.cancel()
+        
+        let workItem = DispatchWorkItem {
+            Task { @MainActor in
+                await operation()
+            }
+        }
+        pendingRescheduleWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + rescheduleDebounceInterval,
+            execute: workItem
+        )
+    }
+    
+    private func cancelPendingReschedule() {
+        pendingRescheduleWorkItem?.cancel()
+        pendingRescheduleWorkItem = nil
     }
     
     // MARK: - Debug

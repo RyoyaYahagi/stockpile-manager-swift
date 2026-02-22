@@ -5,9 +5,11 @@ struct ItemRow: View {
     let item: Item
     
     var body: some View {
+        let expiryStatus = item.expiryStatus
+        
         HStack(spacing: 12) {
             // 期限状態インジケーター
-            ExpiryBadge(status: item.expiryStatus)
+            ExpiryBadge(status: expiryStatus)
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 4) {
@@ -48,14 +50,14 @@ struct ItemRow: View {
                 }
                 Text(item.expiryDisplayText)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(expiryColor)
+                    .foregroundStyle(expiryColor(for: expiryStatus))
             }
         }
         .padding(.vertical, 4)
     }
     
-    private var expiryColor: Color {
-        switch item.expiryStatus {
+    private func expiryColor(for status: ExpiryStatus) -> Color {
+        switch status {
         case .expired: return .red
         case .imminent: return .orange
         case .approaching: return .yellow

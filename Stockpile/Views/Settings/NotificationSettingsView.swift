@@ -242,12 +242,7 @@ struct NotificationSettingsView: View {
     }
     
     private func rescheduleNotifications(settings: NotificationSettings) {
-        Task {
-            await notificationManager.rescheduleAllNotifications(
-                items: items,
-                settings: settings
-            )
-        }
+        notificationManager.requestReschedule(items: items, settings: settings)
     }
     
     private func openSettings() {

@@ -27,48 +27,64 @@ struct DashboardView: View {
         case imminent
     }
     
-    private var filteredItems: [Item] {
-        var result = items
+    private struct DashboardData {
+        let filteredItems: [Item]
+        let expiredCount: Int
+        let imminentCount: Int
+    }
+    
+    private var dashboardData: DashboardData {
+        let normalizedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasSearchText = !normalizedSearchText.isEmpty
         
-        // 収納場所フィルタ
-        if let bagId = selectedBagId {
-            result = result.filter { $0.bag?.id == bagId }
+        var filtered: [Item] = []
+        var expiredCount = 0
+        var imminentCount = 0
+        
+        for item in items {
+            let status = item.expiryStatus
+            
+            if status == .expired {
+                expiredCount += 1
+            }
+            if status == .imminent {
+                imminentCount += 1
+            }
+            
+            if let bagId = selectedBagId, item.bag?.id != bagId {
+                continue
+            }
+            
+            if hasSearchText, !item.name.localizedCaseInsensitiveContains(normalizedSearchText) {
+                continue
+            }
+            
+            switch selectedExpiryFilter {
+            case .expired:
+                guard status == .expired else { continue }
+            case .imminent:
+                guard status == .expired || status == .imminent else { continue }
+            case .all:
+                break
+            }
+            
+            filtered.append(item)
         }
         
-        // 検索フィルタ
-        if !searchText.isEmpty {
-            result = result.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-        }
-        
-        // 期限状態フィルタ
-        switch selectedExpiryFilter {
-        case .expired:
-            result = result.filter { $0.expiryStatus == .expired }
-        case .imminent:
-            result = result.filter { $0.expiryStatus == .expired || $0.expiryStatus == .imminent }
-        case .all:
-            break
-        }
-        
-        // 賞味期限が早い順にソート（期限なしは最後）
-        result.sort { item1, item2 in
+        filtered.sort { item1, item2 in
             switch (item1.expiryDate, item2.expiryDate) {
-            case (nil, nil): return false // 両方nil -> 順序維持
-            case (nil, _): return false   // item1がnil -> 後ろへ
-            case (_, nil): return true    // item2がnil -> item1を前へ
-            case let (date1?, date2?): return date1 < date2 // 日付比較
+            case (nil, nil): return false
+            case (nil, _): return false
+            case (_, nil): return true
+            case let (date1?, date2?): return date1 < date2
             }
         }
         
-        return result
-    }
-    
-    private var expiredCount: Int {
-        items.filter { $0.expiryStatus == .expired }.count
-    }
-    
-    private var imminentCount: Int {
-        items.filter { $0.expiryStatus == .imminent }.count
+        return DashboardData(
+            filteredItems: filtered,
+            expiredCount: expiredCount,
+            imminentCount: imminentCount
+        )
     }
     
     private var selectedBagName: String {
@@ -80,6 +96,8 @@ struct DashboardView: View {
     }
     
     var body: some View {
+        let data = dashboardData
+        
         List(selection: isSelectionMode ? $selectedItems : nil) {
             // サマリーセクション
             if !items.isEmpty {
@@ -92,7 +110,7 @@ struct DashboardView: View {
                         } label: {
                             SummaryCard(
                                 title: "期限切れ",
-                                count: expiredCount,
+                                count: data.expiredCount,
                                 color: .red,
                                 isSelected: selectedExpiryFilter == .expired
                             )
@@ -106,7 +124,7 @@ struct DashboardView: View {
                         } label: {
                             SummaryCard(
                                 title: "期限間近",
-                                count: imminentCount,
+                                count: data.imminentCount,
                                 color: .orange,
                                 isSelected: selectedExpiryFilter == .imminent
                             )
@@ -155,14 +173,14 @@ struct DashboardView: View {
             
             // アイテム一覧
             Section {
-                if filteredItems.isEmpty {
+                if data.filteredItems.isEmpty {
                     ContentUnavailableView(
                         "備蓄品がありません",
                         systemImage: "tray",
                         description: Text("右下の+ボタンで備蓄品を追加しましょう")
                     )
                 } else {
-                    ForEach(filteredItems) { item in
+                    ForEach(data.filteredItems) { item in
                         ItemRow(item: item)
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -216,8 +234,8 @@ struct DashboardView: View {
                     }
                 }
             } header: {
-                if !filteredItems.isEmpty {
-                    Text("備蓄品 (\(filteredItems.count))")
+                if !data.filteredItems.isEmpty {
+                    Text("備蓄品 (\(data.filteredItems.count))")
                 }
             }
         }
@@ -370,9 +388,7 @@ struct DashboardView: View {
         )
         
         modelContext.delete(item)
-        Task {
-            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
-        }
+        NotificationManager.shared.requestReschedule(using: modelContext)
         
         // スナックバーを表示
         showUndoSnackbarWithTimeout()
@@ -406,9 +422,7 @@ struct DashboardView: View {
             newItem.bag = bags.first { $0.id == bagId }
         }
         modelContext.insert(newItem)
-        Task {
-            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
-        }
+        NotificationManager.shared.requestReschedule(using: modelContext)
         
         dismissUndoSnackbar()
     }
@@ -438,9 +452,7 @@ struct DashboardView: View {
         for item in items where selectedItems.contains(item.id) {
             modelContext.delete(item)
         }
-        Task {
-            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
-        }
+        NotificationManager.shared.requestReschedule(using: modelContext)
         selectedItems.removeAll()
         isSelectionMode = false
     }
@@ -466,9 +478,7 @@ struct DashboardView: View {
             newItem.bag = targetBag
             modelContext.insert(newItem)
         }
-        Task {
-            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
-        }
+        NotificationManager.shared.requestReschedule(using: modelContext)
         selectedItems.removeAll()
         isSelectionMode = false
     }

@@ -205,9 +205,7 @@ struct ItemFormSheet: View {
             item.bag = selectedBag
         }
         
-        Task {
-            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
-        }
+        NotificationManager.shared.requestReschedule(using: modelContext)
         
         dismiss()
     }

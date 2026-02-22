@@ -9,15 +9,17 @@ struct ItemDetailView: View {
     @State private var showDeleteConfirmation = false
     
     var body: some View {
+        let expiryStatus = item.expiryStatus
+        
         List {
             // 期限セクション
             Section {
                 HStack {
                     Label("期限状態", systemImage: "clock")
                     Spacer()
-                    ExpiryBadge(status: item.expiryStatus)
-                    Text(item.expiryStatus.label)
-                        .foregroundStyle(expiryColor)
+                    ExpiryBadge(status: expiryStatus)
+                    Text(expiryStatus.label)
+                        .foregroundStyle(expiryColor(for: expiryStatus))
                 }
                 
                 if let expiryDate = item.expiryDate {
@@ -32,7 +34,7 @@ struct ItemDetailView: View {
                         Label("残り日数", systemImage: "hourglass")
                         Spacer()
                         Text(item.expiryDisplayText)
-                            .foregroundStyle(expiryColor)
+                            .foregroundStyle(expiryColor(for: expiryStatus))
                     }
                 }
             } header: {
@@ -103,17 +105,15 @@ struct ItemDetailView: View {
         ) {
             Button("削除", role: .destructive) {
                 modelContext.delete(item)
-                Task {
-                    await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
-                }
+                NotificationManager.shared.requestReschedule(using: modelContext)
                 router.pop()
             }
             Button("キャンセル", role: .cancel) {}
         }
     }
     
-    private var expiryColor: Color {
-        switch item.expiryStatus {
+    private func expiryColor(for status: ExpiryStatus) -> Color {
+        switch status {
         case .expired: return .red
         case .imminent: return .orange
         case .approaching: return .yellow

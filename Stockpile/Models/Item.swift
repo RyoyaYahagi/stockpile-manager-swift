@@ -65,22 +65,9 @@ final class Item {
     
     /// 期限状態を計算
     var expiryStatus: ExpiryStatus {
-        guard let expiryDate = expiryDate else {
+        guard let days = daysUntilExpiry else {
             return .noExpiry
         }
-        
-        let calendar = Calendar.current
-        
-        // 今日と期限日の日付成分のみで比較（時刻を無視）
-        let todayComponents = calendar.dateComponents([.year, .month, .day], from: Date())
-        let expiryComponents = calendar.dateComponents([.year, .month, .day], from: expiryDate)
-        
-        guard let today = calendar.date(from: todayComponents),
-              let normalizedExpiry = calendar.date(from: expiryComponents) else {
-            return .noExpiry
-        }
-        
-        let days = calendar.dateComponents([.day], from: today, to: normalizedExpiry).day ?? 0
         
         if days < 0 {
             return .expired
@@ -96,19 +83,7 @@ final class Item {
     /// 期限までの日数を取得
     var daysUntilExpiry: Int? {
         guard let expiryDate = expiryDate else { return nil }
-        
-        let calendar = Calendar.current
-        
-        // 今日と期限日の日付成分のみで計算（時刻を無視）
-        let todayComponents = calendar.dateComponents([.year, .month, .day], from: Date())
-        let expiryComponents = calendar.dateComponents([.year, .month, .day], from: expiryDate)
-        
-        guard let today = calendar.date(from: todayComponents),
-              let normalizedExpiry = calendar.date(from: expiryComponents) else {
-            return nil
-        }
-        
-        return calendar.dateComponents([.day], from: today, to: normalizedExpiry).day
+        return Self.calculateDaysUntilExpiry(for: expiryDate)
     }
     
     /// 期限の表示用文字列
@@ -124,5 +99,15 @@ final class Item {
         } else {
             return "あと\(days)日"
         }
+    }
+    
+    private static func calculateDaysUntilExpiry(
+        for expiryDate: Date,
+        from referenceDate: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Int {
+        let today = calendar.startOfDay(for: referenceDate)
+        let normalizedExpiry = calendar.startOfDay(for: expiryDate)
+        return calendar.dateComponents([.day], from: today, to: normalizedExpiry).day ?? 0
     }
 }
