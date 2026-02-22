@@ -115,6 +115,7 @@ final class FamilySharingService {
 
             do {
                 try await firebaseClient.addCurrentUserAsMember(familyId: inviteInfo.familyId)
+                try await syncFamilyMembersFromFirebase(for: family)
             } catch {
                 return .pendingSync("メンバー登録を後で再試行します: \(error.localizedDescription)")
             }
@@ -194,6 +195,48 @@ final class FamilySharingService {
     func firebaseMigrationStatus(for family: Family) -> FirebaseMigrationService.MigrationStatus {
         let migrationService = FirebaseMigrationService(modelContext: modelContext)
         return migrationService.status(for: family)
+    }
+
+    /// Firebase上のメンバー情報をローカルへ同期
+    @discardableResult
+    func syncFamilyMembersFromFirebase(for family: Family) async throws -> Int {
+        guard APIConfig.isFirebaseConfigured else {
+            throw SharingError.firebaseNotConfigured
+        }
+
+        let remoteMembers = try await firebaseClient.fetchMembers(familyId: family.id.uuidString)
+        for member in remoteMembers {
+            upsertLocalMember(
+                in: family,
+                uid: member.uid,
+                displayName: member.displayName,
+                email: member.email
+            )
+        }
+        try modelContext.save()
+        return remoteMembers.count
+    }
+
+    private func upsertLocalMember(
+        in family: Family,
+        uid: String,
+        displayName: String,
+        email: String?
+    ) {
+        if let existing = family.members.first(where: { $0.lineUserId == uid }) {
+            if !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                existing.displayName = displayName
+            }
+            existing.email = email
+            existing.family = family
+            existing.lineUserId = uid
+            return
+        }
+
+        let user = User(displayName: displayName, email: email)
+        user.family = family
+        user.lineUserId = uid
+        modelContext.insert(user)
     }
 
     enum JoinResult {
@@ -446,6 +489,12 @@ struct FirebaseInviteInfo: Sendable {
     }
 }
 
+struct FirebaseMemberInfo: Sendable {
+    let uid: String
+    let displayName: String
+    let email: String?
+}
+
 private struct FirestoreWriteOperation {
     let path: String
     let data: [String: Any]
@@ -603,6 +652,43 @@ private actor FirebaseSDKClient {
                 "createdAt": now
             ]
         )
+    }
+
+    func fetchMembers(familyId: String) async throws -> [FirebaseMemberInfo] {
+        guard APIConfig.isFirebaseConfigured else {
+            throw ClientError.notConfigured
+        }
+
+        _ = try await ensureAnonymousUser()
+
+        let query = firestore.collection("families/\(familyId)/members")
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[FirebaseMemberInfo], Error>) in
+            query.getDocuments { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                let members: [FirebaseMemberInfo] = snapshot?.documents.compactMap { document in
+                    let data = document.data()
+                    let uid = (data["uid"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let normalizedUID = (uid?.isEmpty == false) ? uid! : document.documentID
+                    guard !normalizedUID.isEmpty else { return nil }
+
+                    let displayName = (data["displayName"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let normalizedDisplayName = (displayName?.isEmpty == false) ? displayName! : "匿名ユーザー"
+                    let email = (data["email"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                    return FirebaseMemberInfo(
+                        uid: normalizedUID,
+                        displayName: normalizedDisplayName,
+                        email: email?.isEmpty == true ? nil : email
+                    )
+                } ?? []
+
+                continuation.resume(returning: members)
+            }
+        }
     }
 
     func deleteInvite(familyId: String, inviteCode: String?) async throws {
