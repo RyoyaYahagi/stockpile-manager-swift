@@ -9,11 +9,10 @@ import FirebaseFirestore
 @MainActor
 final class FamilySharingService {
     private let modelContext: ModelContext
-    private let cloudKitService: CloudKitSharingService
+    private lazy var cloudKitService = CloudKitSharingService()
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
-        self.cloudKitService = CloudKitSharingService()
     }
 
     /// 招待URLを生成

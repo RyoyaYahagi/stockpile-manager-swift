@@ -14,19 +14,31 @@ final class CloudKitSharingService: @unchecked Sendable {
     /// 招待コードの有効期限（24時間）
     private static let inviteExpiration: TimeInterval = 24 * 60 * 60
     
-    /// CloudKitコンテナID
-    private static var containerIdentifier: String {
-        if let identifier = Bundle.main.object(forInfoDictionaryKey: "CK_CONTAINER_IDENTIFIER") as? String,
-           !identifier.isEmpty {
-            return identifier
+    /// CloudKitコンテナID（Info.plistに明示設定されている場合のみ使用）
+    private static var configuredContainerIdentifier: String? {
+        guard let rawIdentifier = Bundle.main.object(forInfoDictionaryKey: "CK_CONTAINER_IDENTIFIER") as? String else {
+            return nil
         }
         
-        let bundleId = Bundle.main.bundleIdentifier ?? "com.yappa-stockpile.app"
-        return "iCloud.\(bundleId)"
+        let identifier = rawIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !identifier.isEmpty else {
+            return nil
+        }
+        
+        // ビルド設定が未展開の文字列や不正値を除外して、起動時クラッシュを回避する
+        guard !identifier.contains("$("), identifier.hasPrefix("iCloud.") else {
+            return nil
+        }
+        
+        return identifier
     }
 
     init() {
-        self.container = CKContainer(identifier: Self.containerIdentifier)
+        if let containerIdentifier = Self.configuredContainerIdentifier {
+            self.container = CKContainer(identifier: containerIdentifier)
+        } else {
+            self.container = CKContainer.default()
+        }
         self.publicDatabase = container.publicCloudDatabase
         self.privateDatabase = container.privateCloudDatabase
     }
