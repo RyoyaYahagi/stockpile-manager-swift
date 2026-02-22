@@ -550,6 +550,9 @@ private actor FirebaseSDKClient {
             throw ClientError.notConfigured
         }
 
+        // Firestoreルールで request.auth を要求するため、読み取り前に匿名サインインを保証する。
+        _ = try await ensureAnonymousUser()
+
         let reference = firestore.document("invites/\(code)")
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<FirebaseInviteInfo?, Error>) in
             reference.getDocument { snapshot, error in
