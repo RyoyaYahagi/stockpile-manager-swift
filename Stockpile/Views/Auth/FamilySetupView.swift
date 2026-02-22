@@ -172,7 +172,8 @@ struct FamilySetupView: View {
                 // 家族作成自体は完了扱いにし、設定画面から再試行可能にする。
                 print("Firebase初回移行に失敗: \(error)")
             }
-            router.popToRoot()
+            router.pop()
+            router.push(.familySettings(family))
         } catch {
             errorMessage = "家族の作成に失敗しました: \(error.localizedDescription)"
         }
