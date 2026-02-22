@@ -361,6 +361,9 @@ final class FirebaseMigrationService {
         }
 
         do {
+            // 初回移行と同様に、未紐付けローカルデータを対象家族に関連付けてから再送する。
+            try attachOrphanDataIfNeeded(to: family)
+            try modelContext.save()
             try await uploadFamilySnapshot(family)
             markCompleted(for: family.id)
         } catch {
