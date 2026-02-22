@@ -90,6 +90,22 @@ struct APIConfig {
 
     // MARK: - Firebase
 
+    /// Firebase SDKを必要時に初期化
+    static func configureFirebaseIfNeeded() {
+        guard FirebaseApp.app() == nil else {
+            return
+        }
+
+        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let options = FirebaseOptions(contentsOfFile: path) {
+            FirebaseApp.configure(options: options)
+            return
+        }
+
+        // Test環境などでplist解決が失敗しても、標準解決を最後に試行する。
+        FirebaseApp.configure()
+    }
+
     /// Firebase SDKが初期化済みか
     static var isFirebaseConfigured: Bool {
         FirebaseApp.app() != nil

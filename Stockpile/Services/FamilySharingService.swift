@@ -12,6 +12,7 @@ final class FamilySharingService {
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
+        APIConfig.configureFirebaseIfNeeded()
         self.firebaseClient = FirebaseSDKClient()
     }
 
@@ -468,13 +469,8 @@ private actor FirebaseSDKClient {
         }
     }
 
-    private let auth: Auth
-    private let firestore: Firestore
-
-    init(auth: Auth = Auth.auth(), firestore: Firestore = Firestore.firestore()) {
-        self.auth = auth
-        self.firestore = firestore
-    }
+    private var auth: Auth { Auth.auth() }
+    private var firestore: Firestore { Firestore.firestore() }
 
     func migrateFamily(family: FamilySnapshot, bags: [BagSnapshot], items: [ItemSnapshot]) async throws {
         guard APIConfig.isFirebaseConfigured else {
