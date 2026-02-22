@@ -11,6 +11,8 @@ struct NotificationSettingsView: View {
     
     @State private var showPendingNotifications = false
     @State private var pendingNotifications: [UNNotificationRequest] = []
+    @State private var isSchedulingTestNotification = false
+    @State private var testNotificationAlertMessage: String?
     
     var body: some View {
         Form {
@@ -116,6 +118,7 @@ struct NotificationSettingsView: View {
                             await sendTestNotification()
                         }
                     }
+                    .disabled(isSchedulingTestNotification)
                     
                     Button("すべての通知を再スケジュール") {
                         rescheduleNotifications(settings: settings)
@@ -173,6 +176,23 @@ struct NotificationSettingsView: View {
                     }
                 }
             }
+        }
+        .alert(
+            "テスト通知",
+            isPresented: Binding(
+                get: { testNotificationAlertMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        testNotificationAlertMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK") {
+                testNotificationAlertMessage = nil
+            }
+        } message: {
+            Text(testNotificationAlertMessage ?? "")
         }
     }
     
@@ -252,6 +272,21 @@ struct NotificationSettingsView: View {
     }
     
     private func sendTestNotification() async {
+        isSchedulingTestNotification = true
+        defer { isSchedulingTestNotification = false }
+        
+        if notificationManager.authorizationStatus == .notDetermined {
+            _ = await notificationManager.requestAuthorization()
+        } else {
+            await notificationManager.refreshAuthorizationStatus()
+        }
+        
+        let status = notificationManager.authorizationStatus
+        guard status == .authorized || status == .provisional || status == .ephemeral else {
+            testNotificationAlertMessage = "通知権限が未許可のため、テスト通知を送信できません。設定アプリで通知を許可してください。"
+            return
+        }
+        
         let content = UNMutableNotificationContent()
         content.title = "テスト通知"
         content.body = "通知が正常に動作しています！"
@@ -265,10 +300,15 @@ struct NotificationSettingsView: View {
         )
         
         do {
-            try await UNUserNotificationCenter.current().add(request)
+            let center = UNUserNotificationCenter.current()
+            center.removePendingNotificationRequests(withIdentifiers: ["test-notification"])
+            center.removeDeliveredNotifications(withIdentifiers: ["test-notification"])
+            try await center.add(request)
             print("✅ Test notification scheduled for 5 seconds later")
+            testNotificationAlertMessage = "5秒後にテスト通知を予約しました。アプリを開いたままでもバナー表示されます。"
         } catch {
             print("❌ Failed to schedule test notification: \(error)")
+            testNotificationAlertMessage = "テスト通知の予約に失敗しました: \(error.localizedDescription)"
         }
     }
 }

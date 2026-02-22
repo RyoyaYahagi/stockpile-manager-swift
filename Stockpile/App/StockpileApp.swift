@@ -24,6 +24,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         completionHandler()
     }
     
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .badge, .sound]
+    }
+    
 }
 
 @main
