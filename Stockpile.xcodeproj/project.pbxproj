@@ -36,12 +36,12 @@
 		027 /* ProductSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 127 /* ProductSearchService.swift */; };
 		028 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128 /* APIConfig.swift */; };
 		029 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 129 /* Secrets.plist */; };
-		030 /* CloudKitSharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130 /* CloudKitSharingService.swift */; };
 		031 /* FamilySharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131 /* FamilySharingService.swift */; };
 		032 /* FamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132 /* FamilySettingsView.swift */; };
 		033F1A6A2C0A000100000001 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000011 /* FirebaseCore */; };
 		033F1A6A2C0A000100000002 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000012 /* FirebaseAuth */; };
 		033F1A6A2C0A000100000003 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000013 /* FirebaseFirestore */; };
+		A30EF01C2F4A7B7800979C1A /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A30EF01B2F4A7B7800979C1A /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -75,10 +75,10 @@
 		127 /* ProductSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchService.swift; sourceTree = "<group>"; };
 		128 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 		129 /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Secrets.plist; sourceTree = "<group>"; };
-		130 /* CloudKitSharingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitSharingService.swift; sourceTree = "<group>"; };
 		131 /* FamilySharingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySharingService.swift; sourceTree = "<group>"; };
 		132 /* FamilySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySettingsView.swift; sourceTree = "<group>"; };
 		133 /* Stockpile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Stockpile.entitlements; sourceTree = "<group>"; };
+		A30EF01B2F4A7B7800979C1A /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -99,6 +99,7 @@
 		300 = {
 			isa = PBXGroup;
 			children = (
+				A30EF01B2F4A7B7800979C1A /* GoogleService-Info.plist */,
 				301 /* Stockpile */,
 				302 /* Products */,
 			);
@@ -235,7 +236,6 @@
 			children = (
 				124 /* NotificationManager.swift */,
 				127 /* ProductSearchService.swift */,
-				130 /* CloudKitSharingService.swift */,
 				131 /* FamilySharingService.swift */,
 			);
 			path = Services;
@@ -264,12 +264,12 @@
 			);
 			dependencies = (
 			);
+			name = Stockpile;
 			packageProductDependencies = (
 				033F1A6A2C0A000100000011 /* FirebaseCore */,
 				033F1A6A2C0A000100000012 /* FirebaseAuth */,
 				033F1A6A2C0A000100000013 /* FirebaseFirestore */,
 			);
-			name = Stockpile;
 			productName = Stockpile;
 			productReference = 100 /* Stockpile.app */;
 			productType = "com.apple.product-type.application";
@@ -318,6 +318,7 @@
 			files = (
 				019 /* Assets.xcassets in Resources */,
 				029 /* Secrets.plist in Resources */,
+				A30EF01C2F4A7B7800979C1A /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -355,42 +356,12 @@
 				026 /* BarcodeScannerView.swift in Sources */,
 				027 /* ProductSearchService.swift in Sources */,
 				028 /* APIConfig.swift in Sources */,
-				030 /* CloudKitSharingService.swift in Sources */,
 				031 /* FamilySharingService.swift in Sources */,
 				032 /* FamilySettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 11.0.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		033F1A6A2C0A000100000011 /* FirebaseCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseCore;
-		};
-		033F1A6A2C0A000100000012 /* FirebaseAuth */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAuth;
-		};
-		033F1A6A2C0A000100000013 /* FirebaseFirestore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseFirestore;
-		};
-/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		700 /* Debug */ = {
@@ -612,6 +583,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		033F1A6A2C0A000100000011 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		033F1A6A2C0A000100000012 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		033F1A6A2C0A000100000013 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 600 /* Project object */;
 }

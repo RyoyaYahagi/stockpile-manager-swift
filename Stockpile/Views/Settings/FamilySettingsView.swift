@@ -164,18 +164,14 @@ struct FamilySettingsView: View {
             do {
                 let sharingService = FamilySharingService(modelContext: modelContext)
 
-                _ = try await sharingService.startSharing(family: family)
+                try await sharingService.startSharing(family: family)
 
                 isStartingShare = false
                 router.present(.inviteCode(family.inviteCode))
             } catch {
                 isStartingShare = false
 
-                if case FamilySharingService.SharingError.notSignedIn = error {
-                    shareError = "iCloudにサインインしてください。設定アプリからiCloudにサインインした後、再試行してください。"
-                } else {
-                    shareError = "共有の開始に失敗しました: \(error.localizedDescription)"
-                }
+                shareError = "共有の開始に失敗しました: \(error.localizedDescription)"
                 showShareError = true
             }
         }

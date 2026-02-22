@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import CloudKit
 import FirebaseAuth
 import FirebaseFirestore
 
@@ -9,10 +8,11 @@ import FirebaseFirestore
 @MainActor
 final class FamilySharingService {
     private let modelContext: ModelContext
-    private lazy var cloudKitService = CloudKitSharingService()
+    private let firebaseClient: FirebaseSDKClient
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
+        self.firebaseClient = FirebaseSDKClient()
     }
 
     /// 招待URLを生成
@@ -32,35 +32,29 @@ final class FamilySharingService {
     }
 
     /// 共有を開始し、招待を作成
-    func startSharing(family: Family) async throws -> CKShare {
-#if targetEnvironment(simulator)
-        throw SharingError.cloudKitUnavailableOnSimulator
-#else
-        let status = try await cloudKitService.checkAccountStatus()
-        guard status == .available else {
-            throw SharingError.notSignedIn
+    func startSharing(family: Family) async throws {
+        guard APIConfig.isFirebaseConfigured else {
+            throw SharingError.firebaseNotConfigured
         }
 
-        let familyInfo = CloudKitSharingService.FamilyInfo(
-            id: family.id,
+        let familySnapshot = FamilySnapshot(
+            id: family.id.uuidString,
             name: family.name,
             inviteCode: family.inviteCode,
+            lineGroupId: family.lineGroupId,
             createdAt: family.createdAt
         )
 
         do {
-            let share = try await cloudKitService.createShare(familyInfo: familyInfo)
-            _ = try await cloudKitService.createInvite(familyInfo: familyInfo, share: share)
-            return share
+            try await firebaseClient.publishInvite(for: familySnapshot)
         } catch {
-            throw mapCloudKitError(error)
+            throw SharingError.firebaseFailure(error.localizedDescription)
         }
-#endif
     }
 
     /// 招待コードの有効期限を延長
     func refreshInviteCode(for family: Family) async throws {
-        try await cloudKitService.refreshInvite(familyId: family.id)
+        try await startSharing(family: family)
     }
 
     /// 招待コードで家族を検索（ローカル）
@@ -71,9 +65,13 @@ final class FamilySharingService {
         return try? modelContext.fetch(descriptor).first
     }
 
-    /// 招待コードで家族を検索（CloudKit）
-    func findFamilyInCloud(byInviteCode code: String) async throws -> CloudKitSharingService.InviteInfo? {
-        try await cloudKitService.findInvite(byCode: code)
+    /// 招待コードで家族を検索（Firebase）
+    func findFamilyInCloud(byInviteCode code: String) async throws -> FirebaseInviteInfo? {
+        guard APIConfig.isFirebaseConfigured else {
+            throw SharingError.firebaseNotConfigured
+        }
+
+        return try await firebaseClient.fetchInvite(byCode: code)
     }
 
     /// 招待コードから家族に参加
@@ -96,26 +94,30 @@ final class FamilySharingService {
             return .expired
         }
 
-        guard let shareURL = inviteInfo.shareURL else {
-            return .error(SharingError.invalidShareURL)
-        }
-
         do {
-            let metadata = try await cloudKitService.fetchShareMetadata(from: shareURL)
-            try await cloudKitService.acceptShare(metadata: metadata)
+            let familyName = inviteInfo.familyName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let family = Family(
+                name: familyName.isEmpty ? "家族" : familyName,
+                inviteCode: normalizedCode
+            )
 
-            // CloudKit同期待ち
-            for _ in 0..<5 {
-                try await Task.sleep(for: .seconds(1))
-                if let syncedFamily = findFamilyLocally(byInviteCode: normalizedCode) {
-                    return .success(syncedFamily)
+            if let remoteFamilyID = UUID(uuidString: inviteInfo.familyId) {
+                let allFamilies = try modelContext.fetch(FetchDescriptor<Family>())
+                if let existingFamily = allFamilies.first(where: { $0.id == remoteFamilyID }) {
+                    return .alreadyMember(existingFamily)
                 }
+                family.id = remoteFamilyID
             }
 
-            // 同期反映前でもローカルの家族レコードを作成して参加状態を成立させる
-            let family = Family(name: inviteInfo.familyName, inviteCode: normalizedCode)
             modelContext.insert(family)
             try modelContext.save()
+
+            do {
+                try await firebaseClient.addCurrentUserAsMember(familyId: inviteInfo.familyId)
+            } catch {
+                return .pendingSync("メンバー登録を後で再試行します: \(error.localizedDescription)")
+            }
+
             return .success(family)
         } catch {
             return .error(error)
@@ -146,13 +148,33 @@ final class FamilySharingService {
         for member in family.members {
             member.family = nil
         }
+        try modelContext.save()
 
-        try await cloudKitService.deleteInvite(familyId: family.id)
+        guard APIConfig.isFirebaseConfigured else {
+            return
+        }
+
+        do {
+            try await firebaseClient.deleteInvite(
+                familyId: family.id.uuidString,
+                inviteCode: family.inviteCode
+            )
+        } catch {
+            throw SharingError.firebaseFailure(error.localizedDescription)
+        }
     }
 
     /// 期限切れの招待を削除
     func cleanupExpiredInvites() async throws {
-        try await cloudKitService.deleteExpiredInvites()
+        guard APIConfig.isFirebaseConfigured else {
+            throw SharingError.firebaseNotConfigured
+        }
+
+        do {
+            try await firebaseClient.deleteExpiredInvites()
+        } catch {
+            throw SharingError.firebaseFailure(error.localizedDescription)
+        }
     }
 
     /// 初回家族作成時にローカルデータをFirebaseへ移行
@@ -192,59 +214,26 @@ final class FamilySharingService {
     }
 
     enum SharingError: LocalizedError {
-        case notSignedIn
         case invalidInviteCode
-        case invalidShareURL
         case familyNotFound
         case alreadyInFamily
-        case cloudKitUnavailableOnSimulator
-        case invalidContainerConfiguration
-        case cloudKitFailure(String)
+        case firebaseNotConfigured
+        case firebaseFailure(String)
 
         var errorDescription: String? {
             switch self {
-            case .notSignedIn:
-                return "iCloudにサインインしてください"
             case .invalidInviteCode:
                 return "無効な招待コードです"
-            case .invalidShareURL:
-                return "共有URLが無効です"
             case .familyNotFound:
                 return "家族が見つかりません"
             case .alreadyInFamily:
                 return "既にこの家族に参加しています"
-            case .cloudKitUnavailableOnSimulator:
-                return "シミュレータではCloudKit共有を開始できません。実機で確認してください。"
-            case .invalidContainerConfiguration:
-                return "CloudKitコンテナ設定が不一致です。Bundle IDとiCloudコンテナの紐づけを確認してください。"
-            case .cloudKitFailure(let detail):
-                return "CloudKitエラー: \(detail)"
+            case .firebaseNotConfigured:
+                return "Firebase設定が不足しています。GoogleService-Info.plistを確認してください。"
+            case .firebaseFailure(let detail):
+                return "Firebaseエラー: \(detail)"
             }
         }
-    }
-    
-    private func mapCloudKitError(_ error: Error) -> SharingError {
-        if let sharingError = error as? SharingError {
-            return sharingError
-        }
-        
-        if let ckError = error as? CKError {
-            switch ckError.code {
-            case .notAuthenticated:
-                return .notSignedIn
-            case .badContainer, .permissionFailure:
-                return .invalidContainerConfiguration
-            default:
-                break
-            }
-        }
-        
-        let message = (error as NSError).localizedDescription
-        if message.localizedCaseInsensitiveContains("Invalid bundle ID for container") {
-            return .invalidContainerConfiguration
-        }
-        
-        return .cloudKitFailure(message)
     }
 }
 
@@ -445,15 +434,27 @@ private struct ItemSnapshot: Sendable {
     let createdAt: Date
 }
 
+struct FirebaseInviteInfo: Sendable {
+    let inviteCode: String
+    let familyName: String
+    let familyId: String
+    let expiresAt: Date
+
+    var isExpired: Bool {
+        expiresAt <= Date()
+    }
+}
+
 private struct FirestoreWriteOperation {
     let path: String
     let data: [String: Any]
 }
 
-private final class FirebaseSDKClient {
+private actor FirebaseSDKClient {
     enum ClientError: LocalizedError {
         case notConfigured
         case missingUser
+        case invalidInviteData
 
         var errorDescription: String? {
             switch self {
@@ -461,6 +462,8 @@ private final class FirebaseSDKClient {
                 return "Firebaseが初期化されていません。"
             case .missingUser:
                 return "Firebaseユーザー情報を取得できませんでした。"
+            case .invalidInviteData:
+                return "招待データが不正です。"
             }
         }
     }
@@ -482,47 +485,13 @@ private final class FirebaseSDKClient {
         let now = Date()
         let expiresAt = now.addingTimeInterval(24 * 60 * 60)
 
-        var operations: [FirestoreWriteOperation] = []
+        var operations = baseFamilyOperations(
+            family: family,
+            uid: uid,
+            now: now,
+            expiresAt: expiresAt
+        )
         operations.reserveCapacity(3 + bags.count + items.count)
-
-        operations.append(
-            FirestoreWriteOperation(
-                path: "families/\(family.id)",
-                data: [
-                    "id": family.id,
-                    "name": family.name,
-                    "inviteCode": family.inviteCode,
-                    "createdAt": family.createdAt,
-                    "lineGroupId": family.lineGroupId ?? NSNull(),
-                    "migratedAt": now
-                ]
-            )
-        )
-
-        operations.append(
-            FirestoreWriteOperation(
-                path: "families/\(family.id)/members/\(uid)",
-                data: [
-                    "uid": uid,
-                    "displayName": "匿名ユーザー",
-                    "createdAt": now
-                ]
-            )
-        )
-
-        operations.append(
-            FirestoreWriteOperation(
-                path: "invites/\(family.inviteCode)",
-                data: [
-                    "familyId": family.id,
-                    "familyName": family.name,
-                    "inviteCode": family.inviteCode,
-                    "createdBy": uid,
-                    "createdAt": now,
-                    "expiresAt": expiresAt
-                ]
-            )
-        )
 
         for bag in bags {
             operations.append(
@@ -562,6 +531,110 @@ private final class FirebaseSDKClient {
         try await commitWritesInBatches(operations)
     }
 
+    func publishInvite(for family: FamilySnapshot) async throws {
+        guard APIConfig.isFirebaseConfigured else {
+            throw ClientError.notConfigured
+        }
+
+        let uid = try await ensureAnonymousUser()
+        let now = Date()
+        let expiresAt = now.addingTimeInterval(24 * 60 * 60)
+        let operations = baseFamilyOperations(
+            family: family,
+            uid: uid,
+            now: now,
+            expiresAt: expiresAt
+        )
+
+        try await commitWritesInBatches(operations)
+    }
+
+    func fetchInvite(byCode code: String) async throws -> FirebaseInviteInfo? {
+        guard APIConfig.isFirebaseConfigured else {
+            throw ClientError.notConfigured
+        }
+
+        let reference = firestore.document("invites/\(code)")
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<FirebaseInviteInfo?, Error>) in
+            reference.getDocument { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                guard let data = snapshot?.data() else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                guard let familyId = data["familyId"] as? String, !familyId.isEmpty else {
+                    continuation.resume(throwing: ClientError.invalidInviteData)
+                    return
+                }
+
+                let inviteCode = (data["inviteCode"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let familyName = data["familyName"] as? String ?? ""
+                let expiresAtTimestamp = data["expiresAt"] as? Timestamp
+                let expiresAt = expiresAtTimestamp?.dateValue() ?? .distantPast
+
+                continuation.resume(
+                    returning: FirebaseInviteInfo(
+                        inviteCode: (inviteCode?.isEmpty == false ? inviteCode! : code),
+                        familyName: familyName,
+                        familyId: familyId,
+                        expiresAt: expiresAt
+                    )
+                )
+            }
+        }
+    }
+
+    func addCurrentUserAsMember(familyId: String) async throws {
+        guard APIConfig.isFirebaseConfigured else {
+            throw ClientError.notConfigured
+        }
+
+        let uid = try await ensureAnonymousUser()
+        let now = Date()
+        try await upsertDocument(
+            path: "families/\(familyId)/members/\(uid)",
+            data: [
+                "uid": uid,
+                "displayName": "匿名ユーザー",
+                "createdAt": now
+            ]
+        )
+    }
+
+    func deleteInvite(familyId: String, inviteCode: String?) async throws {
+        guard APIConfig.isFirebaseConfigured else {
+            throw ClientError.notConfigured
+        }
+
+        if let inviteCode,
+           let invite = try await fetchInvite(byCode: inviteCode),
+           invite.familyId == familyId {
+            try await deleteDocument(path: "invites/\(inviteCode)")
+            return
+        }
+
+        let inviteDocumentIDs = try await fetchInviteDocumentIDs(familyId: familyId)
+        for documentID in inviteDocumentIDs {
+            try await deleteDocument(path: "invites/\(documentID)")
+        }
+    }
+
+    func deleteExpiredInvites() async throws {
+        guard APIConfig.isFirebaseConfigured else {
+            throw ClientError.notConfigured
+        }
+
+        let expiredDocumentIDs = try await fetchExpiredInviteDocumentIDs(before: Date())
+        for documentID in expiredDocumentIDs {
+            try await deleteDocument(path: "invites/\(documentID)")
+        }
+    }
+
     private func ensureAnonymousUser() async throws -> String {
         if let currentUser = auth.currentUser {
             return currentUser.uid
@@ -582,6 +655,108 @@ private final class FirebaseSDKClient {
             }
         }
         return userID
+    }
+
+    private func baseFamilyOperations(
+        family: FamilySnapshot,
+        uid: String,
+        now: Date,
+        expiresAt: Date
+    ) -> [FirestoreWriteOperation] {
+        [
+            FirestoreWriteOperation(
+                path: "families/\(family.id)",
+                data: [
+                    "id": family.id,
+                    "name": family.name,
+                    "inviteCode": family.inviteCode,
+                    "createdAt": family.createdAt,
+                    "lineGroupId": family.lineGroupId ?? NSNull(),
+                    "migratedAt": now
+                ]
+            ),
+            FirestoreWriteOperation(
+                path: "families/\(family.id)/members/\(uid)",
+                data: [
+                    "uid": uid,
+                    "displayName": "匿名ユーザー",
+                    "createdAt": now
+                ]
+            ),
+            FirestoreWriteOperation(
+                path: "invites/\(family.inviteCode)",
+                data: [
+                    "familyId": family.id,
+                    "familyName": family.name,
+                    "inviteCode": family.inviteCode,
+                    "createdBy": uid,
+                    "createdAt": now,
+                    "expiresAt": expiresAt
+                ]
+            )
+        ]
+    }
+
+    private func fetchInviteDocumentIDs(familyId: String) async throws -> [String] {
+        let query = firestore
+            .collection("invites")
+            .whereField("familyId", isEqualTo: familyId)
+
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[String], Error>) in
+            query.getDocuments { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                let documentIDs = snapshot?.documents.map(\.documentID) ?? []
+                continuation.resume(returning: documentIDs)
+            }
+        }
+    }
+
+    private func fetchExpiredInviteDocumentIDs(before date: Date) async throws -> [String] {
+        let query = firestore
+            .collection("invites")
+            .whereField("expiresAt", isLessThan: Timestamp(date: date))
+
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[String], Error>) in
+            query.getDocuments { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                let documentIDs = snapshot?.documents.map(\.documentID) ?? []
+                continuation.resume(returning: documentIDs)
+            }
+        }
+    }
+
+    private func upsertDocument(path: String, data: [String: Any]) async throws {
+        let reference = firestore.document(path)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            reference.setData(data, merge: true) { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(returning: ())
+            }
+        }
+    }
+
+    private func deleteDocument(path: String) async throws {
+        let reference = firestore.document(path)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            reference.delete { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(returning: ())
+            }
+        }
     }
 
     private func commitWritesInBatches(_ operations: [FirestoreWriteOperation], batchSize: Int = 400) async throws {

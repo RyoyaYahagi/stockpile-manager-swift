@@ -2,8 +2,29 @@ import SwiftUI
 import SwiftData
 import UIKit
 import UserNotifications
-import CloudKit
 import FirebaseCore
+
+private enum FirebaseBootstrap {
+    @MainActor private static var configured = false
+
+    @MainActor
+    static func configureIfNeeded() {
+        guard !configured else { return }
+        guard FirebaseApp.app() == nil else {
+            configured = true
+            return
+        }
+
+        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+              let options = FirebaseOptions(contentsOfFile: path) else {
+            print("⚠️ GoogleService-Info.plist が見つからないためFirebase初期化をスキップしました。")
+            return
+        }
+
+        FirebaseApp.configure(options: options)
+        configured = true
+    }
+}
 
 final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
     func application(
@@ -11,7 +32,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        configureFirebaseIfNeeded()
+        FirebaseBootstrap.configureIfNeeded()
         return true
     }
     
@@ -26,47 +47,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         completionHandler()
     }
     
-    /// CloudKit共有リンク受諾時に呼ばれる
-    func application(
-        _ application: UIApplication,
-        userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata
-    ) {
-        Task {
-            do {
-                let sharingService = CloudKitSharingService()
-                try await sharingService.acceptShare(metadata: cloudKitShareMetadata)
-                
-                await MainActor.run {
-                    NotificationCenter.default.post(
-                        name: .didAcceptCloudKitShare,
-                        object: nil,
-                        userInfo: ["metadata": cloudKitShareMetadata]
-                    )
-                }
-            } catch {
-                print("CloudKit共有の受諾に失敗: \(error)")
-            }
-        }
-    }
-
-    private func configureFirebaseIfNeeded() {
-        guard FirebaseApp.app() == nil else {
-            return
-        }
-
-        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-              let options = FirebaseOptions(contentsOfFile: path) else {
-            print("⚠️ GoogleService-Info.plist が見つからないためFirebase初期化をスキップしました。")
-            return
-        }
-
-        FirebaseApp.configure(options: options)
-    }
 }
 
 @main
 struct StockpileApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    init() {
+        FirebaseBootstrap.configureIfNeeded()
+    }
     
     private let sharedModelContainer: ModelContainer = {
         // 初回起動時のStore作成前にApplication Supportを保証して、
