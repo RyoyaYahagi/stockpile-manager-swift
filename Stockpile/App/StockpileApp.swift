@@ -2,29 +2,6 @@ import SwiftUI
 import SwiftData
 import UIKit
 import UserNotifications
-import FirebaseCore
-
-private enum FirebaseBootstrap {
-    @MainActor private static var configured = false
-
-    @MainActor
-    static func configureIfNeeded() {
-        guard !configured else { return }
-        guard FirebaseApp.app() == nil else {
-            configured = true
-            return
-        }
-
-        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-              let options = FirebaseOptions(contentsOfFile: path) else {
-            print("⚠️ GoogleService-Info.plist が見つからないためFirebase初期化をスキップしました。")
-            return
-        }
-
-        FirebaseApp.configure(options: options)
-        configured = true
-    }
-}
 
 final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
     func application(
@@ -32,7 +9,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        FirebaseBootstrap.configureIfNeeded()
+        APIConfig.configureFirebaseIfNeeded()
         return true
     }
     
@@ -52,10 +29,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
 @main
 struct StockpileApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-
-    init() {
-        FirebaseBootstrap.configureIfNeeded()
-    }
     
     private let sharedModelContainer: ModelContainer = {
         // 初回起動時のStore作成前にApplication Supportを保証して、

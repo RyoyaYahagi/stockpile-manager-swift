@@ -3,6 +3,8 @@ import FirebaseCore
 
 /// API設定を管理する構造体
 struct APIConfig {
+    private static let firebaseConfigLock = NSLock()
+    nonisolated(unsafe) private static var firebaseConfigured = false
     
     // MARK: - 楽天API
     
@@ -92,22 +94,32 @@ struct APIConfig {
 
     /// Firebase SDKを必要時に初期化
     static func configureFirebaseIfNeeded() {
-        guard FirebaseApp.app() == nil else {
-            return
-        }
+        firebaseConfigLock.lock()
+        defer { firebaseConfigLock.unlock() }
+
+        guard !firebaseConfigured else { return }
 
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
            let options = FirebaseOptions(contentsOfFile: path) {
             FirebaseApp.configure(options: options)
+            firebaseConfigured = true
             return
         }
 
-        // Test環境などでplist解決が失敗しても、標準解決を最後に試行する。
+        // `GoogleService-Info.plist` が存在するが options 解決に失敗した場合のみ
+        // 標準解決を最後に試行する。
+        guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else {
+            print("⚠️ GoogleService-Info.plist が見つからないためFirebase初期化をスキップしました。")
+            return
+        }
         FirebaseApp.configure()
+        firebaseConfigured = true
     }
 
     /// Firebase SDKが初期化済みか
     static var isFirebaseConfigured: Bool {
-        FirebaseApp.app() != nil
+        firebaseConfigLock.lock()
+        defer { firebaseConfigLock.unlock() }
+        return firebaseConfigured
     }
 }
