@@ -24,10 +24,26 @@ enum NotificationTapRelay {
     }
 }
 
+private enum FirstLaunchAction {
+    case addItem
+    case notificationSettings
+    case finished
+}
+
 struct ContentView: View {
     @State private var router = Router()
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query private var items: [Item]
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
+    @AppStorage("app.hasCompletedFirstLaunchTutorial")
+    private var hasCompletedFirstLaunchTutorial = false
+    @State private var showFirstLaunchTutorial = false
+    @State private var hasPresentedFirstLaunchTutorialInSession = false
+    
+    private var currentFamily: Family? {
+        families.first
+    }
     
     var body: some View {
         NavigationStack(path: $router.path) {
@@ -64,10 +80,31 @@ struct ContentView: View {
                     )
                 )
             }
+            
+            if !hasCompletedFirstLaunchTutorial,
+               !hasPresentedFirstLaunchTutorialInSession {
+                hasPresentedFirstLaunchTutorialInSession = true
+                showFirstLaunchTutorial = true
+            }
+        }
+        .task(id: currentFamily?.id) {
+            FamilyRealtimeSyncCoordinator.shared.activate(for: currentFamily)
+            NotificationManager.shared.requestReschedule(using: modelContext)
+        }
+        .onChange(of: scenePhase) { _, newValue in
+            guard newValue == .active else { return }
+            FamilyRealtimeSyncCoordinator.shared.requestImmediateSync()
+            NotificationManager.shared.requestReschedule(using: modelContext)
         }
         .onReceive(NotificationCenter.default.publisher(for: .didTapNotification)) { notification in
             _ = NotificationTapRelay.consumePending()
             handleNotificationTap(notification)
+        }
+        .fullScreenCover(isPresented: $showFirstLaunchTutorial) {
+            FirstLaunchTutorialView { action in
+                handleFirstLaunchTutorialCompletion(action)
+            }
+            .interactiveDismissDisabled()
         }
     }
     
@@ -116,6 +153,23 @@ struct ContentView: View {
         }
     }
     
+    private func handleFirstLaunchTutorialCompletion(_ action: FirstLaunchAction) {
+        hasCompletedFirstLaunchTutorial = true
+        showFirstLaunchTutorial = false
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            switch action {
+            case .addItem:
+                router.present(.addItem())
+            case .notificationSettings:
+                router.popToRoot()
+                router.push(.notificationSettings)
+            case .finished:
+                break
+            }
+        }
+    }
+    
     private func extractItemId(from rawValue: Any?) -> UUID? {
         if let uuid = rawValue as? UUID {
             return uuid
@@ -126,6 +180,97 @@ struct ContentView: View {
         }
         
         return nil
+    }
+}
+
+private struct FirstLaunchTutorialView: View {
+    let onComplete: (FirstLaunchAction) -> Void
+    @State private var stepIndex = 0
+    
+    private struct Step {
+        let title: String
+        let description: String
+        let primaryTitle: String
+        let action: FirstLaunchAction
+    }
+    
+    private let steps: [Step] = [
+        Step(
+            title: "まずは備蓄品を登録",
+            description: "実際に追加画面を開いて、最初の備蓄品を登録してみましょう。",
+            primaryTitle: "追加画面を開く",
+            action: .addItem
+        ),
+        Step(
+            title: "通知設定を確認",
+            description: "通知時刻と通知タイミングを確認して、自動通知を有効化しましょう。",
+            primaryTitle: "通知設定を開く",
+            action: .notificationSettings
+        ),
+        Step(
+            title: "準備完了です",
+            description: "家族共有を使うと、備蓄品の更新が自動同期されます。すぐに使い始めましょう。",
+            primaryTitle: "ダッシュボードへ",
+            action: .finished
+        )
+    ]
+    
+    var body: some View {
+        let step = steps[stepIndex]
+        
+        NavigationStack {
+            VStack(spacing: 28) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(.blue)
+                
+                VStack(spacing: 10) {
+                    Text("はじめてのガイド")
+                        .font(.title2.bold())
+                    Text(step.title)
+                        .font(.title3.weight(.semibold))
+                    Text(step.description)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                
+                HStack(spacing: 8) {
+                    ForEach(Array(steps.indices), id: \.self) { index in
+                        Capsule()
+                            .fill(index == stepIndex ? Color.blue : Color.gray.opacity(0.25))
+                            .frame(width: index == stepIndex ? 28 : 8, height: 8)
+                    }
+                }
+                
+                VStack(spacing: 12) {
+                    Button(step.primaryTitle) {
+                        onComplete(step.action)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity)
+                    
+                    Button(stepIndex < steps.count - 1 ? "次へ" : "あとで使う") {
+                        if stepIndex < steps.count - 1 {
+                            withAnimation {
+                                stepIndex += 1
+                            }
+                        } else {
+                            onComplete(.finished)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity)
+                }
+                
+                Spacer()
+            }
+            .padding(24)
+            .navigationTitle("チュートリアル")
+            .navigationBarTitleDisplayMode(.inline)
+        }
     }
 }
 

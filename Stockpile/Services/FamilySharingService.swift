@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 import FirebaseAuth
 import FirebaseFirestore
+import Network
 
 /// 家族共有サービス
 /// 招待コードの生成・検証、家族への参加・離脱を管理
@@ -116,8 +117,9 @@ final class FamilySharingService {
             do {
                 try await firebaseClient.addCurrentUserAsMember(familyId: inviteInfo.familyId)
                 try await syncFamilyMembersFromFirebase(for: family)
+                _ = try await syncFamilyDataFromFirebase(for: family)
             } catch {
-                return .pendingSync("メンバー登録を後で再試行します: \(error.localizedDescription)")
+                return .pendingSync("Firebase同期を後で再試行します: \(error.localizedDescription)")
             }
 
             return .success(family)
@@ -183,12 +185,14 @@ final class FamilySharingService {
     func migrateInitialDataToFirebaseIfNeeded(for family: Family) async throws {
         let migrationService = FirebaseMigrationService(modelContext: modelContext)
         try await migrationService.migrateIfNeeded(for: family)
+        _ = try await syncFamilyDataFromFirebase(for: family)
     }
 
     /// 失敗中のFirebase初回移行を再試行
     func retryInitialFirebaseMigration(for family: Family) async throws {
         let migrationService = FirebaseMigrationService(modelContext: modelContext)
         try await migrationService.retryMigration(for: family)
+        _ = try await syncFamilyDataFromFirebase(for: family)
     }
 
     /// Firebase初回移行の状態を取得
@@ -215,6 +219,132 @@ final class FamilySharingService {
         }
         try modelContext.save()
         return remoteMembers.count
+    }
+
+    /// Firebase上の家族データ（Bag/Item）をローカルへ反映
+    @discardableResult
+    func syncFamilyDataFromFirebase(for family: Family) async throws -> (bags: Int, items: Int) {
+        guard APIConfig.isFirebaseConfigured else {
+            throw SharingError.firebaseNotConfigured
+        }
+
+        let remoteBags = try await firebaseClient.fetchBags(familyId: family.id.uuidString)
+        let remoteItems = try await firebaseClient.fetchItems(familyId: family.id.uuidString)
+        try applyRemoteFamilyData(in: family, remoteBags: remoteBags, remoteItems: remoteItems)
+        try modelContext.save()
+        NotificationManager.shared.requestReschedule(using: modelContext)
+        return (bags: remoteBags.count, items: remoteItems.count)
+    }
+
+    /// Firebase接続済み家族のローカル変更をFirebaseへ同期（削除含む）
+    func syncFamilyDataToFirebase(for family: Family) async throws {
+        guard APIConfig.isFirebaseConfigured else {
+            throw SharingError.firebaseNotConfigured
+        }
+
+        let snapshots = try buildLocalFamilySnapshots(for: family, modelContext: modelContext)
+        do {
+            try await firebaseClient.syncFamily(
+                family: snapshots.family,
+                bags: snapshots.bags,
+                items: snapshots.items
+            )
+        } catch {
+            if FirebaseSyncRetryCoordinator.isRetryable(error) {
+                FirebaseSyncRetryCoordinator.shared.enqueueFamilySync(familyID: family.id)
+            }
+            throw error
+        }
+    }
+
+    /// Firebase上の家族状態をローカルへ同期（メンバー + Bag/Item）
+    func syncFamilyStateFromFirebase(for family: Family) async throws {
+        do {
+            _ = try await syncFamilyMembersFromFirebase(for: family)
+            _ = try await syncFamilyDataFromFirebase(for: family)
+        } catch {
+            if FirebaseSyncRetryCoordinator.isRetryable(error) {
+                FirebaseSyncRetryCoordinator.shared.enqueueFamilySync(familyID: family.id)
+            }
+            throw error
+        }
+    }
+
+    private func applyRemoteFamilyData(
+        in family: Family,
+        remoteBags: [FirebaseBagInfo],
+        remoteItems: [FirebaseItemInfo]
+    ) throws {
+        let allBags = try modelContext.fetch(FetchDescriptor<Bag>())
+        let allItems = try modelContext.fetch(FetchDescriptor<Item>())
+        let localFamilyBags = allBags.filter { $0.family?.id == family.id }
+        let localFamilyItems = allItems.filter { $0.family?.id == family.id }
+
+        var bagById = Dictionary(
+            uniqueKeysWithValues: localFamilyBags.map { ($0.id.uuidString, $0) }
+        )
+        for remoteBag in remoteBags {
+            guard let remoteBagID = UUID(uuidString: remoteBag.id) else { continue }
+            if let existingBag = bagById[remoteBag.id] {
+                existingBag.name = remoteBag.name
+                existingBag.createdAt = remoteBag.createdAt
+                existingBag.family = family
+            } else {
+                let bag = Bag(name: remoteBag.name)
+                bag.id = remoteBagID
+                bag.createdAt = remoteBag.createdAt
+                bag.family = family
+                modelContext.insert(bag)
+                bagById[remoteBag.id] = bag
+            }
+        }
+
+        var itemById = Dictionary(
+            uniqueKeysWithValues: localFamilyItems.map { ($0.id.uuidString, $0) }
+        )
+        for remoteItem in remoteItems {
+            guard let remoteItemID = UUID(uuidString: remoteItem.id) else { continue }
+            let linkedBag = remoteItem.bagId.flatMap { bagById[$0] }
+
+            if let existingItem = itemById[remoteItem.id] {
+                existingItem.name = remoteItem.name
+                existingItem.quantity = remoteItem.quantity
+                existingItem.expiryDate = remoteItem.expiryDate
+                existingItem.bag = linkedBag
+                existingItem.locationNote = remoteItem.locationNote
+                existingItem.notified30 = remoteItem.notified30
+                existingItem.notified7 = remoteItem.notified7
+                existingItem.notified1 = remoteItem.notified1
+                existingItem.createdAt = remoteItem.createdAt
+                existingItem.family = family
+            } else {
+                let item = Item(
+                    name: remoteItem.name,
+                    quantity: max(1, remoteItem.quantity),
+                    expiryDate: remoteItem.expiryDate,
+                    locationNote: remoteItem.locationNote
+                )
+                item.id = remoteItemID
+                item.notified30 = remoteItem.notified30
+                item.notified7 = remoteItem.notified7
+                item.notified1 = remoteItem.notified1
+                item.createdAt = remoteItem.createdAt
+                item.family = family
+                item.bag = linkedBag
+                modelContext.insert(item)
+                itemById[remoteItem.id] = item
+            }
+        }
+
+        let remoteItemIDs = Set(remoteItems.map(\.id))
+        for localItem in localFamilyItems where !remoteItemIDs.contains(localItem.id.uuidString) {
+            modelContext.delete(localItem)
+        }
+
+        let remoteBagIDs = Set(remoteBags.map(\.id))
+        for localBag in localFamilyBags where !remoteBagIDs.contains(localBag.id.uuidString) {
+            modelContext.delete(localBag)
+        }
     }
 
     private func upsertLocalMember(
@@ -345,6 +475,12 @@ final class FirebaseMigrationService {
         }
 
         do {
+            let client = FirebaseSDKClient()
+            if try await hasRemoteFamilyData(for: family.id.uuidString, client: client) {
+                markCompleted(for: family.id)
+                return
+            }
+
             try attachOrphanDataIfNeeded(to: family)
             try modelContext.save()
             try await uploadFamilySnapshot(family)
@@ -361,6 +497,12 @@ final class FirebaseMigrationService {
         }
 
         do {
+            let client = FirebaseSDKClient()
+            if try await hasRemoteFamilyData(for: family.id.uuidString, client: client) {
+                markCompleted(for: family.id)
+                return
+            }
+
             // 初回移行と同様に、未紐付けローカルデータを対象家族に関連付けてから再送する。
             try attachOrphanDataIfNeeded(to: family)
             try modelContext.save()
@@ -410,47 +552,19 @@ final class FirebaseMigrationService {
     }
 
     private func uploadFamilySnapshot(_ family: Family) async throws {
-        let allBags = try modelContext.fetch(FetchDescriptor<Bag>())
-        let allItems = try modelContext.fetch(FetchDescriptor<Item>())
-        let bagSnapshots = allBags
-            .filter { $0.family?.id == family.id }
-            .map { bag in
-                BagSnapshot(
-                    id: bag.id.uuidString,
-                    name: bag.name,
-                    createdAt: bag.createdAt
-                )
-            }
-        let itemSnapshots = allItems
-            .filter { $0.family?.id == family.id }
-            .map { item in
-                ItemSnapshot(
-                    id: item.id.uuidString,
-                    name: item.name,
-                    quantity: item.quantity,
-                    expiryDate: item.expiryDate,
-                    bagId: item.bag?.id.uuidString,
-                    locationNote: item.locationNote,
-                    notified30: item.notified30,
-                    notified7: item.notified7,
-                    notified1: item.notified1,
-                    createdAt: item.createdAt
-                )
-            }
-        let familySnapshot = FamilySnapshot(
-            id: family.id.uuidString,
-            name: family.name,
-            inviteCode: family.inviteCode,
-            lineGroupId: family.lineGroupId,
-            createdAt: family.createdAt
-        )
+        let snapshots = try buildLocalFamilySnapshots(for: family, modelContext: modelContext)
 
         let client = FirebaseSDKClient()
         try await client.migrateFamily(
-            family: familySnapshot,
-            bags: bagSnapshots,
-            items: itemSnapshots
+            family: snapshots.family,
+            bags: snapshots.bags,
+            items: snapshots.items
         )
+    }
+
+    private func hasRemoteFamilyData(for familyId: String, client: FirebaseSDKClient) async throws -> Bool {
+        let counts = try await client.fetchFamilyDataCounts(familyId: familyId)
+        return counts.bags > 0 || counts.items > 0
     }
 }
 
@@ -481,6 +595,51 @@ private struct ItemSnapshot: Sendable {
     let createdAt: Date
 }
 
+private func buildLocalFamilySnapshots(
+    for family: Family,
+    modelContext: ModelContext
+) throws -> (family: FamilySnapshot, bags: [BagSnapshot], items: [ItemSnapshot]) {
+    let allBags = try modelContext.fetch(FetchDescriptor<Bag>())
+    let allItems = try modelContext.fetch(FetchDescriptor<Item>())
+
+    let bagSnapshots = allBags
+        .filter { $0.family?.id == family.id }
+        .map { bag in
+            BagSnapshot(
+                id: bag.id.uuidString,
+                name: bag.name,
+                createdAt: bag.createdAt
+            )
+        }
+
+    let itemSnapshots = allItems
+        .filter { $0.family?.id == family.id }
+        .map { item in
+            ItemSnapshot(
+                id: item.id.uuidString,
+                name: item.name,
+                quantity: item.quantity,
+                expiryDate: item.expiryDate,
+                bagId: item.bag?.id.uuidString,
+                locationNote: item.locationNote,
+                notified30: item.notified30,
+                notified7: item.notified7,
+                notified1: item.notified1,
+                createdAt: item.createdAt
+            )
+        }
+
+    let familySnapshot = FamilySnapshot(
+        id: family.id.uuidString,
+        name: family.name,
+        inviteCode: family.inviteCode,
+        lineGroupId: family.lineGroupId,
+        createdAt: family.createdAt
+    )
+
+    return (family: familySnapshot, bags: bagSnapshots, items: itemSnapshots)
+}
+
 struct FirebaseInviteInfo: Sendable {
     let inviteCode: String
     let familyName: String
@@ -496,6 +655,263 @@ struct FirebaseMemberInfo: Sendable {
     let uid: String
     let displayName: String
     let email: String?
+}
+
+struct FirebaseBagInfo: Sendable {
+    let id: String
+    let name: String
+    let createdAt: Date
+}
+
+struct FirebaseItemInfo: Sendable {
+    let id: String
+    let name: String
+    let quantity: Int
+    let expiryDate: Date?
+    let bagId: String?
+    let locationNote: String?
+    let notified30: Bool
+    let notified7: Bool
+    let notified1: Bool
+    let createdAt: Date
+}
+
+@MainActor
+final class FirebaseSyncRetryCoordinator {
+    static let shared = FirebaseSyncRetryCoordinator()
+
+    private enum DefaultsKey {
+        static let pendingFamilyIDs = "firebase.sync.pendingFamilyIds"
+    }
+
+    private let monitor = NWPathMonitor()
+    private let monitorQueue = DispatchQueue(label: "com.stockpile.firebase-sync.monitor")
+    private let defaults: UserDefaults
+    private var hasStartedMonitor = false
+    private var isReachable = false
+    private var isRetrying = false
+    private weak var modelContext: ModelContext?
+
+    private init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func configure(modelContext: ModelContext) {
+        self.modelContext = modelContext
+        startMonitorIfNeeded()
+        triggerRetryIfNeeded()
+    }
+
+    func enqueueFamilySync(familyID: UUID) {
+        var familyIDs = pendingFamilyIDs()
+        let rawID = familyID.uuidString
+        if !familyIDs.contains(rawID) {
+            familyIDs.append(rawID)
+            savePendingFamilyIDs(familyIDs)
+        }
+        triggerRetryIfNeeded()
+    }
+
+    static func isRetryable(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            return true
+        }
+
+        if nsError.domain == FirestoreErrorDomain,
+           let code = FirestoreErrorCode.Code(rawValue: nsError.code) {
+            switch code {
+            case .unavailable, .deadlineExceeded, .aborted, .cancelled:
+                return true
+            default:
+                break
+            }
+        }
+
+        if nsError.domain == "FIRAuthErrorDomain",
+           let code = AuthErrorCode(rawValue: nsError.code) {
+            switch code {
+            case .networkError, .tooManyRequests, .internalError:
+                return true
+            default:
+                break
+            }
+        }
+
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
+            return isRetryable(underlying)
+        }
+        return false
+    }
+
+    private func startMonitorIfNeeded() {
+        guard !hasStartedMonitor else { return }
+        hasStartedMonitor = true
+        monitor.pathUpdateHandler = { [weak self] path in
+            guard let self else { return }
+            Task { @MainActor in
+                let reachable = path.status == .satisfied
+                let becameReachable = reachable && !self.isReachable
+                self.isReachable = reachable
+                if becameReachable {
+                    self.triggerRetryIfNeeded()
+                }
+            }
+        }
+        monitor.start(queue: monitorQueue)
+    }
+
+    private func triggerRetryIfNeeded() {
+        guard isReachable, !pendingFamilyIDs().isEmpty else { return }
+        Task { await retryQueuedSyncIfNeeded() }
+    }
+
+    private func retryQueuedSyncIfNeeded() async {
+        guard isReachable, !isRetrying, let modelContext else { return }
+        let queuedFamilyIDs = pendingFamilyIDs()
+        guard !queuedFamilyIDs.isEmpty else { return }
+        isRetrying = true
+        defer { isRetrying = false }
+
+        let allFamilies: [Family]
+        do {
+            allFamilies = try modelContext.fetch(FetchDescriptor<Family>())
+        } catch {
+            return
+        }
+        let familyMap = Dictionary(uniqueKeysWithValues: allFamilies.map { ($0.id.uuidString, $0) })
+        let sharingService = FamilySharingService(modelContext: modelContext)
+        var remainingFamilyIDs: [String] = []
+
+        for familyID in queuedFamilyIDs {
+            guard let family = familyMap[familyID] else { continue }
+            do {
+                try await sharingService.syncFamilyDataToFirebase(for: family)
+                try await sharingService.syncFamilyStateFromFirebase(for: family)
+            } catch {
+                remainingFamilyIDs.append(familyID)
+            }
+        }
+
+        savePendingFamilyIDs(remainingFamilyIDs)
+    }
+
+    private func pendingFamilyIDs() -> [String] {
+        defaults.stringArray(forKey: DefaultsKey.pendingFamilyIDs) ?? []
+    }
+
+    private func savePendingFamilyIDs(_ familyIDs: [String]) {
+        if familyIDs.isEmpty {
+            defaults.removeObject(forKey: DefaultsKey.pendingFamilyIDs)
+            return
+        }
+        defaults.set(familyIDs, forKey: DefaultsKey.pendingFamilyIDs)
+    }
+}
+
+@MainActor
+final class FamilyRealtimeSyncCoordinator {
+    static let shared = FamilyRealtimeSyncCoordinator()
+
+    private weak var modelContext: ModelContext?
+    private var observedFamilyID: UUID?
+    private var familyListener: ListenerRegistration?
+    private var isSyncing = false
+    private var pendingSync = false
+
+    private init() {}
+
+    func configure(modelContext: ModelContext) {
+        self.modelContext = modelContext
+    }
+
+    func activate(for family: Family?) {
+        guard APIConfig.isFirebaseConfigured, let family else {
+            stop()
+            return
+        }
+
+        // 同一家族の監視中は listener を貼り直さず、即時同期だけ実行
+        if observedFamilyID == family.id {
+            requestImmediateSync()
+            return
+        }
+
+        stop()
+        observedFamilyID = family.id
+        startListening(familyID: family.id)
+        requestImmediateSync()
+    }
+
+    func requestImmediateSync() {
+        guard observedFamilyID != nil else { return }
+        enqueueSync()
+    }
+
+    func stop() {
+        familyListener?.remove()
+        familyListener = nil
+        observedFamilyID = nil
+        pendingSync = false
+    }
+
+    private func startListening(familyID: UUID) {
+        let familyIDString = familyID.uuidString
+        familyListener = Firestore.firestore()
+            .collection("families")
+            .document(familyIDString)
+            .addSnapshotListener { [weak self] snapshot, error in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.handleSnapshot(
+                        for: familyID,
+                        snapshot: snapshot,
+                        error: error
+                    )
+                }
+            }
+    }
+
+    private func handleSnapshot(
+        for familyID: UUID,
+        snapshot: DocumentSnapshot?,
+        error: Error?
+    ) {
+        guard observedFamilyID == familyID else { return }
+        guard error == nil else { return }
+        guard snapshot?.exists == true else { return }
+        enqueueSync()
+    }
+
+    private func enqueueSync() {
+        pendingSync = true
+        guard !isSyncing else { return }
+
+        Task { @MainActor in
+            isSyncing = true
+            defer { isSyncing = false }
+
+            while pendingSync {
+                pendingSync = false
+                await syncObservedFamilyFromFirebase()
+            }
+        }
+    }
+
+    private func syncObservedFamilyFromFirebase() async {
+        guard let modelContext, let familyID = observedFamilyID else { return }
+        let descriptor = FetchDescriptor<Family>(
+            predicate: #Predicate { $0.id == familyID }
+        )
+        guard let family = (try? modelContext.fetch(descriptor))?.first else { return }
+
+        let sharingService = FamilySharingService(modelContext: modelContext)
+        do {
+            try await sharingService.syncFamilyStateFromFirebase(for: family)
+        } catch {
+            // 監視同期の失敗はリトライキュー側に委譲し、UI操作を妨げない
+        }
+    }
 }
 
 private struct FirestoreWriteOperation {
@@ -577,6 +993,74 @@ private actor FirebaseSDKClient {
         }
 
         try await commitWritesInBatches(operations)
+    }
+
+    func syncFamily(family: FamilySnapshot, bags: [BagSnapshot], items: [ItemSnapshot]) async throws {
+        guard APIConfig.isFirebaseConfigured else {
+            throw ClientError.notConfigured
+        }
+
+        let uid = try await ensureAnonymousUser()
+        let now = Date()
+        let expiresAt = now.addingTimeInterval(24 * 60 * 60)
+
+        var writeOperations = baseFamilyOperations(
+            family: family,
+            uid: uid,
+            now: now,
+            expiresAt: expiresAt
+        )
+        writeOperations.reserveCapacity(3 + bags.count + items.count)
+
+        let localBagIDs = Set(bags.map(\.id))
+        let localItemIDs = Set(items.map(\.id))
+
+        for bag in bags {
+            writeOperations.append(
+                FirestoreWriteOperation(
+                    path: "families/\(family.id)/bags/\(bag.id)",
+                    data: [
+                        "id": bag.id,
+                        "familyId": family.id,
+                        "name": bag.name,
+                        "createdAt": bag.createdAt
+                    ]
+                )
+            )
+        }
+
+        for item in items {
+            writeOperations.append(
+                FirestoreWriteOperation(
+                    path: "families/\(family.id)/items/\(item.id)",
+                    data: [
+                        "id": item.id,
+                        "familyId": family.id,
+                        "name": item.name,
+                        "quantity": item.quantity,
+                        "expiryDate": item.expiryDate ?? NSNull(),
+                        "bagId": item.bagId ?? NSNull(),
+                        "locationNote": item.locationNote ?? NSNull(),
+                        "notified30": item.notified30,
+                        "notified7": item.notified7,
+                        "notified1": item.notified1,
+                        "createdAt": item.createdAt
+                    ]
+                )
+            )
+        }
+
+        try await commitWritesInBatches(writeOperations)
+
+        let remoteBagIDs = Set(try await fetchCollectionDocumentIDs(path: "families/\(family.id)/bags"))
+        let remoteItemIDs = Set(try await fetchCollectionDocumentIDs(path: "families/\(family.id)/items"))
+        let deletePaths = remoteBagIDs
+            .subtracting(localBagIDs)
+            .map { "families/\(family.id)/bags/\($0)" }
+            + remoteItemIDs
+            .subtracting(localItemIDs)
+            .map { "families/\(family.id)/items/\($0)" }
+        try await commitDeletesInBatches(deletePaths)
     }
 
     func publishInvite(for family: FamilySnapshot) async throws {
@@ -690,6 +1174,105 @@ private actor FirebaseSDKClient {
                 } ?? []
 
                 continuation.resume(returning: members)
+            }
+        }
+    }
+
+    func fetchFamilyDataCounts(familyId: String) async throws -> (bags: Int, items: Int) {
+        guard APIConfig.isFirebaseConfigured else {
+            throw ClientError.notConfigured
+        }
+
+        _ = try await ensureAnonymousUser()
+        let bagIDs = try await fetchCollectionDocumentIDs(path: "families/\(familyId)/bags")
+        let itemIDs = try await fetchCollectionDocumentIDs(path: "families/\(familyId)/items")
+        return (bags: bagIDs.count, items: itemIDs.count)
+    }
+
+    func fetchBags(familyId: String) async throws -> [FirebaseBagInfo] {
+        guard APIConfig.isFirebaseConfigured else {
+            throw ClientError.notConfigured
+        }
+
+        _ = try await ensureAnonymousUser()
+
+        let query = firestore.collection("families/\(familyId)/bags")
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[FirebaseBagInfo], Error>) in
+            query.getDocuments { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                let bags: [FirebaseBagInfo] = snapshot?.documents.compactMap { document in
+                    let data = document.data()
+                    let id = (data["id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let normalizedID = (id?.isEmpty == false) ? id! : document.documentID
+                    guard !normalizedID.isEmpty else { return nil }
+
+                    let name = (data["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let normalizedName = (name?.isEmpty == false) ? name! : "収納場所"
+                    let createdAt = self.dateValue(from: data["createdAt"]) ?? .distantPast
+
+                    return FirebaseBagInfo(
+                        id: normalizedID,
+                        name: normalizedName,
+                        createdAt: createdAt
+                    )
+                } ?? []
+
+                continuation.resume(returning: bags)
+            }
+        }
+    }
+
+    func fetchItems(familyId: String) async throws -> [FirebaseItemInfo] {
+        guard APIConfig.isFirebaseConfigured else {
+            throw ClientError.notConfigured
+        }
+
+        _ = try await ensureAnonymousUser()
+
+        let query = firestore.collection("families/\(familyId)/items")
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[FirebaseItemInfo], Error>) in
+            query.getDocuments { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                let items: [FirebaseItemInfo] = snapshot?.documents.compactMap { document in
+                    let data = document.data()
+                    let id = (data["id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let normalizedID = (id?.isEmpty == false) ? id! : document.documentID
+                    guard !normalizedID.isEmpty else { return nil }
+
+                    let name = (data["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let normalizedName = (name?.isEmpty == false) ? name! : "備蓄品"
+                    let quantity = max(1, self.intValue(from: data["quantity"]) ?? 1)
+                    let expiryDate = self.dateValue(from: data["expiryDate"])
+                    let bagID = self.stringValue(from: data["bagId"])
+                    let locationNote = self.stringValue(from: data["locationNote"])
+                    let notified30 = self.boolValue(from: data["notified30"]) ?? false
+                    let notified7 = self.boolValue(from: data["notified7"]) ?? false
+                    let notified1 = self.boolValue(from: data["notified1"]) ?? false
+                    let createdAt = self.dateValue(from: data["createdAt"]) ?? .distantPast
+
+                    return FirebaseItemInfo(
+                        id: normalizedID,
+                        name: normalizedName,
+                        quantity: quantity,
+                        expiryDate: expiryDate,
+                        bagId: bagID,
+                        locationNote: locationNote,
+                        notified30: notified30,
+                        notified7: notified7,
+                        notified1: notified1,
+                        createdAt: createdAt
+                    )
+                } ?? []
+
+                continuation.resume(returning: items)
             }
         }
     }
@@ -821,6 +1404,19 @@ private actor FirebaseSDKClient {
         }
     }
 
+    private func fetchCollectionDocumentIDs(path: String) async throws -> [String] {
+        let query = firestore.collection(path)
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[String], Error>) in
+            query.getDocuments { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(returning: snapshot?.documents.map(\.documentID) ?? [])
+            }
+        }
+    }
+
     private func upsertDocument(path: String, data: [String: Any]) async throws {
         let reference = firestore.document(path)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -865,6 +1461,62 @@ private actor FirebaseSDKClient {
             try await commitBatch(batch)
             startIndex = endIndex
         }
+    }
+
+    private func commitDeletesInBatches(_ paths: [String], batchSize: Int = 400) async throws {
+        guard !paths.isEmpty else {
+            return
+        }
+
+        var startIndex = paths.startIndex
+        while startIndex < paths.endIndex {
+            let endIndex = min(startIndex + batchSize, paths.endIndex)
+            let batch = firestore.batch()
+
+            for path in paths[startIndex..<endIndex] {
+                let reference = firestore.document(path)
+                batch.deleteDocument(reference)
+            }
+
+            try await commitBatch(batch)
+            startIndex = endIndex
+        }
+    }
+
+    nonisolated private func stringValue(from raw: Any?) -> String? {
+        guard let value = raw as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    nonisolated private func intValue(from raw: Any?) -> Int? {
+        if let value = raw as? Int {
+            return value
+        }
+        if let number = raw as? NSNumber {
+            return number.intValue
+        }
+        return nil
+    }
+
+    nonisolated private func boolValue(from raw: Any?) -> Bool? {
+        if let value = raw as? Bool {
+            return value
+        }
+        if let number = raw as? NSNumber {
+            return number.boolValue
+        }
+        return nil
+    }
+
+    nonisolated private func dateValue(from raw: Any?) -> Date? {
+        if let timestamp = raw as? Timestamp {
+            return timestamp.dateValue()
+        }
+        if let date = raw as? Date {
+            return date
+        }
+        return nil
     }
 
     private func commitBatch(_ batch: WriteBatch) async throws {

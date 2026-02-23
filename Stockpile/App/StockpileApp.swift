@@ -70,6 +70,14 @@ struct StockpileApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .task {
+                    FirebaseSyncRetryCoordinator.shared.configure(
+                        modelContext: sharedModelContainer.mainContext
+                    )
+                    FamilyRealtimeSyncCoordinator.shared.configure(
+                        modelContext: sharedModelContainer.mainContext
+                    )
+                }
         }
         .modelContainer(sharedModelContainer)
     }

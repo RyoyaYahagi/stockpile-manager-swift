@@ -67,6 +67,21 @@ final class NotificationManager: ObservableObject {
         authorizationStatus = settings.authorizationStatus
     }
     
+    /// 通知スケジュールに必要な権限を確認（未決定ならリクエスト）
+    private func ensureAuthorizationForScheduling() async -> Bool {
+        await refreshAuthorizationStatus()
+        if authorizationStatus == .notDetermined {
+            _ = await requestAuthorization()
+        }
+        
+        switch authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return true
+        default:
+            return false
+        }
+    }
+    
     // MARK: - Scheduling (Grouped by Date)
     
     /// 再スケジュール要求をデバウンスして実行
@@ -91,6 +106,7 @@ final class NotificationManager: ObservableObject {
         cancelAllNotifications()
         
         guard settings.isEnabled else { return }
+        guard await ensureAuthorizationForScheduling() else { return }
         
         var calendar = Calendar.current
         calendar.timeZone = TimeZone.current
@@ -310,6 +326,7 @@ final class NotificationManager: ObservableObject {
     /// 単一アイテムの通知をスケジュール（追加・編集時用）
     func scheduleNotifications(for item: Item, settings: NotificationSettings) async {
         guard settings.isEnabled else { return }
+        guard await ensureAuthorizationForScheduling() else { return }
         guard let expiryDate = item.expiryDate else { return }
         
         // 既存の通知をキャンセル

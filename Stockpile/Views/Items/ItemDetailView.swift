@@ -4,6 +4,7 @@ import SwiftData
 struct ItemDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     @Bindable var item: Item
     
     @State private var showDeleteConfirmation = false
@@ -105,7 +106,23 @@ struct ItemDetailView: View {
         ) {
             Button("削除", role: .destructive) {
                 modelContext.delete(item)
+                do {
+                    try modelContext.save()
+                } catch {
+                    print("ローカル保存に失敗: \(error)")
+                    return
+                }
                 NotificationManager.shared.requestReschedule(using: modelContext)
+                if let family = families.first {
+                    Task {
+                        do {
+                            let sharingService = FamilySharingService(modelContext: modelContext)
+                            try await sharingService.syncFamilyDataToFirebase(for: family)
+                        } catch {
+                            print("Firebase同期に失敗: \(error)")
+                        }
+                    }
+                }
                 router.pop()
             }
             Button("キャンセル", role: .cancel) {}
@@ -128,5 +145,5 @@ struct ItemDetailView: View {
         ItemDetailView(item: Item(name: "缶詰", quantity: 3, expiryDate: Date().addingTimeInterval(86400 * 5)))
     }
     .environment(Router())
-    .modelContainer(for: [Item.self], inMemory: true)
+    .modelContainer(for: [Family.self, Item.self], inMemory: true)
 }

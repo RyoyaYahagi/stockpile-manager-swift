@@ -7,6 +7,7 @@ struct DashboardView: View {
     
     @Query(sort: \Item.expiryDate) private var items: [Item]
     @Query private var bags: [Bag]
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var selectedBagId: UUID?
     @State private var selectedItems: Set<UUID> = []
@@ -20,6 +21,7 @@ struct DashboardView: View {
     @State private var showUndoSnackbar = false
     @State private var undoWorkItem: DispatchWorkItem?
     @State private var selectedExpiryFilter: ExpiryFilter = .all
+    @State private var autoSyncedFamilyID: UUID?
     
     enum ExpiryFilter {
         case all
@@ -32,6 +34,24 @@ struct DashboardView: View {
         let expiredCount: Int
         let imminentCount: Int
     }
+
+    private var currentFamily: Family? {
+        families.first
+    }
+
+    private var scopedItems: [Item] {
+        guard let family = currentFamily else {
+            return items.filter { $0.family == nil }
+        }
+        return items.filter { $0.family?.id == family.id }
+    }
+
+    private var scopedBags: [Bag] {
+        guard let family = currentFamily else {
+            return bags.filter { $0.family == nil }
+        }
+        return bags.filter { $0.family?.id == family.id }
+    }
     
     private var dashboardData: DashboardData {
         let normalizedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -41,7 +61,7 @@ struct DashboardView: View {
         var expiredCount = 0
         var imminentCount = 0
         
-        for item in items {
+        for item in scopedItems {
             let status = item.expiryStatus
             
             if status == .expired {
@@ -89,7 +109,7 @@ struct DashboardView: View {
     
     private var selectedBagName: String {
         guard let bagId = selectedBagId,
-              let bag = bags.first(where: { $0.id == bagId }) else {
+              let bag = scopedBags.first(where: { $0.id == bagId }) else {
             return "すべて"
         }
         return bag.name
@@ -100,7 +120,7 @@ struct DashboardView: View {
         
         List(selection: isSelectionMode ? $selectedItems : nil) {
             // サマリーセクション
-            if !items.isEmpty {
+            if !scopedItems.isEmpty {
                 Section {
                     HStack(spacing: 16) {
                         Button {
@@ -138,7 +158,7 @@ struct DashboardView: View {
                         } label: {
                             SummaryCard(
                                 title: "合計",
-                                count: items.count,
+                                count: scopedItems.count,
                                 color: .blue,
                                 isSelected: selectedExpiryFilter == .all
                             )
@@ -151,7 +171,7 @@ struct DashboardView: View {
             }
             
             // 収納場所フィルタ
-            if !bags.isEmpty && !isSelectionMode {
+            if !scopedBags.isEmpty && !isSelectionMode {
                 Section {
                     Button {
                         showStorageLocationPicker = true
@@ -269,7 +289,7 @@ struct DashboardView: View {
             }
             
             ToolbarItem(placement: .topBarTrailing) {
-                if !items.isEmpty {
+                if !scopedItems.isEmpty {
                     Button(isSelectionMode ? "完了" : "選択") {
                         withAnimation {
                             isSelectionMode.toggle()
@@ -309,6 +329,9 @@ struct DashboardView: View {
                 }
             }
         }
+        .task(id: currentFamily?.id) {
+            await autoSyncFromFirebaseIfNeeded()
+        }
         .overlay(alignment: .bottomTrailing) {
             if !isSelectionMode {
                 Button {
@@ -342,15 +365,15 @@ struct DashboardView: View {
         }
         .sheet(isPresented: $showStorageLocationPicker) {
             StorageLocationPicker(
-                bags: bags,
+                bags: scopedBags,
                 selectedBagId: $selectedBagId
             )
         }
         .sheet(isPresented: $showMoveSheet) {
             BulkMoveSheet(
-                bags: bags,
+                bags: scopedBags,
                 selectedItems: selectedItems,
-                items: items,
+                items: scopedItems,
                 onMove: { bagId in
                     moveSelectedItems(to: bagId)
                 }
@@ -358,9 +381,9 @@ struct DashboardView: View {
         }
         .sheet(isPresented: $showCopySheet) {
             BulkCopySheet(
-                bags: bags,
+                bags: scopedBags,
                 selectedItems: selectedItems,
-                items: items,
+                items: scopedItems,
                 onCopy: { bagId in
                     copySelectedItems(to: bagId)
                 }
@@ -388,7 +411,7 @@ struct DashboardView: View {
         )
         
         modelContext.delete(item)
-        NotificationManager.shared.requestReschedule(using: modelContext)
+        persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
         
         // スナックバーを表示
         showUndoSnackbarWithTimeout()
@@ -419,10 +442,11 @@ struct DashboardView: View {
             locationNote: info.locationNote
         )
         if let bagId = info.bagId {
-            newItem.bag = bags.first { $0.id == bagId }
+            newItem.bag = scopedBags.first { $0.id == bagId }
         }
+        newItem.family = currentFamily
         modelContext.insert(newItem)
-        NotificationManager.shared.requestReschedule(using: modelContext)
+        persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
         
         dismissUndoSnackbar()
     }
@@ -449,26 +473,27 @@ struct DashboardView: View {
     }
     
     private func deleteSelectedItems() {
-        for item in items where selectedItems.contains(item.id) {
+        for item in scopedItems where selectedItems.contains(item.id) {
             modelContext.delete(item)
         }
-        NotificationManager.shared.requestReschedule(using: modelContext)
+        persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
         selectedItems.removeAll()
         isSelectionMode = false
     }
     
     private func moveSelectedItems(to bagId: UUID?) {
-        let targetBag = bags.first { $0.id == bagId }
-        for item in items where selectedItems.contains(item.id) {
+        let targetBag = scopedBags.first { $0.id == bagId }
+        for item in scopedItems where selectedItems.contains(item.id) {
             item.bag = targetBag
         }
+        persistAndSyncFamilyDataIfPossible()
         selectedItems.removeAll()
         isSelectionMode = false
     }
     
     private func copySelectedItems(to bagId: UUID?) {
-        let targetBag = bags.first { $0.id == bagId }
-        for item in items where selectedItems.contains(item.id) {
+        let targetBag = scopedBags.first { $0.id == bagId }
+        for item in scopedItems where selectedItems.contains(item.id) {
             let newItem = Item(
                 name: item.name,
                 quantity: item.quantity,
@@ -476,11 +501,48 @@ struct DashboardView: View {
                 locationNote: item.locationNote
             )
             newItem.bag = targetBag
+            newItem.family = currentFamily
             modelContext.insert(newItem)
         }
-        NotificationManager.shared.requestReschedule(using: modelContext)
+        persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
         selectedItems.removeAll()
         isSelectionMode = false
+    }
+
+    private func persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: Bool = false) {
+        do {
+            try modelContext.save()
+        } catch {
+            print("ローカル保存に失敗: \(error)")
+            return
+        }
+
+        if needsNotificationReschedule {
+            NotificationManager.shared.requestReschedule(using: modelContext)
+        }
+
+        guard let family = currentFamily else { return }
+        Task {
+            do {
+                let sharingService = FamilySharingService(modelContext: modelContext)
+                try await sharingService.syncFamilyDataToFirebase(for: family)
+            } catch {
+                print("Firebase同期に失敗: \(error)")
+            }
+        }
+    }
+
+    private func autoSyncFromFirebaseIfNeeded() async {
+        guard let family = currentFamily else { return }
+        guard autoSyncedFamilyID != family.id else { return }
+        autoSyncedFamilyID = family.id
+
+        do {
+            let sharingService = FamilySharingService(modelContext: modelContext)
+            try await sharingService.syncFamilyStateFromFirebase(for: family)
+        } catch {
+            // 自動同期の失敗はUI操作を妨げない
+        }
     }
 }
 

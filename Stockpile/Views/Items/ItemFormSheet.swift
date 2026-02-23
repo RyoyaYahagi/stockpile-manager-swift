@@ -21,6 +21,7 @@ struct ItemFormSheet: View {
     let mode: Mode
     
     @Query private var bags: [Bag]
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var name: String = ""
     @State private var quantity: Int = 1
@@ -50,6 +51,17 @@ struct ItemFormSheet: View {
     
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && quantity > 0
+    }
+
+    private var currentFamily: Family? {
+        families.first
+    }
+
+    private var scopedBags: [Bag] {
+        guard let family = currentFamily else {
+            return bags.filter { $0.family == nil }
+        }
+        return bags.filter { $0.family?.id == family.id }
     }
     
     var body: some View {
@@ -136,7 +148,7 @@ struct ItemFormSheet: View {
                 Section {
                     Picker("収納場所", selection: $selectedBagId) {
                         Text("未分類").tag(nil as UUID?)
-                        ForEach(bags) { bag in
+                        ForEach(scopedBags) { bag in
                             Text(bag.name).tag(bag.id as UUID?)
                         }
                     }
@@ -184,7 +196,8 @@ struct ItemFormSheet: View {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = locationNote.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        let selectedBag = bags.first { $0.id == selectedBagId }
+        let selectedBag = scopedBags.first { $0.id == selectedBagId }
+        let family = currentFamily
         
         switch mode {
         case .add:
@@ -195,6 +208,7 @@ struct ItemFormSheet: View {
                 locationNote: trimmedNote.isEmpty ? nil : trimmedNote
             )
             newItem.bag = selectedBag
+            newItem.family = family
             modelContext.insert(newItem)
             
         case .edit(let item):
@@ -203,9 +217,29 @@ struct ItemFormSheet: View {
             item.expiryDate = hasExpiry ? expiryDate : nil
             item.locationNote = trimmedNote.isEmpty ? nil : trimmedNote
             item.bag = selectedBag
+            if item.family == nil {
+                item.family = family
+            }
+        }
+        
+        do {
+            try modelContext.save()
+        } catch {
+            print("ローカル保存に失敗: \(error)")
+            return
         }
         
         NotificationManager.shared.requestReschedule(using: modelContext)
+        if let family {
+            Task {
+                do {
+                    let sharingService = FamilySharingService(modelContext: modelContext)
+                    try await sharingService.syncFamilyDataToFirebase(for: family)
+                } catch {
+                    print("Firebase同期に失敗: \(error)")
+                }
+            }
+        }
         
         dismiss()
     }
@@ -214,5 +248,5 @@ struct ItemFormSheet: View {
 #Preview("Add") {
     ItemFormSheet(mode: .add)
         .environment(Router())
-        .modelContainer(for: [Item.self, Bag.self, NotificationSettings.self], inMemory: true)
+        .modelContainer(for: [Family.self, Item.self, Bag.self, NotificationSettings.self], inMemory: true)
 }
