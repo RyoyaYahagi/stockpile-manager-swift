@@ -36,6 +36,8 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Query private var items: [Item]
+    @Query(sort: \NotificationSettings.createdAt, order: .forward)
+    private var notificationSettingsList: [NotificationSettings]
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     @AppStorage("app.hasCompletedFirstLaunchTutorial")
     private var hasCompletedFirstLaunchTutorial = false
@@ -48,6 +50,31 @@ struct ContentView: View {
     
     private var currentFamily: Family? {
         families.first
+    }
+
+    private var notificationRescheduleSignature: String {
+        let settingsSignature: String
+        if let settings = notificationSettingsList.first {
+            settingsSignature = [
+                settings.isEnabled ? "1" : "0",
+                settings.notify30DaysBefore ? "1" : "0",
+                settings.notify7DaysBefore ? "1" : "0",
+                settings.notifyOnDay ? "1" : "0",
+                "\(settings.notificationHour)",
+                "\(settings.notificationMinute)"
+            ].joined(separator: ":")
+        } else {
+            settingsSignature = "missing"
+        }
+
+        let itemSignature = items
+            .map { item in
+                "\(item.id.uuidString):\(item.expiryDate?.timeIntervalSince1970 ?? -1):\(item.quantity)"
+            }
+            .sorted()
+            .joined(separator: "|")
+
+        return "\(settingsSignature)#\(itemSignature)"
     }
     
     var body: some View {
@@ -100,10 +127,13 @@ struct ContentView: View {
             FamilyRealtimeSyncCoordinator.shared.activate(for: currentFamily)
             NotificationManager.shared.requestReschedule(using: modelContext)
         }
+        .task(id: notificationRescheduleSignature) {
+            requestRescheduleForCurrentData()
+        }
         .onChange(of: scenePhase) { _, newValue in
             guard newValue == .active else { return }
             FamilyRealtimeSyncCoordinator.shared.requestImmediateSync()
-            NotificationManager.shared.requestReschedule(using: modelContext)
+            requestRescheduleForCurrentData()
             resumeTutorialIfNeeded()
         }
         .onChange(of: router.path.count) { _, _ in
@@ -225,6 +255,26 @@ struct ContentView: View {
 
         shouldResumeTutorialAfterAction = false
         showFirstLaunchTutorial = true
+    }
+
+    private func requestRescheduleForCurrentData() {
+        let settings = ensureNotificationSettings()
+        NotificationManager.shared.requestReschedule(items: items, settings: settings)
+    }
+
+    private func ensureNotificationSettings() -> NotificationSettings {
+        if let existing = notificationSettingsList.first {
+            return existing
+        }
+
+        let created = NotificationSettings.createDefault()
+        modelContext.insert(created)
+        do {
+            try modelContext.save()
+        } catch {
+            print("通知設定の初期化保存に失敗: \(error)")
+        }
+        return created
     }
     
     private func extractItemId(from rawValue: Any?) -> UUID? {

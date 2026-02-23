@@ -125,6 +125,12 @@ struct NotificationSettingsView: View {
                     }
                 } header: {
                     Text("デバッグ")
+                } footer: {
+                    #if targetEnvironment(simulator)
+                    Text("シミュレーターでは通知音が鳴らない場合があります。音の確認は実機で行ってください。")
+                    #else
+                    Text("端末がサイレント/集中モード中の場合、通知音が鳴らないことがあります。")
+                    #endif
                 }
             } else {
                 Section {
@@ -305,7 +311,11 @@ struct NotificationSettingsView: View {
             center.removeDeliveredNotifications(withIdentifiers: ["test-notification"])
             try await center.add(request)
             print("✅ Test notification scheduled for 5 seconds later")
+            #if targetEnvironment(simulator)
+            testNotificationAlertMessage = "5秒後にテスト通知を予約しました。シミュレーターでは音が鳴らない場合があるため、実機でも確認してください。"
+            #else
             testNotificationAlertMessage = "5秒後にテスト通知を予約しました。アプリを開いたままでもバナー表示されます。"
+            #endif
         } catch {
             print("❌ Failed to schedule test notification: \(error)")
             testNotificationAlertMessage = "テスト通知の予約に失敗しました: \(error.localizedDescription)"
