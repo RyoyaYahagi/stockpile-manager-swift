@@ -105,6 +105,14 @@ struct ItemDetailView: View {
             titleVisibility: .visible
         ) {
             Button("削除", role: .destructive) {
+                let deletedItemInfo = DeletedItemInfo(
+                    id: item.id,
+                    name: item.name,
+                    quantity: item.quantity,
+                    expiryDate: item.expiryDate,
+                    locationNote: item.locationNote,
+                    bagId: item.bag?.id
+                )
                 modelContext.delete(item)
                 do {
                     try modelContext.save()
@@ -124,6 +132,12 @@ struct ItemDetailView: View {
                     }
                 }
                 router.pop()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    NotificationCenter.default.post(
+                        name: .didDeleteItems,
+                        object: [deletedItemInfo]
+                    )
+                }
             }
             Button("キャンセル", role: .cancel) {}
         }

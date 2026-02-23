@@ -7,6 +7,8 @@ struct SettingsView: View {
     @Environment(Router.self) private var router
     
     @Query private var families: [Family]
+    @AppStorage("app.tutorial.replayRequestToken")
+    private var tutorialReplayRequestToken = 0
     
     private var currentFamily: Family? {
         families.first
@@ -19,7 +21,7 @@ struct SettingsView: View {
                 if let family = currentFamily {
                     NavigationLink(value: Destination.familySettings(family)) {
                         HStack {
-                            Label("家族名", systemImage: "person.3")
+                            Label("家族共有設定", systemImage: "person.3")
                             Spacer()
                             Text(family.name)
                                 .foregroundStyle(.secondary)
@@ -64,6 +66,18 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("通知")
+            }
+
+            // ガイドセクション
+            Section {
+                Button {
+                    tutorialReplayRequestToken += 1
+                    router.popToRoot()
+                } label: {
+                    Label("チュートリアルを見直す", systemImage: "questionmark.circle")
+                }
+            } header: {
+                Text("ガイド")
             }
             
             // データセクション

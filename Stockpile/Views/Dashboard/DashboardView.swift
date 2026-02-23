@@ -1,6 +1,10 @@
 import SwiftUI
 import SwiftData
 
+extension Notification.Name {
+    static let didDeleteItems = Notification.Name("didDeleteItems")
+}
+
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
@@ -17,7 +21,7 @@ struct DashboardView: View {
     @State private var showDeleteConfirmation = false
     @State private var showMoveSheet = false
     @State private var showCopySheet = false
-    @State private var deletedItemInfo: DeletedItemInfo?
+    @State private var deletedItemInfoList: [DeletedItemInfo] = []
     @State private var showUndoSnackbar = false
     @State private var undoWorkItem: DispatchWorkItem?
     @State private var selectedExpiryFilter: ExpiryFilter = .all
@@ -113,6 +117,13 @@ struct DashboardView: View {
             return "すべて"
         }
         return bag.name
+    }
+
+    private var deletedItemsMessage: String {
+        if deletedItemInfoList.count == 1, let first = deletedItemInfoList.first {
+            return "「\(first.name)」を削除しました"
+        }
+        return "\(deletedItemInfoList.count)件の備蓄品を削除しました"
     }
     
     var body: some View {
@@ -332,6 +343,12 @@ struct DashboardView: View {
         .task(id: currentFamily?.id) {
             await autoSyncFromFirebaseIfNeeded()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .didDeleteItems)) { notification in
+            guard let deletedItems = notification.object as? [DeletedItemInfo],
+                  !deletedItems.isEmpty else { return }
+            deletedItemInfoList = deletedItems
+            showUndoSnackbarWithTimeout()
+        }
         .overlay(alignment: .bottomTrailing) {
             if !isSelectionMode {
                 Button {
@@ -348,11 +365,11 @@ struct DashboardView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if showUndoSnackbar, let info = deletedItemInfo {
+            if showUndoSnackbar, !deletedItemInfoList.isEmpty {
                 UndoSnackbar(
-                    message: "「\(info.name)」を削除しました",
+                    message: deletedItemsMessage,
                     onUndo: {
-                        undoDelete(info)
+                        undoDelete(deletedItemInfoList)
                     },
                     onDismiss: {
                         dismissUndoSnackbar()
@@ -401,14 +418,7 @@ struct DashboardView: View {
     }
     
     private func deleteItem(_ item: Item) {
-        // Undo用に情報を保存
-        deletedItemInfo = DeletedItemInfo(
-            name: item.name,
-            quantity: item.quantity,
-            expiryDate: item.expiryDate,
-            locationNote: item.locationNote,
-            bagId: item.bag?.id
-        )
+        deletedItemInfoList = [snapshotForUndo(from: item)]
         
         modelContext.delete(item)
         persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
@@ -433,19 +443,21 @@ struct DashboardView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: workItem)
     }
     
-    private func undoDelete(_ info: DeletedItemInfo) {
-        // アイテムを復元
-        let newItem = Item(
-            name: info.name,
-            quantity: info.quantity,
-            expiryDate: info.expiryDate,
-            locationNote: info.locationNote
-        )
-        if let bagId = info.bagId {
-            newItem.bag = scopedBags.first { $0.id == bagId }
+    private func undoDelete(_ infoList: [DeletedItemInfo]) {
+        for info in infoList {
+            let newItem = Item(
+                name: info.name,
+                quantity: info.quantity,
+                expiryDate: info.expiryDate,
+                locationNote: info.locationNote
+            )
+            newItem.id = info.id
+            if let bagId = info.bagId {
+                newItem.bag = scopedBags.first { $0.id == bagId }
+            }
+            newItem.family = currentFamily
+            modelContext.insert(newItem)
         }
-        newItem.family = currentFamily
-        modelContext.insert(newItem)
         persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
         
         dismissUndoSnackbar()
@@ -459,7 +471,7 @@ struct DashboardView: View {
         }
         // 少し遅延して情報をクリア
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            deletedItemInfo = nil
+            deletedItemInfoList = []
         }
     }
     
@@ -473,10 +485,17 @@ struct DashboardView: View {
     }
     
     private func deleteSelectedItems() {
+        deletedItemInfoList = scopedItems
+            .filter { selectedItems.contains($0.id) }
+            .map { snapshotForUndo(from: $0) }
+
         for item in scopedItems where selectedItems.contains(item.id) {
             modelContext.delete(item)
         }
         persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
+        if !deletedItemInfoList.isEmpty {
+            showUndoSnackbarWithTimeout()
+        }
         selectedItems.removeAll()
         isSelectionMode = false
     }
@@ -543,6 +562,17 @@ struct DashboardView: View {
         } catch {
             // 自動同期の失敗はUI操作を妨げない
         }
+    }
+
+    private func snapshotForUndo(from item: Item) -> DeletedItemInfo {
+        DeletedItemInfo(
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            expiryDate: item.expiryDate,
+            locationNote: item.locationNote,
+            bagId: item.bag?.id
+        )
     }
 }
 
@@ -684,6 +714,7 @@ struct BulkCopySheet: View {
 // MARK: - Undo Snackbar
 
 struct DeletedItemInfo {
+    let id: UUID
     let name: String
     let quantity: Int
     let expiryDate: Date?

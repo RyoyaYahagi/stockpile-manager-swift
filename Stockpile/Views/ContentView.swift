@@ -27,8 +27,9 @@ enum NotificationTapRelay {
 private enum FirstLaunchAction {
     case addItem
     case notificationSettings
-    case finished
 }
+
+private let firstLaunchTutorialStepCount = 3
 
 struct ContentView: View {
     @State private var router = Router()
@@ -38,8 +39,12 @@ struct ContentView: View {
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     @AppStorage("app.hasCompletedFirstLaunchTutorial")
     private var hasCompletedFirstLaunchTutorial = false
+    @AppStorage("app.tutorial.replayRequestToken")
+    private var tutorialReplayRequestToken = 0
     @State private var showFirstLaunchTutorial = false
     @State private var hasPresentedFirstLaunchTutorialInSession = false
+    @State private var tutorialStepIndex = 0
+    @State private var shouldResumeTutorialAfterAction = false
     
     private var currentFamily: Family? {
         families.first
@@ -84,8 +89,12 @@ struct ContentView: View {
             if !hasCompletedFirstLaunchTutorial,
                !hasPresentedFirstLaunchTutorialInSession {
                 hasPresentedFirstLaunchTutorialInSession = true
-                showFirstLaunchTutorial = true
+                startTutorial(at: 0)
             }
+        }
+        .onChange(of: tutorialReplayRequestToken) { _, _ in
+            hasPresentedFirstLaunchTutorialInSession = true
+            startTutorial(at: 0)
         }
         .task(id: currentFamily?.id) {
             FamilyRealtimeSyncCoordinator.shared.activate(for: currentFamily)
@@ -95,16 +104,26 @@ struct ContentView: View {
             guard newValue == .active else { return }
             FamilyRealtimeSyncCoordinator.shared.requestImmediateSync()
             NotificationManager.shared.requestReschedule(using: modelContext)
+            resumeTutorialIfNeeded()
+        }
+        .onChange(of: router.path.count) { _, _ in
+            resumeTutorialIfNeeded()
+        }
+        .onChange(of: router.presentedSheet?.id) { _, _ in
+            resumeTutorialIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .didTapNotification)) { notification in
             _ = NotificationTapRelay.consumePending()
             handleNotificationTap(notification)
         }
         .fullScreenCover(isPresented: $showFirstLaunchTutorial) {
-            FirstLaunchTutorialView { action in
-                handleFirstLaunchTutorialCompletion(action)
-            }
-            .interactiveDismissDisabled()
+            FirstLaunchTutorialView(
+                stepIndex: $tutorialStepIndex,
+                onTryStep: handleFirstLaunchTutorialTryStep,
+                onAdvanceStep: handleFirstLaunchTutorialAdvance,
+                onFinish: handleFirstLaunchTutorialFinish,
+                onClose: handleFirstLaunchTutorialClose
+            )
         }
     }
     
@@ -153,10 +172,18 @@ struct ContentView: View {
         }
     }
     
-    private func handleFirstLaunchTutorialCompletion(_ action: FirstLaunchAction) {
-        hasCompletedFirstLaunchTutorial = true
+    private func startTutorial(at index: Int) {
+        tutorialStepIndex = min(max(0, index), firstLaunchTutorialStepCount - 1)
+        shouldResumeTutorialAfterAction = false
+        showFirstLaunchTutorial = true
+    }
+
+    private func handleFirstLaunchTutorialTryStep(_ action: FirstLaunchAction) {
+        let nextStep = min(tutorialStepIndex + 1, firstLaunchTutorialStepCount - 1)
+        tutorialStepIndex = nextStep
+        shouldResumeTutorialAfterAction = true
         showFirstLaunchTutorial = false
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             switch action {
             case .addItem:
@@ -164,10 +191,40 @@ struct ContentView: View {
             case .notificationSettings:
                 router.popToRoot()
                 router.push(.notificationSettings)
-            case .finished:
-                break
             }
         }
+    }
+
+    private func handleFirstLaunchTutorialAdvance() {
+        guard tutorialStepIndex < firstLaunchTutorialStepCount - 1 else {
+            handleFirstLaunchTutorialFinish()
+            return
+        }
+        withAnimation {
+            tutorialStepIndex += 1
+        }
+    }
+
+    private func handleFirstLaunchTutorialFinish() {
+        hasCompletedFirstLaunchTutorial = true
+        shouldResumeTutorialAfterAction = false
+        showFirstLaunchTutorial = false
+        tutorialStepIndex = 0
+    }
+
+    private func handleFirstLaunchTutorialClose() {
+        shouldResumeTutorialAfterAction = false
+        showFirstLaunchTutorial = false
+    }
+
+    private func resumeTutorialIfNeeded() {
+        guard shouldResumeTutorialAfterAction else { return }
+        guard !showFirstLaunchTutorial else { return }
+        guard router.path.isEmpty else { return }
+        guard router.presentedSheet == nil else { return }
+
+        shouldResumeTutorialAfterAction = false
+        showFirstLaunchTutorial = true
     }
     
     private func extractItemId(from rawValue: Any?) -> UUID? {
@@ -184,39 +241,47 @@ struct ContentView: View {
 }
 
 private struct FirstLaunchTutorialView: View {
-    let onComplete: (FirstLaunchAction) -> Void
-    @State private var stepIndex = 0
+    @Binding var stepIndex: Int
+    let onTryStep: (FirstLaunchAction) -> Void
+    let onAdvanceStep: () -> Void
+    let onFinish: () -> Void
+    let onClose: () -> Void
     
     private struct Step {
         let title: String
         let description: String
         let primaryTitle: String
-        let action: FirstLaunchAction
+        let action: FirstLaunchAction?
+        let helperText: String?
     }
     
     private let steps: [Step] = [
         Step(
             title: "まずは備蓄品を登録",
             description: "実際に追加画面を開いて、最初の備蓄品を登録してみましょう。",
-            primaryTitle: "追加画面を開く",
-            action: .addItem
+            primaryTitle: "この操作を試す",
+            action: .addItem,
+            helperText: "追加画面から戻ると、このガイドの続きが自動で再表示されます。"
         ),
         Step(
             title: "通知設定を確認",
             description: "通知時刻と通知タイミングを確認して、自動通知を有効化しましょう。",
-            primaryTitle: "通知設定を開く",
-            action: .notificationSettings
+            primaryTitle: "この操作を試す",
+            action: .notificationSettings,
+            helperText: "設定確認後に戻ると、最終ステップに進めます。"
         ),
         Step(
             title: "準備完了です",
             description: "家族共有を使うと、備蓄品の更新が自動同期されます。すぐに使い始めましょう。",
-            primaryTitle: "ダッシュボードへ",
-            action: .finished
+            primaryTitle: "チュートリアル完了",
+            action: nil,
+            helperText: nil
         )
     ]
     
     var body: some View {
-        let step = steps[stepIndex]
+        let safeStepIndex = min(max(stepIndex, 0), steps.count - 1)
+        let step = steps[safeStepIndex]
         
         NavigationStack {
             VStack(spacing: 28) {
@@ -238,29 +303,47 @@ private struct FirstLaunchTutorialView: View {
                 HStack(spacing: 8) {
                     ForEach(Array(steps.indices), id: \.self) { index in
                         Capsule()
-                            .fill(index == stepIndex ? Color.blue : Color.gray.opacity(0.25))
-                            .frame(width: index == stepIndex ? 28 : 8, height: 8)
+                            .fill(index == safeStepIndex ? Color.blue : Color.gray.opacity(0.25))
+                            .frame(width: index == safeStepIndex ? 28 : 8, height: 8)
                     }
                 }
                 
                 VStack(spacing: 12) {
-                    Button(step.primaryTitle) {
-                        onComplete(step.action)
+                    if let action = step.action {
+                        Button(step.primaryTitle) {
+                            onTryStep(action)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity)
+
+                        Button("この手順はあとで試す（次へ）") {
+                            onAdvanceStep()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        Button(step.primaryTitle) {
+                            onFinish()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity)
+                    }
+
+                    if let helperText = step.helperText {
+                        Text(helperText)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+
+                    Button("閉じる") {
+                        onClose()
                     }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity)
-                    
-                    Button(stepIndex < steps.count - 1 ? "次へ" : "あとで使う") {
-                        if stepIndex < steps.count - 1 {
-                            withAnimation {
-                                stepIndex += 1
-                            }
-                        } else {
-                            onComplete(.finished)
-                        }
-                    }
-                    .buttonStyle(.bordered)
+                    .tint(.gray)
                     .controlSize(.large)
                     .frame(maxWidth: .infinity)
                 }
