@@ -167,8 +167,7 @@ struct NotificationSettingsView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(request.content.body)
                                         .font(.subheadline)
-                                    if let trigger = request.trigger as? UNCalendarNotificationTrigger,
-                                       let nextDate = trigger.nextTriggerDate() {
+                                    if let nextDate = nextTriggerDate(for: request) {
                                         Text(nextDate.formatted(date: .abbreviated, time: .shortened))
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
@@ -353,6 +352,16 @@ struct NotificationSettingsView: View {
     private func refreshNotificationDebugList() async {
         pendingNotifications = await notificationManager.getPendingNotifications()
         deliveredNotifications = await notificationManager.getDeliveredNotifications()
+    }
+
+    private func nextTriggerDate(for request: UNNotificationRequest) -> Date? {
+        if let calendarTrigger = request.trigger as? UNCalendarNotificationTrigger {
+            return calendarTrigger.nextTriggerDate()
+        }
+        if let intervalTrigger = request.trigger as? UNTimeIntervalNotificationTrigger {
+            return Date().addingTimeInterval(intervalTrigger.timeInterval)
+        }
+        return nil
     }
     
     private func sendTestNotification() async {

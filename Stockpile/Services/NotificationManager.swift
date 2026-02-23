@@ -39,6 +39,7 @@ final class NotificationManager: ObservableObject {
     @Published private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
     private var pendingRescheduleWorkItem: DispatchWorkItem?
     private let rescheduleDebounceInterval: TimeInterval = 0.25
+    private let immediateFallbackInterval: TimeInterval = 60
     
     private init() {
         Task {
@@ -262,10 +263,25 @@ final class NotificationManager: ObservableObject {
             return
         }
         
-        let trigger = UNCalendarNotificationTrigger(
-            dateMatching: dateComponents,
-            repeats: false
-        )
+        let trigger: UNNotificationTrigger
+        let effectiveScheduledDate: Date
+        if scheduledDate > now {
+            trigger = UNCalendarNotificationTrigger(
+                dateMatching: dateComponents,
+                repeats: false
+            )
+            effectiveScheduledDate = scheduledDate
+        } else if calendar.isDate(date, inSameDayAs: now) {
+            // 追加直後などで当日通知時刻を過ぎていた場合、通知を取りこぼさないよう近い将来にフォールバックする
+            trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: immediateFallbackInterval,
+                repeats: false
+            )
+            effectiveScheduledDate = now.addingTimeInterval(immediateFallbackInterval)
+        } else {
+            print("⚠️ Skipped grouped notification - \(formatDate(scheduledDate)) is in the past")
+            return
+        }
         
         // 日付でユニークなidentifierを生成
         let dateFormatter = DateFormatter()
@@ -280,7 +296,7 @@ final class NotificationManager: ObservableObject {
         
         do {
             try await UNUserNotificationCenter.current().add(request)
-            print("✅ Scheduled grouped: \(notificationItems.count)件 at \(formatDate(scheduledDate))")
+            print("✅ Scheduled grouped: \(notificationItems.count)件 at \(formatDate(effectiveScheduledDate))")
         } catch {
             print("❌ Failed to schedule grouped notification: \(error)")
         }
@@ -431,18 +447,26 @@ final class NotificationManager: ObservableObject {
         
         let now = Date()
         
-        // 過去の日時は通知しない
-        guard scheduledDate > now else {
+        let trigger: UNNotificationTrigger
+        let effectiveScheduledDate: Date
+        if scheduledDate > now {
+            trigger = UNCalendarNotificationTrigger(
+                dateMatching: dateComponents,
+                repeats: false
+            )
+            effectiveScheduledDate = scheduledDate
+        } else if calendar.isDate(date, inSameDayAs: now) {
+            trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: immediateFallbackInterval,
+                repeats: false
+            )
+            effectiveScheduledDate = now.addingTimeInterval(immediateFallbackInterval)
+        } else {
             #if DEBUG
             print("⚠️ Skipped: \(item.name) (\(suffix)) - \(formatDate(scheduledDate)) is in the past")
             #endif
             return
         }
-        
-        let trigger = UNCalendarNotificationTrigger(
-            dateMatching: dateComponents,
-            repeats: false
-        )
         
         let identifier = "\(item.id.uuidString)-\(suffix)"
         
@@ -458,7 +482,7 @@ final class NotificationManager: ObservableObject {
         do {
             try await UNUserNotificationCenter.current().add(request)
             #if DEBUG
-            print("✅ Scheduled: \(item.name) (\(suffix)) at \(formatDate(scheduledDate))")
+            print("✅ Scheduled: \(item.name) (\(suffix)) at \(formatDate(effectiveScheduledDate))")
             #endif
         } catch {
             #if DEBUG
