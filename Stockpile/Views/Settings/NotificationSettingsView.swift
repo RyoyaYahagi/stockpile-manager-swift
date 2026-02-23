@@ -13,6 +13,7 @@ struct NotificationSettingsView: View {
     @State private var pendingNotifications: [UNNotificationRequest] = []
     @State private var isSchedulingTestNotification = false
     @State private var testNotificationAlertMessage: String?
+    @State private var currentSystemSettings: UNNotificationSettings?
     
     var body: some View {
         Form {
@@ -20,11 +21,13 @@ struct NotificationSettingsView: View {
                 // 通知権限セクション
                 Section {
                     authorizationStatusRow
+                    soundStatusRow
                     
                     if notificationManager.authorizationStatus == .notDetermined {
                         Button("通知を許可する") {
                             Task {
-                                await notificationManager.requestAuthorization()
+                                _ = await notificationManager.requestAuthorization()
+                                await refreshSystemSettings()
                             }
                         }
                     } else if notificationManager.authorizationStatus == .denied {
@@ -148,7 +151,7 @@ struct NotificationSettingsView: View {
         }
         .onAppear {
             Task {
-                await notificationManager.refreshAuthorizationStatus()
+                await refreshSystemSettings()
             }
         }
         .sheet(isPresented: $showPendingNotifications) {
@@ -212,6 +215,15 @@ struct NotificationSettingsView: View {
                 .foregroundStyle(statusColor)
         }
     }
+
+    private var soundStatusRow: some View {
+        HStack {
+            Text("サウンド")
+            Spacer()
+            Text(soundStatusText)
+                .foregroundStyle(soundStatusColor)
+        }
+    }
     
     private var statusText: String {
         switch notificationManager.authorizationStatus {
@@ -230,6 +242,34 @@ struct NotificationSettingsView: View {
         case .denied: return .red
         case .notDetermined: return .orange
         @unknown default: return .secondary
+        }
+    }
+
+    private var soundStatusText: String {
+        guard let currentSystemSettings else { return "確認中..." }
+        switch currentSystemSettings.soundSetting {
+        case .enabled:
+            return "有効"
+        case .disabled:
+            return "無効"
+        case .notSupported:
+            return "未対応"
+        @unknown default:
+            return "不明"
+        }
+    }
+
+    private var soundStatusColor: Color {
+        guard let currentSystemSettings else { return .secondary }
+        switch currentSystemSettings.soundSetting {
+        case .enabled:
+            return .green
+        case .disabled:
+            return .red
+        case .notSupported:
+            return .orange
+        @unknown default:
+            return .secondary
         }
     }
     
@@ -276,20 +316,31 @@ struct NotificationSettingsView: View {
             UIApplication.shared.open(url)
         }
     }
+
+    private func refreshSystemSettings() async {
+        let settings = await notificationManager.currentNotificationSettings()
+        currentSystemSettings = settings
+        await notificationManager.refreshAuthorizationStatus()
+    }
     
     private func sendTestNotification() async {
         isSchedulingTestNotification = true
         defer { isSchedulingTestNotification = false }
         
-        if notificationManager.authorizationStatus == .notDetermined {
+        let authorizationStatus = currentSystemSettings?.authorizationStatus ?? notificationManager.authorizationStatus
+        if authorizationStatus == .notDetermined {
             _ = await notificationManager.requestAuthorization()
-        } else {
-            await notificationManager.refreshAuthorizationStatus()
         }
-        
-        let status = notificationManager.authorizationStatus
+
+        await refreshSystemSettings()
+        let status = currentSystemSettings?.authorizationStatus ?? notificationManager.authorizationStatus
         guard status == .authorized || status == .provisional || status == .ephemeral else {
             testNotificationAlertMessage = "通知権限が未許可のため、テスト通知を送信できません。設定アプリで通知を許可してください。"
+            return
+        }
+
+        if currentSystemSettings?.soundSetting == .disabled {
+            testNotificationAlertMessage = "通知のサウンドがオフです。設定アプリ > 通知 > 備蓄品管理 で「サウンド」を有効にしてください。"
             return
         }
         
@@ -297,6 +348,9 @@ struct NotificationSettingsView: View {
         content.title = "テスト通知"
         content.body = "通知が正常に動作しています！"
         content.sound = .default
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .timeSensitive
+        }
         
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
         let request = UNNotificationRequest(
@@ -314,7 +368,7 @@ struct NotificationSettingsView: View {
             #if targetEnvironment(simulator)
             testNotificationAlertMessage = "5秒後にテスト通知を予約しました。シミュレーターでは音が鳴らない場合があるため、実機でも確認してください。"
             #else
-            testNotificationAlertMessage = "5秒後にテスト通知を予約しました。アプリを開いたままでもバナー表示されます。"
+            testNotificationAlertMessage = "5秒後にテスト通知を予約しました。音が出ない場合は、本体の消音スイッチ・音量・集中モード・通知サウンド設定を確認してください。"
             #endif
         } catch {
             print("❌ Failed to schedule test notification: \(error)")

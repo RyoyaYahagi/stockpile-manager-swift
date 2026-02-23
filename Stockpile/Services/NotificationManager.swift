@@ -66,6 +66,11 @@ final class NotificationManager: ObservableObject {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         authorizationStatus = settings.authorizationStatus
     }
+
+    /// 現在の通知システム設定を取得
+    func currentNotificationSettings() async -> UNNotificationSettings {
+        await UNUserNotificationCenter.current().notificationSettings()
+    }
     
     /// 通知スケジュールに必要な権限を確認（未決定ならリクエスト）
     private func ensureAuthorizationForScheduling() async -> Bool {
@@ -218,6 +223,9 @@ final class NotificationManager: ObservableObject {
     ) async {
         let content = UNMutableNotificationContent()
         content.sound = .default
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .timeSensitive
+        }
         
         // 通知タイトルとメッセージを生成
         let (title, body) = generateNotificationContent(notificationItems: notificationItems)
@@ -400,6 +408,9 @@ final class NotificationManager: ObservableObject {
         content.title = "備蓄品の期限通知"
         content.body = message
         content.sound = .default
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .timeSensitive
+        }
         content.userInfo = ["itemId": item.id.uuidString]
         
         // 通知時刻を設定
