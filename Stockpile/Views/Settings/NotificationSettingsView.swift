@@ -11,6 +11,7 @@ struct NotificationSettingsView: View {
     
     @State private var showPendingNotifications = false
     @State private var pendingNotifications: [UNNotificationRequest] = []
+    @State private var deliveredNotifications: [UNNotification] = []
     @State private var isSchedulingTestNotification = false
     @State private var testNotificationAlertMessage: String?
     @State private var currentSystemSettings: UNNotificationSettings?
@@ -111,7 +112,7 @@ struct NotificationSettingsView: View {
                 Section {
                     Button("スケジュール済み通知を確認") {
                         Task {
-                            pendingNotifications = await notificationManager.getPendingNotifications()
+                            await refreshNotificationDebugList()
                             showPendingNotifications = true
                         }
                     }
@@ -157,17 +158,36 @@ struct NotificationSettingsView: View {
         .sheet(isPresented: $showPendingNotifications) {
             NavigationStack {
                 List {
-                    if pendingNotifications.isEmpty {
-                        Text("スケジュール済み通知はありません")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(pendingNotifications, id: \.identifier) { request in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(request.content.body)
-                                    .font(.subheadline)
-                                if let trigger = request.trigger as? UNCalendarNotificationTrigger,
-                                   let nextDate = trigger.nextTriggerDate() {
-                                    Text(nextDate.formatted(date: .abbreviated, time: .shortened))
+                    Section("予約済み（Pending）") {
+                        if pendingNotifications.isEmpty {
+                            Text("予約済み通知はありません")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(pendingNotifications, id: \.identifier) { request in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(request.content.body)
+                                        .font(.subheadline)
+                                    if let trigger = request.trigger as? UNCalendarNotificationTrigger,
+                                       let nextDate = trigger.nextTriggerDate() {
+                                        Text(nextDate.formatted(date: .abbreviated, time: .shortened))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Section("配信済み（Delivered）") {
+                        if deliveredNotifications.isEmpty {
+                            Text("配信済み通知はありません")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(Array(deliveredNotifications.enumerated()), id: \.offset) { _, notification in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(notification.request.content.body)
+                                        .font(.subheadline)
+                                    Text(notification.date.formatted(date: .abbreviated, time: .shortened))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -175,9 +195,16 @@ struct NotificationSettingsView: View {
                         }
                     }
                 }
-                .navigationTitle("スケジュール済み通知")
+                .navigationTitle("通知デバッグ一覧")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("更新") {
+                            Task {
+                                await refreshNotificationDebugList()
+                            }
+                        }
+                    }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("閉じる") {
                             showPendingNotifications = false
@@ -321,6 +348,11 @@ struct NotificationSettingsView: View {
         let settings = await notificationManager.currentNotificationSettings()
         currentSystemSettings = settings
         await notificationManager.refreshAuthorizationStatus()
+    }
+
+    private func refreshNotificationDebugList() async {
+        pendingNotifications = await notificationManager.getPendingNotifications()
+        deliveredNotifications = await notificationManager.getDeliveredNotifications()
     }
     
     private func sendTestNotification() async {

@@ -509,4 +509,9 @@ final class NotificationManager: ObservableObject {
     func getPendingNotifications() async -> [UNNotificationRequest] {
         await UNUserNotificationCenter.current().pendingNotificationRequests()
     }
+
+    /// 配信済み通知を取得（デバッグ用）
+    func getDeliveredNotifications() async -> [UNNotification] {
+        await UNUserNotificationCenter.current().deliveredNotifications()
+    }
 }
