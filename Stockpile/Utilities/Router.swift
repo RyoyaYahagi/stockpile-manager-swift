@@ -22,6 +22,7 @@ final class Router {
         case addBag
         case inviteCode(String)
         case importJSON
+        case exportJSON
         case qrScanner
         
         var id: String {
@@ -31,6 +32,7 @@ final class Router {
             case .addBag: return "addBag"
             case .inviteCode: return "inviteCode"
             case .importJSON: return "importJSON"
+            case .exportJSON: return "exportJSON"
             case .qrScanner: return "qrScanner"
             }
         }

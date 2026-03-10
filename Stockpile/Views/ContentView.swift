@@ -170,6 +170,8 @@ struct ContentView: View {
             InviteCodeView(code: code)
         case .importJSON:
             ImportJSONView()
+        case .exportJSON:
+            ExportJSONView()
         case .qrScanner:
             QRScannerView { _ in
                 // QRスキャン結果の処理はFamilySetupViewで行う

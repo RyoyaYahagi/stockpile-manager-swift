@@ -85,6 +85,12 @@ struct SettingsView: View {
             // データセクション
             Section {
                 Button {
+                    router.present(.exportJSON)
+                } label: {
+                    Label("JSONエクスポート", systemImage: "square.and.arrow.up")
+                }
+
+                Button {
                     router.present(.importJSON)
                 } label: {
                     Label("JSONインポート", systemImage: "square.and.arrow.down")
