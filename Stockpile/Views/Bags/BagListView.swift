@@ -139,11 +139,11 @@ struct BagListView: View {
         guard let family = currentFamily else { return }
         Task {
             do {
-                let sharingService = FamilySharingService(modelContext: modelContext)
-                try await sharingService.syncFamilyDataToFirebase(for: family)
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                try await sharingService.syncFamilyDataToCloudKit(for: family)
             } catch {
                 #if DEBUG
-                print("Firebase同期に失敗: \(error)")
+                print("CloudKit同期に失敗: \(error)")
                 #endif
             }
         }
@@ -219,11 +219,11 @@ struct BagFormSheet: View {
                         if let family = families.first {
                             Task {
                                 do {
-                                    let sharingService = FamilySharingService(modelContext: modelContext)
-                                    try await sharingService.syncFamilyDataToFirebase(for: family)
+                                    let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                                    try await sharingService.syncFamilyDataToCloudKit(for: family)
                                 } catch {
                                     #if DEBUG
-                                    print("Firebase同期に失敗: \(error)")
+                                    print("CloudKit同期に失敗: \(error)")
                                     #endif
                                 }
                             }

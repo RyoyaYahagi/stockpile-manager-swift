@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import CloudKit
 
 /// 家族設定画面
 struct FamilySettingsView: View {
@@ -12,14 +13,19 @@ struct FamilySettingsView: View {
     @State private var editedName = ""
     @State private var showLeaveConfirmation = false
     @State private var isStartingShare = false
-    @State private var isRetryingMigration = false
     @State private var isSyncingFamilyData = false
     @State private var autoSyncedFamilyID: UUID?
     @State private var shareError: String?
     @State private var showShareError = false
+    @State private var activeShare: CKShare?
+    @State private var showShareSheet = false
 
-    private var isFirebaseDeveloperModeEnabled: Bool {
-        APIConfig.isFirebaseDeveloperModeEnabled
+    private var isParticipantFamily: Bool {
+        family.cloudKitDatabaseScope == .sharedDatabase
+    }
+
+    private var shareButtonTitle: String {
+        family.isCloudKitSharedFamily ? "共有リンクを開く" : "家族共有を開始"
     }
 
     var body: some View {
@@ -43,40 +49,52 @@ struct FamilySettingsView: View {
             }
 
             Section {
-                if isFirebaseDeveloperModeEnabled {
-                    Button {
-                        startSharingAndShowInvite()
-                    } label: {
-                        HStack {
-                            Label("招待コードを表示", systemImage: "qrcode")
-                            Spacer()
-                            if isStartingShare {
-                                ProgressView()
-                                    .progressViewStyle(.circular)
-                            }
+                Button {
+                    presentCloudKitShareSheet()
+                } label: {
+                    HStack {
+                        Label(shareButtonTitle, systemImage: "square.and.arrow.up")
+                        Spacer()
+                        if isStartingShare {
+                            ProgressView()
+                                .progressViewStyle(.circular)
                         }
                     }
-                    .disabled(isStartingShare)
-                } else {
-                    HStack {
-                        Label("iCloud同期", systemImage: "icloud")
-                        Spacer()
-                        Text("有効")
-                            .foregroundStyle(.secondary)
-                    }
                 }
+                .disabled(isStartingShare)
             } header: {
                 Text("招待")
             } footer: {
                 Text(
-                    isFirebaseDeveloperModeEnabled
-                    ? "QRコードまたは6桁のコードを共有して、家族を招待できます。招待コードは24時間有効です。"
-                    : "通常の同期はiCloudで行われます。Firebase招待は開発者オプション有効時のみ利用できます。"
+                    family.isCloudKitSharedFamily
+                    ? "iCloud の共有リンクを使って家族を招待します。参加側はリンクを開くと共有を受理できます。"
+                    : "CloudKit の共有リンクを作成すると、家族の別 Apple ID 端末とも備蓄データを共有できます。"
                 )
             }
 
-            if isFirebaseDeveloperModeEnabled {
-                firebaseMigrationSection
+            Section {
+                HStack {
+                    Label("同期方式", systemImage: "icloud")
+                    Spacer()
+                    Text(family.isCloudKitSharedFamily ? "CloudKit共有" : "未共有")
+                        .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    syncFamilyDataNow()
+                } label: {
+                    HStack {
+                        Label("CloudKitから最新化", systemImage: "arrow.clockwise.icloud")
+                        Spacer()
+                        if isSyncingFamilyData {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                        }
+                    }
+                }
+                .disabled(isSyncingFamilyData || !family.isCloudKitSharedFamily)
+            } header: {
+                Text("CloudKit同期")
             }
 
             Section {
@@ -102,7 +120,7 @@ struct FamilySettingsView: View {
                     HStack {
                         Image(systemName: "person.badge.plus")
                             .foregroundStyle(.secondary)
-                        Text("まだメンバーがいません")
+                        Text("メンバー情報は端末ローカルです")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -128,14 +146,16 @@ struct FamilySettingsView: View {
                 Text("共有データ")
             }
 
-            Section {
-                Button(role: .destructive) {
-                    showLeaveConfirmation = true
-                } label: {
-                    Label("家族から離脱", systemImage: "person.badge.minus")
+            if isParticipantFamily {
+                Section {
+                    Button(role: .destructive) {
+                        showLeaveConfirmation = true
+                    } label: {
+                        Label("共有家族から離脱", systemImage: "person.badge.minus")
+                    }
+                } footer: {
+                    Text("離脱すると、この家族の共有データにアクセスできなくなります")
                 }
-            } footer: {
-                Text("離脱すると、この家族の共有データにアクセスできなくなります")
             }
         }
         .navigationTitle("家族設定")
@@ -152,7 +172,7 @@ struct FamilySettingsView: View {
             }
         }
         .confirmationDialog(
-            "家族から離脱しますか？",
+            "家族共有から離脱しますか？",
             isPresented: $showLeaveConfirmation,
             titleVisibility: .visible
         ) {
@@ -168,6 +188,20 @@ struct FamilySettingsView: View {
         } message: {
             Text(shareError ?? "不明なエラーが発生しました")
         }
+        .sheet(isPresented: $showShareSheet, onDismiss: {
+            activeShare = nil
+        }) {
+            if let activeShare {
+                CloudKitSharingSheet(
+                    share: activeShare,
+                    container: CKContainer.default(),
+                    onDidStopSharing: {
+                        let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                        sharingService.clearShareMetadata(for: family)
+                    }
+                )
+            }
+        }
         .task(id: family.id) {
             await autoSyncFamilyStateIfPossible()
         }
@@ -181,21 +215,18 @@ struct FamilySettingsView: View {
         isEditing = false
     }
 
-    private func startSharingAndShowInvite() {
+    private func presentCloudKitShareSheet() {
         isStartingShare = true
 
         Task {
             do {
-                let sharingService = FamilySharingService(modelContext: modelContext)
-
-                try await sharingService.startSharing(family: family)
-
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                activeShare = try await sharingService.prepareShare(for: family)
                 isStartingShare = false
-                router.present(.inviteCode(family.inviteCode))
+                showShareSheet = true
             } catch {
                 isStartingShare = false
-
-                shareError = "共有の開始に失敗しました: \(error.localizedDescription)"
+                shareError = "共有リンクの準備に失敗しました: \(error.localizedDescription)"
                 showShareError = true
             }
         }
@@ -204,7 +235,7 @@ struct FamilySettingsView: View {
     private func leaveFamily() {
         Task {
             do {
-                let sharingService = FamilySharingService(modelContext: modelContext)
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 try await sharingService.leaveFamily(family)
             } catch {
                 // エラーは画面遷移を妨げない
@@ -214,137 +245,74 @@ struct FamilySettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private var firebaseMigrationSection: some View {
-        let sharingService = FamilySharingService(modelContext: modelContext)
-        let status = sharingService.firebaseMigrationStatus(for: family)
-        let isFirebaseUnavailable: Bool = {
-            if case .notConfigured = status {
-                return true
-            }
-            return false
-        }()
-        let migrationActionTitle: String = {
-            switch status {
-            case .notStarted:
-                return "Firebase移行を実行"
-            default:
-                return "Firebase移行を再実行"
-            }
-        }()
-
-        Section {
-            switch status {
-            case .completed:
-                HStack {
-                    Label("初回移行", systemImage: "checkmark.seal.fill")
-                    Spacer()
-                    Text("完了")
-                        .foregroundStyle(.secondary)
-                }
-            case .notConfigured:
-                HStack {
-                    Label("初回移行", systemImage: "exclamationmark.triangle.fill")
-                    Spacer()
-                    Text("未設定")
-                        .foregroundStyle(.secondary)
-                }
-            case .notStarted:
-                HStack {
-                    Label("初回移行", systemImage: "arrow.clockwise")
-                    Spacer()
-                    Text("未実行")
-                        .foregroundStyle(.secondary)
-                }
-            case .pending(let lastError):
-                HStack {
-                    Label("初回移行", systemImage: "exclamationmark.triangle.fill")
-                    Spacer()
-                    Text("再試行待ち")
-                        .foregroundStyle(.orange)
-                }
-                if let lastError, !lastError.isEmpty {
-                    Text(lastError)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Button {
-                retryFirebaseMigration()
-            } label: {
-                HStack {
-                    Text(migrationActionTitle)
-                    Spacer()
-                    if isRetryingMigration {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                    }
-                }
-            }
-            .disabled(isRetryingMigration || isFirebaseUnavailable)
-
-            Button {
-                syncFamilyDataFromFirebase()
-            } label: {
-                HStack {
-                    Text("Firebaseから最新データを取得")
-                    Spacer()
-                    if isSyncingFamilyData {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                    }
-                }
-            }
-            .disabled(isSyncingFamilyData || isFirebaseUnavailable)
-        } header: {
-            Text("Firebase同期")
-        } footer: {
-            Text("家族共有接続後はFirebase上のデータを正として同期します。")
-        }
-    }
-
-    private func retryFirebaseMigration() {
-        isRetryingMigration = true
-
-        Task {
-            defer { isRetryingMigration = false }
-            do {
-                let sharingService = FamilySharingService(modelContext: modelContext)
-                try await sharingService.retryInitialFirebaseMigration(for: family)
-                try await sharingService.syncFamilyStateFromFirebase(for: family)
-            } catch {
-                shareError = "Firebase移行に失敗しました: \(error.localizedDescription)"
-                showShareError = true
-            }
-        }
-    }
-
-    private func syncFamilyDataFromFirebase() {
+    private func syncFamilyDataNow() {
         isSyncingFamilyData = true
 
         Task {
             defer { isSyncingFamilyData = false }
+
             do {
-                let sharingService = FamilySharingService(modelContext: modelContext)
-                try await sharingService.syncFamilyStateFromFirebase(for: family)
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                try await sharingService.syncFamilyStateFromCloudKit(for: family)
             } catch {
-                shareError = "Firebase同期に失敗しました: \(error.localizedDescription)"
+                shareError = "CloudKit同期に失敗しました: \(error.localizedDescription)"
                 showShareError = true
             }
         }
     }
 
     private func autoSyncFamilyStateIfPossible() async {
-        guard APIConfig.isFirebaseEnabled else { return }
+        guard family.isCloudKitSharedFamily else { return }
         guard autoSyncedFamilyID != family.id else { return }
         autoSyncedFamilyID = family.id
 
         do {
-            let sharingService = FamilySharingService(modelContext: modelContext)
-            try await sharingService.syncFamilyStateFromFirebase(for: family)
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            try await sharingService.syncFamilyStateFromCloudKit(for: family)
         } catch {
-            // 画面表示時の自動同期は失敗してもUI操作を妨げない。
+            // 自動同期の失敗はUI操作を妨げない。
+        }
+    }
+}
+
+struct CloudKitSharingSheet: UIViewControllerRepresentable {
+    let share: CKShare
+    let container: CKContainer
+    var onDidStopSharing: (() -> Void)?
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onDidStopSharing: onDidStopSharing)
+    }
+
+    func makeUIViewController(context: Context) -> UICloudSharingController {
+        let controller = UICloudSharingController(share: share, container: container)
+        controller.availablePermissions = [.allowReadWrite, .allowPrivate]
+        controller.delegate = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: UICloudSharingController, context: Context) {}
+
+    final class Coordinator: NSObject, UICloudSharingControllerDelegate {
+        private let onDidStopSharing: (() -> Void)?
+
+        init(onDidStopSharing: (() -> Void)?) {
+            self.onDidStopSharing = onDidStopSharing
+        }
+
+        func itemTitle(for csc: UICloudSharingController) -> String? {
+            "Stockpile 家族共有"
+        }
+
+        func cloudSharingController(
+            _ csc: UICloudSharingController,
+            failedToSaveShareWithError error: any Error
+        ) {}
+
+        func cloudSharingControllerDidSaveShare(_ csc: UICloudSharingController) {}
+
+        func cloudSharingControllerDidStopSharing(_ csc: UICloudSharingController) {
+            onDidStopSharing?()
         }
     }
 }

@@ -1,8 +1,10 @@
 import SwiftUI
 import SwiftData
+import CloudKit
 
 extension Notification.Name {
     static let didTapNotification = Notification.Name("didTapNotification")
+    static let didAcceptCloudKitShare = Notification.Name("didAcceptCloudKitShare")
 }
 
 @MainActor
@@ -21,6 +23,21 @@ enum NotificationTapRelay {
     static func consumePending() -> [AnyHashable: Any]? {
         defer { pendingUserInfo = nil }
         return pendingUserInfo
+    }
+}
+
+@MainActor
+enum CloudKitShareRelay {
+    private static var pendingMetadata: CKShare.Metadata?
+
+    static func storeAndPost(_ metadata: CKShare.Metadata) {
+        pendingMetadata = metadata
+        NotificationCenter.default.post(name: .didAcceptCloudKitShare, object: nil)
+    }
+
+    static func consumePending() -> CKShare.Metadata? {
+        defer { pendingMetadata = nil }
+        return pendingMetadata
     }
 }
 
@@ -112,6 +129,8 @@ struct ContentView: View {
                     )
                 )
             }
+
+            await refreshCloudKitSharedFamilies()
             
             if !hasCompletedFirstLaunchTutorial,
                !hasPresentedFirstLaunchTutorialInSession {
@@ -135,6 +154,9 @@ struct ContentView: View {
             FamilyRealtimeSyncCoordinator.shared.requestImmediateSync()
             requestRescheduleForCurrentData()
             resumeTutorialIfNeeded()
+            Task {
+                await refreshCloudKitSharedFamilies()
+            }
         }
         .onChange(of: router.path.count) { _, _ in
             resumeTutorialIfNeeded()
@@ -145,6 +167,11 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .didTapNotification)) { notification in
             _ = NotificationTapRelay.consumePending()
             handleNotificationTap(notification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didAcceptCloudKitShare)) { _ in
+            Task {
+                await refreshCloudKitSharedFamilies()
+            }
         }
         .fullScreenCover(isPresented: $showFirstLaunchTutorial) {
             FirstLaunchTutorialView(
@@ -274,7 +301,9 @@ struct ContentView: View {
         do {
             try modelContext.save()
         } catch {
+            #if DEBUG
             print("通知設定の初期化保存に失敗: \(error)")
+            #endif
         }
         return created
     }
@@ -289,6 +318,30 @@ struct ContentView: View {
         }
         
         return nil
+    }
+
+    private func refreshCloudKitSharedFamilies() async {
+        let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+
+        if let metadata = CloudKitShareRelay.consumePending() {
+            do {
+                _ = try await sharingService.acceptShare(metadata: metadata)
+            } catch {
+                #if DEBUG
+                print("CloudKit共有の受理に失敗: \(error)")
+                #endif
+            }
+        }
+
+        for family in families where family.cloudKitDatabaseScope == .sharedDatabase {
+            do {
+                try await sharingService.syncFamilyStateFromCloudKit(for: family)
+            } catch {
+                #if DEBUG
+                print("共有家族のCloudKit同期に失敗: \(error)")
+                #endif
+            }
+        }
     }
 }
 

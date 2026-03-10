@@ -104,7 +104,7 @@ struct SettingsView: View {
             } header: {
                 Text("開発者オプション")
             } footer: {
-                Text("既定ではiCloud/CloudKitを使って同一Apple IDの端末間で同期します。Firebaseは検証用に明示的に有効化した場合のみ利用します。")
+                Text("既定ではiCloud/CloudKitで同一Apple IDの端末間同期を行います。家族の別Apple IDと共有する場合は家族設定からCloudKit共有リンクを作成します。Firebaseは検証用に明示的に有効化した場合のみ利用します。")
             }
             
             // アプリ情報

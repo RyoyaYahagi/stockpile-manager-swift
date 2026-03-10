@@ -1,5 +1,7 @@
 import Foundation
 import SwiftData
+import CloudKit
+import UIKit
 import FirebaseAuth
 import FirebaseFirestore
 import Network
@@ -407,6 +409,486 @@ final class FamilySharingService {
             case .firebaseFailure(let detail):
                 return "Firebaseエラー: \(detail)"
             }
+        }
+    }
+}
+
+@MainActor
+final class CloudKitFamilySharingService {
+    private enum Constants {
+        static let familyRecordType = "Family"
+        static let bagRecordType = "Bag"
+        static let itemRecordType = "Item"
+    }
+
+    private let modelContext: ModelContext
+    private let container: CKContainer
+
+    init(modelContext: ModelContext, container: CKContainer = .default()) {
+        self.modelContext = modelContext
+        self.container = container
+    }
+
+    func prepareShare(for family: Family) async throws -> CKShare {
+        ensureCloudKitMetadata(for: family)
+        try await ensureZoneExists(for: family)
+        try await syncFamilyDataToCloudKit(for: family)
+
+        let database = container.privateCloudDatabase
+        let shareRecordID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID(for: family))
+        if let existingRecord = try? await fetchRecord(with: shareRecordID, in: database),
+           let existingShare = existingRecord as? CKShare {
+            family.cloudKitShareURL = existingShare.url
+            try? modelContext.save()
+            return existingShare
+        }
+
+        let share = CKShare(recordZoneID: zoneID(for: family))
+        share[CKShare.SystemFieldKey.title] = family.name as CKRecordValue
+        share.publicPermission = .none
+
+        let savedShare = try await save(record: share, in: database) as? CKShare
+        guard let savedShare else {
+            throw CloudKitSharingError.invalidShareRecord
+        }
+
+        family.cloudKitShareURL = savedShare.url
+        try? modelContext.save()
+        return savedShare
+    }
+
+    @discardableResult
+    func acceptShare(metadata: CKShare.Metadata) async throws -> Family {
+        try await accept(metadata: metadata, using: container)
+
+        guard let rootRecord = metadata.rootRecord else {
+            throw CloudKitSharingError.invalidShareMetadata
+        }
+
+        let acceptedZoneID = rootRecord.recordID.zoneID
+        let family = try await syncZoneToLocal(
+            zoneID: acceptedZoneID,
+            database: container.sharedCloudDatabase,
+            scope: .sharedDatabase
+        )
+        return family
+    }
+
+    func syncFamilyDataToCloudKit(for family: Family) async throws {
+        guard family.isCloudKitSharedFamily else { return }
+
+        let database = database(for: family)
+        if family.cloudKitDatabaseScope == .privateDatabase {
+            try await ensureZoneExists(for: family)
+        }
+
+        let familyRecord = makeFamilyRecord(from: family)
+        let bagRecords = family.resolvedBags.map { makeBagRecord(from: $0, family: family) }
+        let itemRecords = family.resolvedItems.map { makeItemRecord(from: $0, family: family) }
+        let recordsToSave = [familyRecord] + bagRecords + itemRecords
+
+        let remoteBagIDs = try await fetchRecordIDs(
+            forRecordType: Constants.bagRecordType,
+            in: zoneID(for: family),
+            database: database
+        )
+        let remoteItemIDs = try await fetchRecordIDs(
+            forRecordType: Constants.itemRecordType,
+            in: zoneID(for: family),
+            database: database
+        )
+
+        let desiredBagIDs = Set(bagRecords.map(\.recordID))
+        let desiredItemIDs = Set(itemRecords.map(\.recordID))
+        let recordIDsToDelete = Array(remoteBagIDs.subtracting(desiredBagIDs))
+            + Array(remoteItemIDs.subtracting(desiredItemIDs))
+
+        try await modify(recordsToSave: recordsToSave, recordIDsToDelete: recordIDsToDelete, in: database)
+    }
+
+    func syncFamilyStateFromCloudKit(for family: Family) async throws {
+        guard family.isCloudKitSharedFamily else { return }
+        _ = try await syncZoneToLocal(
+            zoneID: zoneID(for: family),
+            database: database(for: family),
+            scope: family.cloudKitDatabaseScope ?? .privateDatabase
+        )
+    }
+
+    func leaveFamily(_ family: Family) async throws {
+        guard family.cloudKitDatabaseScope == .sharedDatabase else { return }
+        modelContext.delete(family)
+        try modelContext.save()
+    }
+
+    func clearShareMetadata(for family: Family) {
+        family.cloudKitShareURL = nil
+        family.cloudKitZoneName = nil
+        family.cloudKitZoneOwnerName = nil
+        family.cloudKitDatabaseScope = nil
+        try? modelContext.save()
+    }
+
+    private func syncZoneToLocal(
+        zoneID: CKRecordZone.ID,
+        database: CKDatabase,
+        scope: FamilyCloudKitDatabaseScope
+    ) async throws -> Family {
+        let familyRecords = try await fetchRecords(
+            forRecordType: Constants.familyRecordType,
+            in: zoneID,
+            database: database
+        )
+
+        guard let familyRecord = familyRecords.first else {
+            throw CloudKitSharingError.familyRecordNotFound
+        }
+
+        let bags = try await fetchRecords(
+            forRecordType: Constants.bagRecordType,
+            in: zoneID,
+            database: database
+        )
+        let items = try await fetchRecords(
+            forRecordType: Constants.itemRecordType,
+            in: zoneID,
+            database: database
+        )
+
+        let familyID = uuidValue(from: familyRecord["id"]) ?? UUID()
+        let familyName = (familyRecord["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentFamily = try fetchOrCreateFamily(
+            id: familyID,
+            fallbackName: familyName?.isEmpty == false ? familyName! : "家族"
+        )
+
+        currentFamily.name = familyName?.isEmpty == false ? familyName! : currentFamily.name
+        currentFamily.cloudKitZoneName = zoneID.zoneName
+        currentFamily.cloudKitZoneOwnerName = zoneID.ownerName
+        currentFamily.cloudKitDatabaseScope = scope
+
+        var bagMap: [UUID: Bag] = [:]
+        let remoteBagIDs = Set(bags.compactMap { uuidValue(from: $0["id"]) })
+        for bagRecord in bags {
+            guard let bagID = uuidValue(from: bagRecord["id"]),
+                  let bagName = bagRecord["name"] as? String else { continue }
+
+            let descriptor = FetchDescriptor<Bag>(predicate: #Predicate { $0.id == bagID })
+            let bag = try modelContext.fetch(descriptor).first ?? {
+                let newBag = Bag(name: bagName)
+                newBag.id = bagID
+                modelContext.insert(newBag)
+                return newBag
+            }()
+
+            bag.name = bagName
+            bag.family = currentFamily
+            bagMap[bagID] = bag
+        }
+
+        for existingBag in currentFamily.resolvedBags where !remoteBagIDs.contains(existingBag.id) {
+            modelContext.delete(existingBag)
+        }
+
+        let remoteItemIDs = Set(items.compactMap { uuidValue(from: $0["id"]) })
+        for itemRecord in items {
+            guard let itemID = uuidValue(from: itemRecord["id"]),
+                  let itemName = itemRecord["name"] as? String else { continue }
+
+            let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemID })
+            let item = try modelContext.fetch(descriptor).first ?? {
+                let newItem = Item(name: itemName)
+                newItem.id = itemID
+                modelContext.insert(newItem)
+                return newItem
+            }()
+
+            item.name = itemName
+            item.quantity = intValue(from: itemRecord["quantity"]) ?? item.quantity
+            item.expiryDate = itemRecord["expiryDate"] as? Date
+            item.locationNote = itemRecord["locationNote"] as? String
+            item.notified30 = (itemRecord["notified30"] as? NSNumber)?.boolValue ?? item.notified30
+            item.notified7 = (itemRecord["notified7"] as? NSNumber)?.boolValue ?? item.notified7
+            item.notified1 = (itemRecord["notified1"] as? NSNumber)?.boolValue ?? item.notified1
+            item.family = currentFamily
+
+            if let bagID = uuidValue(from: itemRecord["bagID"]) {
+                item.bag = bagMap[bagID]
+            } else {
+                item.bag = nil
+            }
+        }
+
+        for existingItem in currentFamily.resolvedItems where !remoteItemIDs.contains(existingItem.id) {
+            modelContext.delete(existingItem)
+        }
+
+        try modelContext.save()
+        NotificationManager.shared.requestReschedule(using: modelContext)
+        return currentFamily
+    }
+
+    private func fetchOrCreateFamily(id: UUID, fallbackName: String) throws -> Family {
+        let descriptor = FetchDescriptor<Family>(predicate: #Predicate { $0.id == id })
+        if let existing = try modelContext.fetch(descriptor).first {
+            return existing
+        }
+
+        let family = Family(name: fallbackName)
+        family.id = id
+        modelContext.insert(family)
+        return family
+    }
+
+    private func ensureCloudKitMetadata(for family: Family) {
+        if family.cloudKitZoneName == nil {
+            family.cloudKitZoneName = "family-\(family.id.uuidString)"
+        }
+        if family.cloudKitZoneOwnerName == nil {
+            family.cloudKitZoneOwnerName = CKCurrentUserDefaultName
+        }
+        if family.cloudKitDatabaseScope == nil {
+            family.cloudKitDatabaseScope = .privateDatabase
+        }
+    }
+
+    private func ensureZoneExists(for family: Family) async throws {
+        let zone = CKRecordZone(zoneID: zoneID(for: family))
+        _ = try await save(zone: zone, in: container.privateCloudDatabase)
+    }
+
+    private func zoneID(for family: Family) -> CKRecordZone.ID {
+        CKRecordZone.ID(
+            zoneName: family.cloudKitZoneName ?? "family-\(family.id.uuidString)",
+            ownerName: family.cloudKitZoneOwnerName ?? CKCurrentUserDefaultName
+        )
+    }
+
+    private func database(for family: Family) -> CKDatabase {
+        switch family.cloudKitDatabaseScope {
+        case .sharedDatabase:
+            return container.sharedCloudDatabase
+        default:
+            return container.privateCloudDatabase
+        }
+    }
+
+    private func makeFamilyRecord(from family: Family) -> CKRecord {
+        let record = CKRecord(
+            recordType: Constants.familyRecordType,
+            recordID: CKRecord.ID(recordName: "family-\(family.id.uuidString)", zoneID: zoneID(for: family))
+        )
+        record["id"] = family.id.uuidString as CKRecordValue
+        record["name"] = family.name as CKRecordValue
+        record["createdAt"] = family.createdAt as CKRecordValue
+        return record
+    }
+
+    private func makeBagRecord(from bag: Bag, family: Family) -> CKRecord {
+        let zoneID = zoneID(for: family)
+        let record = CKRecord(
+            recordType: Constants.bagRecordType,
+            recordID: CKRecord.ID(recordName: "bag-\(bag.id.uuidString)", zoneID: zoneID)
+        )
+        record["id"] = bag.id.uuidString as CKRecordValue
+        record["name"] = bag.name as CKRecordValue
+        record["createdAt"] = bag.createdAt as CKRecordValue
+        if let familyID = bag.family?.id.uuidString {
+            record["familyID"] = familyID as CKRecordValue
+        }
+        return record
+    }
+
+    private func makeItemRecord(from item: Item, family: Family) -> CKRecord {
+        let zoneID = zoneID(for: family)
+        let record = CKRecord(
+            recordType: Constants.itemRecordType,
+            recordID: CKRecord.ID(recordName: "item-\(item.id.uuidString)", zoneID: zoneID)
+        )
+        record["id"] = item.id.uuidString as CKRecordValue
+        record["name"] = item.name as CKRecordValue
+        record["quantity"] = item.quantity as CKRecordValue
+        if let expiryDate = item.expiryDate {
+            record["expiryDate"] = expiryDate as CKRecordValue
+        }
+        if let locationNote = item.locationNote {
+            record["locationNote"] = locationNote as CKRecordValue
+        }
+        record["notified30"] = item.notified30 as CKRecordValue
+        record["notified7"] = item.notified7 as CKRecordValue
+        record["notified1"] = item.notified1 as CKRecordValue
+        record["createdAt"] = item.createdAt as CKRecordValue
+        if let bagID = item.bag?.id.uuidString {
+            record["bagID"] = bagID as CKRecordValue
+        }
+        if let familyID = item.family?.id.uuidString {
+            record["familyID"] = familyID as CKRecordValue
+        }
+        return record
+    }
+
+    private func fetchRecords(
+        forRecordType recordType: String,
+        in zoneID: CKRecordZone.ID,
+        database: CKDatabase
+    ) async throws -> [CKRecord] {
+        try await withCheckedThrowingContinuation { continuation in
+            var fetchedRecords: [CKRecord] = []
+            let query = CKQuery(recordType: recordType, predicate: NSPredicate(value: true))
+            let operation = CKQueryOperation(query: query)
+            operation.zoneID = zoneID
+            operation.recordMatchedBlock = { _, result in
+                if case .success(let record) = result {
+                    fetchedRecords.append(record)
+                }
+            }
+            operation.queryResultBlock = { result in
+                switch result {
+                case .success:
+                    continuation.resume(returning: fetchedRecords)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+            database.add(operation)
+        }
+    }
+
+    private func fetchRecordIDs(
+        forRecordType recordType: String,
+        in zoneID: CKRecordZone.ID,
+        database: CKDatabase
+    ) async throws -> Set<CKRecord.ID> {
+        Set(try await fetchRecords(forRecordType: recordType, in: zoneID, database: database).map(\.recordID))
+    }
+
+    private func fetchRecord(with recordID: CKRecord.ID, in database: CKDatabase) async throws -> CKRecord {
+        try await withCheckedThrowingContinuation { continuation in
+            let operation = CKFetchRecordsOperation(recordIDs: [recordID])
+            var fetchedRecord: CKRecord?
+            operation.perRecordResultBlock = { _, result in
+                if case .success(let record) = result {
+                    fetchedRecord = record
+                }
+            }
+            operation.fetchRecordsResultBlock = { result in
+                switch result {
+                case .success:
+                    if let fetchedRecord {
+                        continuation.resume(returning: fetchedRecord)
+                    } else {
+                        continuation.resume(throwing: CloudKitSharingError.recordNotFound)
+                    }
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+            database.add(operation)
+        }
+    }
+
+    private func save(record: CKRecord, in database: CKDatabase) async throws -> CKRecord {
+        let savedRecords = try await modify(recordsToSave: [record], recordIDsToDelete: [], in: database)
+        guard let savedRecord = savedRecords.first else {
+            throw CloudKitSharingError.recordNotFound
+        }
+        return savedRecord
+    }
+
+    private func save(zone: CKRecordZone, in database: CKDatabase) async throws -> CKRecordZone {
+        try await withCheckedThrowingContinuation { continuation in
+            let operation = CKModifyRecordZonesOperation(recordZonesToSave: [zone], recordZoneIDsToDelete: nil)
+            operation.modifyRecordZonesResultBlock = { result in
+                switch result {
+                case .success:
+                    continuation.resume(returning: zone)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+            database.add(operation)
+        }
+    }
+
+    @discardableResult
+    private func modify(
+        recordsToSave: [CKRecord],
+        recordIDsToDelete: [CKRecord.ID],
+        in database: CKDatabase
+    ) async throws -> [CKRecord] {
+        try await withCheckedThrowingContinuation { continuation in
+            let operation = CKModifyRecordsOperation(recordsToSave: recordsToSave, recordIDsToDelete: recordIDsToDelete)
+            operation.savePolicy = .changedKeys
+            operation.isAtomic = false
+
+            var savedRecords: [CKRecord] = []
+
+            operation.perRecordSaveBlock = { _, result in
+                if case .success(let record) = result {
+                    savedRecords.append(record)
+                }
+            }
+            operation.modifyRecordsResultBlock = { result in
+                switch result {
+                case .success:
+                    continuation.resume(returning: savedRecords)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+            database.add(operation)
+        }
+    }
+
+    private func uuidValue(from raw: Any?) -> UUID? {
+        if let string = raw as? String {
+            return UUID(uuidString: string)
+        }
+        return nil
+    }
+
+    private func intValue(from raw: Any?) -> Int? {
+        if let value = raw as? Int {
+            return value
+        }
+        if let number = raw as? NSNumber {
+            return number.intValue
+        }
+        return nil
+    }
+
+    private func accept(metadata: CKShare.Metadata, using container: CKContainer) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            let operation = CKAcceptSharesOperation(shareMetadatas: [metadata])
+            operation.acceptSharesResultBlock = { result in
+                switch result {
+                case .success:
+                    continuation.resume(returning: ())
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+            container.add(operation)
+        }
+    }
+}
+
+private enum CloudKitSharingError: LocalizedError {
+    case invalidShareRecord
+    case invalidShareMetadata
+    case familyRecordNotFound
+    case recordNotFound
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidShareRecord:
+            return "CloudKit共有レコードの作成に失敗しました。"
+        case .invalidShareMetadata:
+            return "CloudKit共有メタデータの読み取りに失敗しました。"
+        case .familyRecordNotFound:
+            return "共有された家族データが見つかりません。"
+        case .recordNotFound:
+            return "CloudKit上のレコードが見つかりません。"
         }
     }
 }

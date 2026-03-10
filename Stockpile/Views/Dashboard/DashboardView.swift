@@ -1,6 +1,88 @@
 import SwiftUI
 import SwiftData
 
+enum SearchNormalizer {
+    static func normalizedForms(for text: String) -> [String] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        var results = Set<String>()
+        let base = normalize(trimmed)
+        if !base.isEmpty {
+            results.insert(base)
+        }
+
+        let hiragana = toHiragana(trimmed)
+        let hiraganaNormalized = normalize(hiragana)
+        if !hiraganaNormalized.isEmpty {
+            results.insert(hiraganaNormalized)
+        }
+
+        let latin = toLatinReading(trimmed)
+        let latinNormalized = normalize(latin)
+        if !latinNormalized.isEmpty {
+            results.insert(latinNormalized)
+        }
+
+        return Array(results)
+    }
+
+    static func matches(_ source: String, queryForms: [String]) -> Bool {
+        guard !queryForms.isEmpty else { return true }
+
+        let sourceForms = normalizedForms(for: source)
+        guard !sourceForms.isEmpty else { return false }
+
+        return queryForms.contains { query in
+            sourceForms.contains { $0.contains(query) }
+        }
+    }
+
+    private static func normalize(_ text: String) -> String {
+        text
+            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "ja_JP"))
+            .replacingOccurrences(of: "[\\p{P}\\p{S}\\p{Z}]", with: "", options: .regularExpression)
+    }
+
+    private static func toHiragana(_ text: String) -> String {
+        let mutable = NSMutableString(string: text)
+        CFStringTransform(mutable, nil, kCFStringTransformHiraganaKatakana, true)
+        return mutable as String
+    }
+
+    private static func toLatinReading(_ text: String) -> String {
+        let cfText = text as CFString
+        let length = CFStringGetLength(cfText)
+        let range = CFRange(location: 0, length: length)
+        let locale = CFLocaleCopyCurrent()
+        let tokenizer = CFStringTokenizerCreate(
+            kCFAllocatorDefault,
+            cfText,
+            range,
+            kCFStringTokenizerUnitWordBoundary,
+            locale
+        )
+
+        var parts: [String] = []
+        var tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer)
+        while tokenType.rawValue != 0 {
+            if let latin = CFStringTokenizerCopyCurrentTokenAttribute(
+                tokenizer,
+                kCFStringTokenizerAttributeLatinTranscription
+            ) as? String {
+                parts.append(latin)
+            } else {
+                let tokenRange = CFStringTokenizerGetCurrentTokenRange(tokenizer)
+                let token = CFStringCreateWithSubstring(kCFAllocatorDefault, cfText, tokenRange) as String
+                parts.append(token)
+            }
+            tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer)
+        }
+
+        return parts.isEmpty ? text : parts.joined(separator: " ")
+    }
+}
+
 extension Notification.Name {
     static let didDeleteItems = Notification.Name("didDeleteItems")
 }
@@ -59,7 +141,8 @@ struct DashboardView: View {
     
     private var dashboardData: DashboardData {
         let normalizedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let hasSearchText = !normalizedSearchText.isEmpty
+        let queryForms = SearchNormalizer.normalizedForms(for: normalizedSearchText)
+        let hasSearchText = !queryForms.isEmpty
         
         var filtered: [Item] = []
         var expiredCount = 0
@@ -79,7 +162,7 @@ struct DashboardView: View {
                 continue
             }
             
-            if hasSearchText, !item.name.localizedCaseInsensitiveContains(normalizedSearchText) {
+            if hasSearchText, !SearchNormalizer.matches(item.name, queryForms: queryForms) {
                 continue
             }
             
@@ -532,7 +615,9 @@ struct DashboardView: View {
         do {
             try modelContext.save()
         } catch {
+            #if DEBUG
             print("ローカル保存に失敗: \(error)")
+            #endif
             return
         }
 
@@ -543,10 +628,12 @@ struct DashboardView: View {
         guard let family = currentFamily else { return }
         Task {
             do {
-                let sharingService = FamilySharingService(modelContext: modelContext)
-                try await sharingService.syncFamilyDataToFirebase(for: family)
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                try await sharingService.syncFamilyDataToCloudKit(for: family)
             } catch {
-                print("Firebase同期に失敗: \(error)")
+                #if DEBUG
+                print("CloudKit同期に失敗: \(error)")
+                #endif
             }
         }
     }
@@ -557,8 +644,8 @@ struct DashboardView: View {
         autoSyncedFamilyID = family.id
 
         do {
-            let sharingService = FamilySharingService(modelContext: modelContext)
-            try await sharingService.syncFamilyStateFromFirebase(for: family)
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            try await sharingService.syncFamilyStateFromCloudKit(for: family)
         } catch {
             // 自動同期の失敗はUI操作を妨げない
         }

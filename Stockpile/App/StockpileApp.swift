@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import UIKit
 import UserNotifications
+import CloudKit
 
 final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
     func application(
@@ -29,6 +30,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         [.banner, .badge, .sound]
+    }
+
+    func application(
+        _ application: UIApplication,
+        userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata
+    ) {
+        Task { @MainActor in
+            CloudKitShareRelay.storeAndPost(cloudKitShareMetadata)
+        }
     }
     
 }

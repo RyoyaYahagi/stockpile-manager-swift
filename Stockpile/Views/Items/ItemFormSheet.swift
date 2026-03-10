@@ -225,20 +225,24 @@ struct ItemFormSheet: View {
         do {
             try modelContext.save()
         } catch {
+            #if DEBUG
             print("ローカル保存に失敗: \(error)")
+            #endif
             return
         }
         
         NotificationManager.shared.requestReschedule(using: modelContext)
         if let family {
             Task {
-                do {
-                    let sharingService = FamilySharingService(modelContext: modelContext)
-                    try await sharingService.syncFamilyDataToFirebase(for: family)
-                } catch {
-                    print("Firebase同期に失敗: \(error)")
-                }
+            do {
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                try await sharingService.syncFamilyDataToCloudKit(for: family)
+            } catch {
+                #if DEBUG
+                print("CloudKit同期に失敗: \(error)")
+                #endif
             }
+        }
         }
         
         dismiss()

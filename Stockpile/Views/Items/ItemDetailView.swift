@@ -117,17 +117,21 @@ struct ItemDetailView: View {
                 do {
                     try modelContext.save()
                 } catch {
+                    #if DEBUG
                     print("ローカル保存に失敗: \(error)")
+                    #endif
                     return
                 }
                 NotificationManager.shared.requestReschedule(using: modelContext)
                 if let family = families.first {
                     Task {
                         do {
-                            let sharingService = FamilySharingService(modelContext: modelContext)
-                            try await sharingService.syncFamilyDataToFirebase(for: family)
+                            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                            try await sharingService.syncFamilyDataToCloudKit(for: family)
                         } catch {
-                            print("Firebase同期に失敗: \(error)")
+                            #if DEBUG
+                            print("CloudKit同期に失敗: \(error)")
+                            #endif
                         }
                     }
                 }
