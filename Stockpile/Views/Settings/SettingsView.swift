@@ -7,6 +7,8 @@ struct SettingsView: View {
     @Environment(Router.self) private var router
     
     @Query private var families: [Family]
+    @AppStorage(APIConfig.firebaseDeveloperModeKey)
+    private var isFirebaseDeveloperModeEnabled = false
     @AppStorage("app.tutorial.replayRequestToken")
     private var tutorialReplayRequestToken = 0
     
@@ -46,7 +48,7 @@ struct SettingsView: View {
                 Text("家族")
             } footer: {
                 if currentFamily != nil {
-                    Text("家族設定から招待コードの発行と共有を行えます。")
+                    Text("通常のデータ同期はiCloudで行います。Firebase連携は開発者オプション有効時のみ表示されます。")
                 }
             }
             
@@ -89,6 +91,14 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("データ")
+            }
+
+            Section {
+                Toggle("Firebase連携を有効化", isOn: $isFirebaseDeveloperModeEnabled)
+            } header: {
+                Text("開発者オプション")
+            } footer: {
+                Text("既定ではiCloud/CloudKitを使って同一Apple IDの端末間で同期します。Firebaseは検証用に明示的に有効化した場合のみ利用します。")
             }
             
             // アプリ情報

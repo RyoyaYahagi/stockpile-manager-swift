@@ -13,6 +13,10 @@ struct FamilySetupView: View {
     @State private var showQRScanner = false
     @State private var isCreating = false
     @State private var isJoining = false
+
+    private var isFirebaseDeveloperModeEnabled: Bool {
+        APIConfig.isFirebaseDeveloperModeEnabled
+    }
     
     enum SetupMode {
         case create
@@ -37,10 +41,18 @@ struct FamilySetupView: View {
             Section {
                 Picker("セットアップ方法", selection: $selectedMode) {
                     Text("新規作成").tag(SetupMode.create)
-                    Text("参加する").tag(SetupMode.join)
+                    if isFirebaseDeveloperModeEnabled {
+                        Text("参加する").tag(SetupMode.join)
+                    }
                 }
                 .pickerStyle(.segmented)
                 .listRowBackground(Color.clear)
+            }
+
+            Section {
+                Label("通常の端末間同期はiCloudで行われます", systemImage: "icloud")
+            } footer: {
+                Text("Firebase招待コード参加は開発者オプション有効時のみ利用できます。")
             }
             
             switch selectedMode {
@@ -81,6 +93,11 @@ struct FamilySetupView: View {
         }
         .navigationTitle("家族セットアップ")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if !isFirebaseDeveloperModeEnabled {
+                selectedMode = .create
+            }
+        }
         .sheet(isPresented: $showQRScanner) {
             QRScannerView { scannedCode in
                 inviteCode = scannedCode
@@ -122,6 +139,7 @@ struct FamilySetupView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                .disabled(!isFirebaseDeveloperModeEnabled)
             }
             
             Section {
@@ -135,7 +153,11 @@ struct FamilySetupView: View {
             } header: {
                 Text("または招待コードを入力")
             } footer: {
-                Text("家族から共有された6桁の招待コードを入力してください")
+                Text(
+                    isFirebaseDeveloperModeEnabled
+                    ? "家族から共有された6桁の招待コードを入力してください"
+                    : "招待コード参加は開発者オプションでFirebase連携を有効化したときのみ利用できます。"
+                )
             }
         }
     }
@@ -165,12 +187,17 @@ struct FamilySetupView: View {
         
         do {
             try modelContext.save()
-            let sharingService = FamilySharingService(modelContext: modelContext)
-            do {
-                try await sharingService.migrateInitialDataToFirebaseIfNeeded(for: family)
-            } catch {
-                // 家族作成自体は完了扱いにし、設定画面から再試行可能にする。
-                print("Firebase初回移行に失敗: \(error)")
+            if APIConfig.isFirebaseEnabled {
+                let sharingService = FamilySharingService(modelContext: modelContext)
+                do {
+                    try await sharingService.migrateInitialDataToFirebaseIfNeeded(for: family)
+                    try await sharingService.syncFamilyStateFromFirebase(for: family)
+                } catch {
+                    // 家族作成自体は完了扱いにし、設定画面から再試行可能にする。
+                    #if DEBUG
+                    print("Firebase初回移行に失敗: \(error)")
+                    #endif
+                }
             }
             router.pop()
             router.push(.familySettings(family))
@@ -180,6 +207,11 @@ struct FamilySetupView: View {
     }
     
     private func joinWithCode(_ code: String) async {
+        guard isFirebaseDeveloperModeEnabled else {
+            errorMessage = "招待コード参加は開発者オプションでFirebase連携を有効化した場合のみ利用できます。"
+            return
+        }
+
         isJoining = true
         errorMessage = nil
         

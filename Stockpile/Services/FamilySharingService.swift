@@ -35,7 +35,7 @@ final class FamilySharingService {
 
     /// 共有を開始し、招待を作成
     func startSharing(family: Family) async throws {
-        guard APIConfig.isFirebaseConfigured else {
+        guard APIConfig.isFirebaseEnabled else {
             throw SharingError.firebaseNotConfigured
         }
 
@@ -69,7 +69,7 @@ final class FamilySharingService {
 
     /// 招待コードで家族を検索（Firebase）
     func findFamilyInCloud(byInviteCode code: String) async throws -> FirebaseInviteInfo? {
-        guard APIConfig.isFirebaseConfigured else {
+        guard APIConfig.isFirebaseEnabled else {
             throw SharingError.firebaseNotConfigured
         }
 
@@ -154,7 +154,7 @@ final class FamilySharingService {
         }
         try modelContext.save()
 
-        guard APIConfig.isFirebaseConfigured else {
+        guard APIConfig.isFirebaseEnabled else {
             return
         }
 
@@ -170,7 +170,7 @@ final class FamilySharingService {
 
     /// 期限切れの招待を削除
     func cleanupExpiredInvites() async throws {
-        guard APIConfig.isFirebaseConfigured else {
+        guard APIConfig.isFirebaseEnabled else {
             throw SharingError.firebaseNotConfigured
         }
 
@@ -204,8 +204,8 @@ final class FamilySharingService {
     /// Firebase上のメンバー情報をローカルへ同期
     @discardableResult
     func syncFamilyMembersFromFirebase(for family: Family) async throws -> Int {
-        guard APIConfig.isFirebaseConfigured else {
-            throw SharingError.firebaseNotConfigured
+        guard APIConfig.isFirebaseEnabled else {
+            return 0
         }
 
         let remoteMembers = try await firebaseClient.fetchMembers(familyId: family.id.uuidString)
@@ -224,8 +224,8 @@ final class FamilySharingService {
     /// Firebase上の家族データ（Bag/Item）をローカルへ反映
     @discardableResult
     func syncFamilyDataFromFirebase(for family: Family) async throws -> (bags: Int, items: Int) {
-        guard APIConfig.isFirebaseConfigured else {
-            throw SharingError.firebaseNotConfigured
+        guard APIConfig.isFirebaseEnabled else {
+            return (bags: 0, items: 0)
         }
 
         let remoteBags = try await firebaseClient.fetchBags(familyId: family.id.uuidString)
@@ -238,8 +238,8 @@ final class FamilySharingService {
 
     /// Firebase接続済み家族のローカル変更をFirebaseへ同期（削除含む）
     func syncFamilyDataToFirebase(for family: Family) async throws {
-        guard APIConfig.isFirebaseConfigured else {
-            throw SharingError.firebaseNotConfigured
+        guard APIConfig.isFirebaseEnabled else {
+            return
         }
 
         let snapshots = try buildLocalFamilySnapshots(for: family, modelContext: modelContext)
@@ -403,7 +403,7 @@ final class FamilySharingService {
             case .alreadyInFamily:
                 return "既にこの家族に参加しています"
             case .firebaseNotConfigured:
-                return "Firebase設定が不足しています。GoogleService-Info.plistを確認してください。"
+                return "Firebase連携は開発者オプション有効時のみ利用できます。設定で有効化し、GoogleService-Info.plistを確認してください。"
             case .firebaseFailure(let detail):
                 return "Firebaseエラー: \(detail)"
             }
@@ -427,7 +427,7 @@ final class FirebaseMigrationService {
         var errorDescription: String? {
             switch self {
             case .firebaseNotConfigured:
-                return "Firebase設定が不足しています。GoogleService-Info.plistをターゲットに追加し、Firebase初期化を確認してください。"
+                return "Firebase連携は開発者オプション有効時のみ利用できます。設定で有効化し、GoogleService-Info.plistを確認してください。"
             case .uploadFailed(let message):
                 return "Firebase移行に失敗しました: \(message)"
             }
@@ -450,7 +450,7 @@ final class FirebaseMigrationService {
     }
 
     func status(for family: Family) -> MigrationStatus {
-        guard APIConfig.isFirebaseConfigured else {
+        guard APIConfig.isFirebaseEnabled else {
             return .notConfigured
         }
 
@@ -466,7 +466,7 @@ final class FirebaseMigrationService {
     }
 
     func migrateIfNeeded(for family: Family) async throws {
-        guard APIConfig.isFirebaseConfigured else {
+        guard APIConfig.isFirebaseEnabled else {
             throw MigrationError.firebaseNotConfigured
         }
 
@@ -492,7 +492,7 @@ final class FirebaseMigrationService {
     }
 
     func retryMigration(for family: Family) async throws {
-        guard APIConfig.isFirebaseConfigured else {
+        guard APIConfig.isFirebaseEnabled else {
             throw MigrationError.firebaseNotConfigured
         }
 

@@ -3,6 +3,8 @@ import FirebaseCore
 
 /// API設定を管理する構造体
 struct APIConfig {
+    static let firebaseDeveloperModeKey = "developerOptions.firebase.enabled"
+
     private static let firebaseConfigLock = NSLock()
     nonisolated(unsafe) private static var firebaseConfigured = false
     
@@ -92,10 +94,32 @@ struct APIConfig {
 
     // MARK: - Firebase
 
+    /// Firebase を開発者オプションで有効化しているか
+    static var isFirebaseDeveloperModeEnabled: Bool {
+        UserDefaults.standard.bool(forKey: firebaseDeveloperModeKey)
+    }
+
+    /// GoogleService-Info.plist が同梱されているか
+    static var hasFirebaseConfigurationFile: Bool {
+        Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil
+    }
+
+    /// Firebase 機能が利用可能か
+    static var isFirebaseEnabled: Bool {
+        isFirebaseDeveloperModeEnabled && isFirebaseConfigured
+    }
+
     /// Firebase SDKを必要時に初期化
     static func configureFirebaseIfNeeded() {
         firebaseConfigLock.lock()
         defer { firebaseConfigLock.unlock() }
+
+        guard isFirebaseDeveloperModeEnabled else {
+            #if DEBUG
+            print("ℹ️ 開発者オプションがOFFのためFirebase初期化をスキップしました。")
+            #endif
+            return
+        }
 
         guard !firebaseConfigured else { return }
 
@@ -109,7 +133,9 @@ struct APIConfig {
         // `GoogleService-Info.plist` が存在するが options 解決に失敗した場合のみ
         // 標準解決を最後に試行する。
         guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else {
+            #if DEBUG
             print("⚠️ GoogleService-Info.plist が見つからないためFirebase初期化をスキップしました。")
+            #endif
             return
         }
         FirebaseApp.configure()

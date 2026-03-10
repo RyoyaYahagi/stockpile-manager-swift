@@ -13,10 +13,14 @@ struct FamilySettingsView: View {
     @State private var showLeaveConfirmation = false
     @State private var isStartingShare = false
     @State private var isRetryingMigration = false
-    @State private var isSyncingMembers = false
+    @State private var isSyncingFamilyData = false
     @State private var autoSyncedFamilyID: UUID?
     @State private var shareError: String?
     @State private var showShareError = false
+
+    private var isFirebaseDeveloperModeEnabled: Bool {
+        APIConfig.isFirebaseDeveloperModeEnabled
+    }
 
     var body: some View {
         List {
@@ -39,26 +43,41 @@ struct FamilySettingsView: View {
             }
 
             Section {
-                Button {
-                    startSharingAndShowInvite()
-                } label: {
-                    HStack {
-                        Label("招待コードを表示", systemImage: "qrcode")
-                        Spacer()
-                        if isStartingShare {
-                            ProgressView()
-                                .progressViewStyle(.circular)
+                if isFirebaseDeveloperModeEnabled {
+                    Button {
+                        startSharingAndShowInvite()
+                    } label: {
+                        HStack {
+                            Label("招待コードを表示", systemImage: "qrcode")
+                            Spacer()
+                            if isStartingShare {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                            }
                         }
                     }
+                    .disabled(isStartingShare)
+                } else {
+                    HStack {
+                        Label("iCloud同期", systemImage: "icloud")
+                        Spacer()
+                        Text("有効")
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                .disabled(isStartingShare)
             } header: {
                 Text("招待")
             } footer: {
-                Text("QRコードまたは6桁のコードを共有して、家族を招待できます。招待コードは24時間有効です。")
+                Text(
+                    isFirebaseDeveloperModeEnabled
+                    ? "QRコードまたは6桁のコードを共有して、家族を招待できます。招待コードは24時間有効です。"
+                    : "通常の同期はiCloudで行われます。Firebase招待は開発者オプション有効時のみ利用できます。"
+                )
             }
 
-            firebaseMigrationSection
+            if isFirebaseDeveloperModeEnabled {
+                firebaseMigrationSection
+            }
 
             Section {
                 ForEach(family.members) { member in
@@ -150,7 +169,7 @@ struct FamilySettingsView: View {
             Text(shareError ?? "不明なエラーが発生しました")
         }
         .task(id: family.id) {
-            await autoSyncMembersIfPossible()
+            await autoSyncFamilyStateIfPossible()
         }
     }
 
@@ -266,22 +285,22 @@ struct FamilySettingsView: View {
             .disabled(isRetryingMigration || isFirebaseUnavailable)
 
             Button {
-                syncMembersFromFirebase()
+                syncFamilyDataFromFirebase()
             } label: {
                 HStack {
-                    Text("メンバーをFirebaseから同期")
+                    Text("Firebaseから最新データを取得")
                     Spacer()
-                    if isSyncingMembers {
+                    if isSyncingFamilyData {
                         ProgressView()
                             .progressViewStyle(.circular)
                     }
                 }
             }
-            .disabled(isSyncingMembers || isFirebaseUnavailable)
+            .disabled(isSyncingFamilyData || isFirebaseUnavailable)
         } header: {
             Text("Firebase同期")
         } footer: {
-            Text("初回作成時にローカルデータをFirebaseへ移行します。移行後もローカルデータは保持されます。")
+            Text("家族共有接続後はFirebase上のデータを正として同期します。")
         }
     }
 
@@ -293,6 +312,7 @@ struct FamilySettingsView: View {
             do {
                 let sharingService = FamilySharingService(modelContext: modelContext)
                 try await sharingService.retryInitialFirebaseMigration(for: family)
+                try await sharingService.syncFamilyStateFromFirebase(for: family)
             } catch {
                 shareError = "Firebase移行に失敗しました: \(error.localizedDescription)"
                 showShareError = true
@@ -300,28 +320,29 @@ struct FamilySettingsView: View {
         }
     }
 
-    private func syncMembersFromFirebase() {
-        isSyncingMembers = true
+    private func syncFamilyDataFromFirebase() {
+        isSyncingFamilyData = true
 
         Task {
-            defer { isSyncingMembers = false }
+            defer { isSyncingFamilyData = false }
             do {
                 let sharingService = FamilySharingService(modelContext: modelContext)
-                _ = try await sharingService.syncFamilyMembersFromFirebase(for: family)
+                try await sharingService.syncFamilyStateFromFirebase(for: family)
             } catch {
-                shareError = "メンバー同期に失敗しました: \(error.localizedDescription)"
+                shareError = "Firebase同期に失敗しました: \(error.localizedDescription)"
                 showShareError = true
             }
         }
     }
 
-    private func autoSyncMembersIfPossible() async {
+    private func autoSyncFamilyStateIfPossible() async {
+        guard APIConfig.isFirebaseEnabled else { return }
         guard autoSyncedFamilyID != family.id else { return }
         autoSyncedFamilyID = family.id
 
         do {
             let sharingService = FamilySharingService(modelContext: modelContext)
-            _ = try await sharingService.syncFamilyMembersFromFirebase(for: family)
+            try await sharingService.syncFamilyStateFromFirebase(for: family)
         } catch {
             // 画面表示時の自動同期は失敗してもUI操作を妨げない。
         }

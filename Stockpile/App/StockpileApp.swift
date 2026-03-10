@@ -47,11 +47,13 @@ struct StockpileApp: App {
                     withIntermediateDirectories: true
                 )
             } catch {
+                #if DEBUG
                 print("⚠️ Application Support directory creation failed: \(error)")
+                #endif
             }
         }
         
-        let configuration = ModelConfiguration(cloudKitDatabase: .none)
+        let configuration = ModelConfiguration(cloudKitDatabase: .automatic)
         
         do {
             return try ModelContainer(
