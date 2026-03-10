@@ -12,11 +12,12 @@ struct StorageLocationPicker: View {
     @State private var searchText = ""
     
     private var filteredBags: [Bag] {
-        let sorted = bags.sorted { $0.items.count > $1.items.count }
-        if searchText.isEmpty {
+        let sorted = bags.sorted { $0.resolvedItems.count > $1.resolvedItems.count }
+        let queryForms = SearchNormalizer.normalizedForms(for: searchText)
+        if queryForms.isEmpty {
             return sorted
         }
-        return sorted.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        return sorted.filter { SearchNormalizer.matches($0.name, queryForms: queryForms) }
     }
     
     var body: some View {

@@ -33,15 +33,15 @@ enum ExpiryStatus: Comparable {
 /// 備蓄品モデル
 @Model
 final class Item {
-    @Attribute(.unique) var id: UUID
-    var name: String
-    var quantity: Int
+    var id: UUID = UUID()
+    var name: String = ""
+    var quantity: Int = 1
     var expiryDate: Date?
     var locationNote: String?
-    var notified30: Bool
-    var notified7: Bool
-    var notified1: Bool
-    var createdAt: Date
+    var notified30: Bool = false
+    var notified7: Bool = false
+    var notified1: Bool = false
+    var createdAt: Date = Date()
     
     var family: Family?
     var bag: Bag?

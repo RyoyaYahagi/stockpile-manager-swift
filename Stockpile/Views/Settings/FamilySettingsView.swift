@@ -80,7 +80,7 @@ struct FamilySettingsView: View {
             }
 
             Section {
-                ForEach(family.members) { member in
+                ForEach(family.resolvedMembers) { member in
                     HStack {
                         Image(systemName: "person.circle.fill")
                             .font(.title2)
@@ -98,7 +98,7 @@ struct FamilySettingsView: View {
                     }
                 }
 
-                if family.members.isEmpty {
+                if family.resolvedMembers.isEmpty {
                     HStack {
                         Image(systemName: "person.badge.plus")
                             .foregroundStyle(.secondary)
@@ -107,21 +107,21 @@ struct FamilySettingsView: View {
                     }
                 }
             } header: {
-                Text("メンバー (\(family.members.count)人)")
+                Text("メンバー (\(family.resolvedMembers.count)人)")
             }
 
             Section {
                 HStack {
                     Label("収納場所", systemImage: "bag")
                     Spacer()
-                    Text("\(family.bags.count)件")
+                    Text("\(family.resolvedBags.count)件")
                         .foregroundStyle(.secondary)
                 }
 
                 HStack {
                     Label("アイテム", systemImage: "archivebox")
                     Spacer()
-                    Text("\(family.items.count)件")
+                    Text("\(family.resolvedItems.count)件")
                         .foregroundStyle(.secondary)
                 }
             } header: {

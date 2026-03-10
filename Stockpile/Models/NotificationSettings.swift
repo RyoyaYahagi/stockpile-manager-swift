@@ -5,25 +5,25 @@ import SwiftData
 @Model
 final class NotificationSettings {
     /// 通知全体の有効/無効
-    var isEnabled: Bool
+    var isEnabled: Bool = true
     
     /// 30日前通知
-    var notify30DaysBefore: Bool
+    var notify30DaysBefore: Bool = true
     
     /// 7日前通知
-    var notify7DaysBefore: Bool
+    var notify7DaysBefore: Bool = true
     
     /// 当日通知
-    var notifyOnDay: Bool
+    var notifyOnDay: Bool = true
     
     /// 通知時刻（時）
-    var notificationHour: Int
+    var notificationHour: Int = 8
     
     /// 通知時刻（分）
-    var notificationMinute: Int
+    var notificationMinute: Int = 0
     
     /// 作成日時
-    var createdAt: Date
+    var createdAt: Date = Date()
     
     init(
         isEnabled: Bool = true,

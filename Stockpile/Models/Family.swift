@@ -5,26 +5,38 @@ import SwiftData
 /// 備蓄品を共有するグループ単位
 @Model
 final class Family {
-    @Attribute(.unique) var id: UUID
-    var name: String
-    var inviteCode: String
+    var id: UUID = UUID()
+    var name: String = ""
+    var inviteCode: String = ""
     var lineGroupId: String?
-    var createdAt: Date
+    var createdAt: Date = Date()
     
     @Relationship(deleteRule: .cascade, inverse: \User.family)
-    var members: [User] = []
+    var members: [User]? = []
     
     @Relationship(deleteRule: .cascade, inverse: \Bag.family)
-    var bags: [Bag] = []
+    var bags: [Bag]? = []
     
     @Relationship(deleteRule: .cascade, inverse: \Item.family)
-    var items: [Item] = []
+    var items: [Item]? = []
     
     init(name: String, inviteCode: String? = nil) {
         self.id = UUID()
         self.name = name
         self.inviteCode = inviteCode ?? Family.generateInviteCode()
         self.createdAt = Date()
+    }
+
+    var resolvedMembers: [User] {
+        members ?? []
+    }
+
+    var resolvedBags: [Bag] {
+        bags ?? []
+    }
+
+    var resolvedItems: [Item] {
+        items ?? []
     }
     
     /// 6桁の招待コードを生成

@@ -7,20 +7,32 @@ struct BagListView: View {
     @Environment(Router.self) private var router
     
     @Query private var bags: [Bag]
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var showAddSheet = false
     @State private var deletedBagInfo: DeletedBagInfo?
     @State private var showUndoSnackbar = false
     @State private var undoWorkItem: DispatchWorkItem?
+
+    private var currentFamily: Family? {
+        families.first
+    }
+
+    private var scopedBags: [Bag] {
+        guard let family = currentFamily else {
+            return bags.filter { $0.family == nil }
+        }
+        return bags.filter { $0.family?.id == family.id }
+    }
     
     /// アイテム数が多い順にソート（よく使う収納場所を上に）
     private var sortedBags: [Bag] {
-        bags.sorted { $0.items.count > $1.items.count }
+        scopedBags.sorted { $0.resolvedItems.count > $1.resolvedItems.count }
     }
     
     var body: some View {
         List {
-            if bags.isEmpty {
+            if scopedBags.isEmpty {
                 ContentUnavailableView(
                     "収納場所がありません",
                     systemImage: "bag",
@@ -76,6 +88,7 @@ struct BagListView: View {
         
         // 紐づくアイテムは未分類になる（deleteRule: .nullify）
         modelContext.delete(bag)
+        persistAndSyncFamilyIfPossible()
         
         // スナックバーを表示
         showUndoSnackbarWithTimeout()
@@ -97,7 +110,9 @@ struct BagListView: View {
     
     private func undoDelete(_ info: DeletedBagInfo) {
         let newBag = Bag(name: info.name)
+        newBag.family = currentFamily
         modelContext.insert(newBag)
+        persistAndSyncFamilyIfPossible()
         dismissUndoSnackbar()
     }
     
@@ -109,6 +124,28 @@ struct BagListView: View {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             deletedBagInfo = nil
+        }
+    }
+
+    private func persistAndSyncFamilyIfPossible() {
+        do {
+            try modelContext.save()
+        } catch {
+            #if DEBUG
+            print("ローカル保存に失敗: \(error)")
+            #endif
+        }
+
+        guard let family = currentFamily else { return }
+        Task {
+            do {
+                let sharingService = FamilySharingService(modelContext: modelContext)
+                try await sharingService.syncFamilyDataToFirebase(for: family)
+            } catch {
+                #if DEBUG
+                print("Firebase同期に失敗: \(error)")
+                #endif
+            }
         }
     }
 }
@@ -126,7 +163,7 @@ struct BagRow: View {
                 Text(bag.name)
                     .font(.body)
                 
-                Text("\(bag.items.count)個のアイテム")
+                Text("\(bag.resolvedItems.count)個のアイテム")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -139,6 +176,7 @@ struct BagRow: View {
 struct BagFormSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var name = ""
     
@@ -169,7 +207,27 @@ struct BagFormSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("追加") {
                         let bag = Bag(name: name.trimmingCharacters(in: .whitespacesAndNewlines))
+                        bag.family = families.first
                         modelContext.insert(bag)
+                        do {
+                            try modelContext.save()
+                        } catch {
+                            #if DEBUG
+                            print("ローカル保存に失敗: \(error)")
+                            #endif
+                        }
+                        if let family = families.first {
+                            Task {
+                                do {
+                                    let sharingService = FamilySharingService(modelContext: modelContext)
+                                    try await sharingService.syncFamilyDataToFirebase(for: family)
+                                } catch {
+                                    #if DEBUG
+                                    print("Firebase同期に失敗: \(error)")
+                                    #endif
+                                }
+                            }
+                        }
                         dismiss()
                     }
                     .disabled(!isValid)
@@ -224,5 +282,5 @@ struct BagUndoSnackbar: View {
         BagListView()
     }
     .environment(Router())
-    .modelContainer(for: [Bag.self, Item.self], inMemory: true)
+    .modelContainer(for: [Family.self, Bag.self, Item.self], inMemory: true)
 }

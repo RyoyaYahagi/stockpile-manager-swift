@@ -149,7 +149,7 @@ final class FamilySharingService {
 
     /// 家族から離脱
     func leaveFamily(_ family: Family) async throws {
-        for member in family.members {
+        for member in family.resolvedMembers {
             member.family = nil
         }
         try modelContext.save()
@@ -353,7 +353,7 @@ final class FamilySharingService {
         displayName: String,
         email: String?
     ) {
-        if let existing = family.members.first(where: { $0.lineUserId == uid }) {
+        if let existing = family.resolvedMembers.first(where: { $0.lineUserId == uid }) {
             if !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 existing.displayName = displayName
             }

@@ -34,7 +34,7 @@ struct SettingsView: View {
                     HStack {
                         Label("メンバー", systemImage: "person.2")
                         Spacer()
-                        Text("\(family.members.count)人")
+                        Text("\(family.resolvedMembers.count)人")
                             .foregroundStyle(.secondary)
                     }
                 } else {
