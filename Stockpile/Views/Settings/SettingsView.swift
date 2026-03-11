@@ -6,7 +6,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
     
-    @Query private var families: [Family]
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     @AppStorage(APIConfig.firebaseDeveloperModeKey)
     private var isFirebaseDeveloperModeEnabled = false
     @AppStorage("app.tutorial.replayRequestToken")
