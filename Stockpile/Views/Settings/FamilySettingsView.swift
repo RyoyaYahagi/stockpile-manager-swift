@@ -19,6 +19,7 @@ struct FamilySettingsView: View {
     @State private var autoSyncedFamilyID: UUID?
     @State private var shareError: String?
     @State private var showShareError = false
+    @State private var showFamilyNamePrompt = false
     @State private var activeShare: CKShare?
     @State private var showShareSheet = false
 
@@ -68,7 +69,7 @@ struct FamilySettingsView: View {
 
             Section {
                 Button {
-                    presentCloudKitShareSheet()
+                    handleShareButtonTap()
                 } label: {
                     HStack {
                         Label(shareButtonTitle, systemImage: "square.and.arrow.up")
@@ -206,6 +207,34 @@ struct FamilySettingsView: View {
         } message: {
             Text(shareError ?? "不明なエラーが発生しました")
         }
+        .sheet(isPresented: $showFamilyNamePrompt) {
+            NavigationStack {
+                Form {
+                    Section {
+                        TextField("家族名", text: $editedName)
+                    } header: {
+                        Text("家族名")
+                    } footer: {
+                        Text("最初に家族名を登録すると、その名前で共有リンクを送信できます。")
+                    }
+                }
+                .navigationTitle("家族名を設定")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("キャンセル") {
+                            showFamilyNamePrompt = false
+                        }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("続ける") {
+                            saveFamilyNameAndStartSharing()
+                        }
+                        .disabled(editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+        }
         .sheet(isPresented: $showShareSheet, onDismiss: {
             activeShare = nil
         }) {
@@ -230,7 +259,46 @@ struct FamilySettingsView: View {
         if !trimmedName.isEmpty {
             family.name = trimmedName
         }
+
+        do {
+            try modelContext.save()
+        } catch {
+            shareError = "家族名の保存に失敗しました: \(error.localizedDescription)"
+            showShareError = true
+            return
+        }
         isEditing = false
+    }
+
+    private func handleShareButtonTap() {
+        if requiresFamilyNameBeforeSharing {
+            editedName = family.name
+            showFamilyNamePrompt = true
+            return
+        }
+
+        presentCloudKitShareSheet()
+    }
+
+    private var requiresFamilyNameBeforeSharing: Bool {
+        !family.isCloudKitSharedFamily
+            && family.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func saveFamilyNameAndStartSharing() {
+        let trimmedName = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+
+        family.name = trimmedName
+
+        do {
+            try modelContext.save()
+            showFamilyNamePrompt = false
+            presentCloudKitShareSheet()
+        } catch {
+            shareError = "家族名の保存に失敗しました: \(error.localizedDescription)"
+            showShareError = true
+        }
     }
 
     private func presentCloudKitShareSheet() {

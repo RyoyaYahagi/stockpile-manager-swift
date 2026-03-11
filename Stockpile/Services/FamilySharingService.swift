@@ -430,6 +430,17 @@ final class CloudKitFamilySharingService {
     }
 
     func prepareShare(for family: Family) async throws -> CKShare {
+        do {
+            return try await prepareShare(for: family, resettingMetadataOnFailure: true)
+        } catch {
+            throw normalizeSharePreparationError(error)
+        }
+    }
+
+    private func prepareShare(
+        for family: Family,
+        resettingMetadataOnFailure shouldResetMetadataOnFailure: Bool
+    ) async throws -> CKShare {
         ensureCloudKitMetadata(for: family)
         try await ensureZoneExists(for: family)
         // Family レコードをゾーンに先に保存（初回は isCloudKitSharedFamily が false のため
@@ -438,9 +449,7 @@ final class CloudKitFamilySharingService {
         try await syncFamilyDataToCloudKit(for: family)
 
         let database = container.privateCloudDatabase
-        let shareRecordID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID(for: family))
-        if let existingRecord = try? await fetchRecord(with: shareRecordID, in: database),
-           let existingShare = existingRecord as? CKShare {
+        if let existingShare = try await fetchExistingShare(for: family, in: database) {
             family.cloudKitShareURL = existingShare.url
             try? modelContext.save()
             return existingShare
@@ -450,14 +459,24 @@ final class CloudKitFamilySharingService {
         share[CKShare.SystemFieldKey.title] = family.name as CKRecordValue
         share.publicPermission = .none
 
-        let savedShare = try await save(record: share, in: database) as? CKShare
-        guard let savedShare else {
-            throw CloudKitSharingError.invalidShareRecord
-        }
+        do {
+            let savedShare = try await save(record: share, in: database) as? CKShare
+            guard let savedShare else {
+                throw CloudKitSharingError.invalidShareRecord
+            }
 
-        family.cloudKitShareURL = savedShare.url
-        try? modelContext.save()
-        return savedShare
+            family.cloudKitShareURL = savedShare.url
+            try? modelContext.save()
+            return savedShare
+        } catch {
+            if shouldResetMetadataOnFailure,
+               shouldRetrySharePreparation(after: error) {
+                resetShareMetadata(for: family)
+                return try await prepareShare(for: family, resettingMetadataOnFailure: false)
+            }
+
+            throw error
+        }
     }
 
     @discardableResult
@@ -655,6 +674,60 @@ final class CloudKitFamilySharingService {
         }
         // メタデータをローカルDBに永続化（isCloudKitSharedFamily が正しく評価されるよう保証）
         try? modelContext.save()
+    }
+
+    private func fetchExistingShare(for family: Family, in database: CKDatabase) async throws -> CKShare? {
+        let shareRecordID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID(for: family))
+
+        do {
+            let existingRecord = try await fetchRecord(with: shareRecordID, in: database)
+            return existingRecord as? CKShare
+        } catch let error as CloudKitSharingError where error == .recordNotFound {
+            return nil
+        } catch {
+            if shouldRetrySharePreparation(after: error) {
+                return nil
+            }
+            throw error
+        }
+    }
+
+    private func shouldRetrySharePreparation(after error: Error) -> Bool {
+        if let sharingError = error as? CloudKitSharingError,
+           sharingError == .recordNotFound {
+            return true
+        }
+
+        guard let ckError = error as? CKError else {
+            return false
+        }
+
+        switch ckError.code {
+        case .unknownItem, .zoneNotFound, .userDeletedZone:
+            return true
+        case .partialFailure:
+            if let partialErrors = ckError.partialErrorsByItemID?.values {
+                return partialErrors.contains { shouldRetrySharePreparation(after: $0) }
+            }
+            return false
+        default:
+            return false
+        }
+    }
+
+    private func resetShareMetadata(for family: Family) {
+        family.cloudKitShareURL = nil
+        family.cloudKitZoneName = nil
+        family.cloudKitZoneOwnerName = nil
+        family.cloudKitDatabaseScope = .privateDatabase
+        try? modelContext.save()
+    }
+
+    private func normalizeSharePreparationError(_ error: Error) -> Error {
+        if shouldRetrySharePreparation(after: error) {
+            return CloudKitSharingError.sharePreparationFailed
+        }
+        return error
     }
 
     /// ゾーンに Family レコードが存在することを保証する
@@ -893,11 +966,12 @@ final class CloudKitFamilySharingService {
 
 }
 
-private enum CloudKitSharingError: LocalizedError {
+private enum CloudKitSharingError: LocalizedError, Equatable {
     case invalidShareRecord
     case invalidShareMetadata
     case familyRecordNotFound
     case recordNotFound
+    case sharePreparationFailed
 
     var errorDescription: String? {
         switch self {
@@ -909,6 +983,8 @@ private enum CloudKitSharingError: LocalizedError {
             return "共有された家族データが見つかりません。"
         case .recordNotFound:
             return "CloudKit上のレコードが見つかりません。"
+        case .sharePreparationFailed:
+            return "共有リンクの再準備に失敗しました。しばらく待ってからもう一度お試しください。"
         }
     }
 }
