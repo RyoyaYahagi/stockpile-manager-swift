@@ -121,8 +121,6 @@ struct ItemFormSheet: View {
                     }
                 } header: {
                     Text("基本情報")
-                } footer: {
-                    Text("まずは名前だけでも保存できます。数量や場所はあとから直せます。")
                 }
                 
                 // 賞味期限
@@ -144,8 +142,6 @@ struct ItemFormSheet: View {
                     }
                 } header: {
                     Text("賞味期限")
-                } footer: {
-                    Text("期限が分からないときはオフのままで大丈夫です。あとで追加できます。")
                 }
                 
                 // 収納場所
@@ -161,8 +157,6 @@ struct ItemFormSheet: View {
                         .lineLimit(3...5)
                 } header: {
                     Text("収納場所")
-                } footer: {
-                    Text("場所メモは必要なときだけで大丈夫です。")
                 }
             }
             .navigationTitle(mode.title)

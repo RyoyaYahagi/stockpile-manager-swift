@@ -408,11 +408,9 @@ private struct FirstLaunchTutorialView: View {
     private struct Step {
         let title: String
         let message: String
-        let detail: String?
         let primaryTitle: String
         let action: FirstLaunchAction?
         let secondaryTitle: String?
-        let helperText: String?
     }
 
     private var steps: [Step] {
@@ -420,69 +418,55 @@ private struct FirstLaunchTutorialView: View {
             Step(
                 title: "このアプリで最初にやること",
                 message: "家にある食べ物や日用品を、ひとつずつメモしていくアプリです。",
-                detail: "最初は1件登録できれば十分です。細かい設定はあとで変えられます。",
                 primaryTitle: "使い方を見る",
                 action: nil,
-                secondaryTitle: nil,
-                helperText: nil
+                secondaryTitle: nil
             ),
             Step(
                 title: "まずは右下の + を押します",
                 message: "右下の + を押すと、登録画面が開きます。",
-                detail: "よく使う物や忘れやすい物を、ひとつ登録してみましょう。",
                 primaryTitle: "+ボタンを開く",
                 action: .addItem,
-                secondaryTitle: "今は説明だけ見る",
-                helperText: "登録画面を閉じると、この続きに自動で戻ります。"
+                secondaryTitle: "今は説明だけ見る"
             ),
             Step(
                 title: didAddItem ? "登録できました" : "名前だけでも保存できます",
                 message: didAddItem
                     ? "一覧に1件増えていれば、最初の登録は完了です。"
                     : "登録画面では、名前を入れて保存すれば使い始められます。",
-                detail: "数量や場所はあとから直せます。入力に迷ったら、まず保存で大丈夫です。",
                 primaryTitle: "次へ進む",
                 action: nil,
-                secondaryTitle: nil,
-                helperText: nil
+                secondaryTitle: nil
             ),
             Step(
                 title: "期限は分かるときだけで大丈夫です",
                 message: "賞味期限が分からない物は、あとで追加できます。",
-                detail: "カメラ読み取りは便利機能なので、慣れてから使えば問題ありません。",
                 primaryTitle: "次へ進む",
                 action: nil,
-                secondaryTitle: nil,
-                helperText: nil
+                secondaryTitle: nil
             ),
             Step(
                 title: "通知は必要になってから設定できます",
                 message: "通知を開くと、いつお知らせするかを決められます。",
-                detail: "今すぐ設定しなくても使えます。必要なときに見直せます。",
                 primaryTitle: "通知を開く",
                 action: .notificationSettings,
-                secondaryTitle: "今は設定しない",
-                helperText: "通知設定を閉じると、この続きに戻ります。"
+                secondaryTitle: "今は設定しない"
             ),
             Step(
                 title: didSetUpFamily ? "家族共有の準備もできます" : "家族と使うときは共有を設定できます",
                 message: didSetUpFamily
                     ? "家族設定から、家族に共有リンクを送れる状態です。"
                     : "家族共有を開くと、家族で同じ一覧を見るための設定画面が開きます。",
-                detail: "ひとりで使う場合は後回しで大丈夫です。必要になったら設定から開けます。",
                 primaryTitle: "家族共有を開く",
                 action: .familySharing,
-                secondaryTitle: "今は設定しない",
-                helperText: "家族設定を閉じると、この続きに戻ります。"
+                secondaryTitle: "今は設定しない"
             ),
             Step(
                 title: "これで使い始められます",
                 message: "分からなくなっても、設定から「はじめての使い方」を見直せます。",
-                detail: "次は必要な物を少しずつ追加していきましょう。",
                 primaryTitle: "使い始める",
                 action: nil,
-                secondaryTitle: nil,
-                helperText: nil
+                secondaryTitle: nil
             )
         ]
     }
@@ -506,12 +490,6 @@ private struct FirstLaunchTutorialView: View {
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                    if let detail = step.detail {
-                        Text(detail)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
                 }
                 
                 HStack(spacing: 8) {
@@ -548,13 +526,6 @@ private struct FirstLaunchTutorialView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                         .frame(maxWidth: .infinity)
-                    }
-
-                    if let helperText = step.helperText {
-                        Text(helperText)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
                     }
 
                     Button("あとで見る") {
