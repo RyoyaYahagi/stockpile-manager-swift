@@ -432,6 +432,9 @@ final class CloudKitFamilySharingService {
     func prepareShare(for family: Family) async throws -> CKShare {
         ensureCloudKitMetadata(for: family)
         try await ensureZoneExists(for: family)
+        // Family レコードをゾーンに先に保存（初回は isCloudKitSharedFamily が false のため
+        // syncFamilyDataToCloudKit の guard を通過しないケースに対応）
+        try await ensureFamilyRecordExists(for: family)
         try await syncFamilyDataToCloudKit(for: family)
 
         let database = container.privateCloudDatabase
@@ -650,6 +653,18 @@ final class CloudKitFamilySharingService {
         if family.cloudKitDatabaseScope == nil {
             family.cloudKitDatabaseScope = .privateDatabase
         }
+        // メタデータをローカルDBに永続化（isCloudKitSharedFamily が正しく評価されるよう保証）
+        try? modelContext.save()
+    }
+
+    /// ゾーンに Family レコードが存在することを保証する
+    /// prepareShare の初回実行時は isCloudKitSharedFamily が false のため
+    /// syncFamilyDataToCloudKit の guard を通過しない。このメソッドで事前に保存する。
+    private func ensureFamilyRecordExists(for family: Family) async throws {
+        let database = container.privateCloudDatabase
+        let familyRecord = makeFamilyRecord(from: family)
+        // savePolicy = .changedKeys なので既存レコードがあっても安全に上書き
+        try await modify(recordsToSave: [familyRecord], recordIDsToDelete: [], in: database)
     }
 
     private func ensureZoneExists(for family: Family) async throws {
@@ -732,17 +747,21 @@ final class CloudKitFamilySharingService {
         in zoneID: CKRecordZone.ID,
         database: CKDatabase
     ) async throws -> [CKRecord] {
-        try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             var fetchedRecords: [CKRecord] = []
-            let query = CKQuery(recordType: recordType, predicate: NSPredicate(value: true))
-            let operation = CKQueryOperation(query: query)
-            operation.zoneID = zoneID
-            operation.recordMatchedBlock = { _, result in
-                if case .success(let record) = result {
+            let configuration = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
+            configuration.previousServerChangeToken = nil
+
+            let operation = CKFetchRecordZoneChangesOperation(
+                recordZoneIDs: [zoneID],
+                configurationsByRecordZoneID: [zoneID: configuration]
+            )
+            operation.recordWasChangedBlock = { _, result in
+                if case .success(let record) = result, record.recordType == recordType {
                     fetchedRecords.append(record)
                 }
             }
-            operation.queryResultBlock = { result in
+            operation.fetchRecordZoneChangesResultBlock = { result in
                 switch result {
                 case .success:
                     continuation.resume(returning: fetchedRecords)
@@ -871,6 +890,7 @@ final class CloudKitFamilySharingService {
             container.add(operation)
         }
     }
+
 }
 
 private enum CloudKitSharingError: LocalizedError {
