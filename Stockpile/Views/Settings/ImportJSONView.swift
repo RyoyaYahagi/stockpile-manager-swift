@@ -2,10 +2,11 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
-/// JSONインポートビュー
+/// バックアップ復元ビュー
 struct ImportJSONView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var isImporting = false
     @State private var importResult: ImportResult?
@@ -13,6 +14,10 @@ struct ImportJSONView: View {
     enum ImportResult {
         case success(count: Int)
         case error(String)
+    }
+
+    private var currentFamily: Family? {
+        families.first
     }
     
     var body: some View {
@@ -23,10 +28,10 @@ struct ImportJSONView: View {
                     .foregroundStyle(.blue)
                 
                 VStack(spacing: 8) {
-                    Text("JSONインポート")
+                    Text("バックアップから復元")
                         .font(.title2.bold())
                     
-                    Text("備蓄品データをJSONファイルから一括読み込みします")
+                    Text("バックアップファイルから備蓄品データをまとめて復元します")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -62,7 +67,7 @@ struct ImportJSONView: View {
                 Spacer()
             }
             .padding(.top, 40)
-            .navigationTitle("インポート")
+            .navigationTitle("バックアップから復元")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -100,7 +105,7 @@ struct ImportJSONView: View {
             HStack {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                Text("\(count)件のアイテムをインポートしました")
+                Text("\(count)件のアイテムを復元しました")
             }
             .padding()
             .background(Color.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
@@ -137,11 +142,11 @@ struct ImportJSONView: View {
                 importResult = .success(count: items.count)
                 
             } catch {
-                importResult = .error("インポートに失敗しました: \(error.localizedDescription)")
+                importResult = .error("復元に失敗しました: \(error.localizedDescription)")
             }
             
         case .failure(let error):
-            importResult = .error("ファイル選択に失敗しました: \(error.localizedDescription)")
+            importResult = .error("バックアップファイルの選択に失敗しました: \(error.localizedDescription)")
         }
     }
     
@@ -190,17 +195,29 @@ struct ImportJSONView: View {
             )
         }
         
+        let targetFamily = currentFamily
+
         // 既存のBagを取得
         let bagDescriptor = FetchDescriptor<Bag>()
-        let existingBags = (try? modelContext.fetch(bagDescriptor)) ?? []
+        let existingBags = ((try? modelContext.fetch(bagDescriptor)) ?? []).filter { bag in
+            guard let targetFamily else {
+                return bag.family == nil
+            }
+            return bag.family?.id == targetFamily.id
+        }
         var bagCache: [String: Bag] = [:]
         for bag in existingBags {
             bagCache[bag.name] = bag
         }
-        
+
         // 既存のItemを重複判定用に読み込む
         let itemDescriptor = FetchDescriptor<Item>()
-        let existingItems = (try? modelContext.fetch(itemDescriptor)) ?? []
+        let existingItems = ((try? modelContext.fetch(itemDescriptor)) ?? []).filter { item in
+            guard let targetFamily else {
+                return item.family == nil
+            }
+            return item.family?.id == targetFamily.id
+        }
         var existingSignatures = Set(existingItems.map { item in
             signature(
                 name: item.name,
@@ -233,6 +250,7 @@ struct ImportJSONView: View {
                 expiryDate: expiryDate,
                 locationNote: importItem.locationNote
             )
+            item.family = targetFamily
             
             // Bagの関連付け
             if let bagName = normalized(importItem.bagName) {
@@ -241,6 +259,7 @@ struct ImportJSONView: View {
                 } else {
                     // 新規Bagを作成
                     let newBag = Bag(name: bagName)
+                    newBag.family = targetFamily
                     modelContext.insert(newBag)
                     bagCache[bagName] = newBag
                     item.bag = newBag
@@ -281,7 +300,7 @@ private struct JSONExportDocument: FileDocument {
     }
 }
 
-/// JSONエクスポートビュー
+/// バックアップ書き出しビュー
 struct ExportJSONView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -306,7 +325,11 @@ struct ExportJSONView: View {
         guard let family = currentFamily else {
             return items.filter { $0.family == nil }
         }
-        return items.filter { $0.family?.id == family.id }
+        let familyItems = items.filter { $0.family?.id == family.id }
+        if !familyItems.isEmpty {
+            return familyItems
+        }
+        return items.filter { $0.family == nil }
     }
 
     var body: some View {
@@ -317,10 +340,10 @@ struct ExportJSONView: View {
                     .foregroundStyle(.blue)
 
                 VStack(spacing: 8) {
-                    Text("JSONエクスポート")
+                    Text("バックアップ")
                         .font(.title2.bold())
 
-                    Text("現在の備蓄品データをJSONファイルとして書き出します")
+                    Text("現在の備蓄品データをバックアップファイルとして書き出します")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -337,7 +360,7 @@ struct ExportJSONView: View {
                     Button {
                         prepareExport()
                     } label: {
-                        Label("JSONを書き出す", systemImage: "square.and.arrow.up")
+                            Label("バックアップを書き出す", systemImage: "square.and.arrow.up")
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding()
@@ -347,7 +370,7 @@ struct ExportJSONView: View {
                     .disabled(scopedItems.isEmpty)
 
                     if scopedItems.isEmpty {
-                        Text("書き出せる備蓄品がありません")
+                        Text("バックアップできる備蓄品がありません")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -362,7 +385,7 @@ struct ExportJSONView: View {
                 Spacer()
             }
             .padding(.top, 40)
-            .navigationTitle("エクスポート")
+            .navigationTitle("バックアップ")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -426,19 +449,19 @@ struct ExportJSONView: View {
             exportResult = nil
             isExporting = true
         } catch {
-            exportResult = .error("エクスポートの準備に失敗しました: \(error.localizedDescription)")
+            exportResult = .error("バックアップの準備に失敗しました: \(error.localizedDescription)")
         }
     }
 
     private func handleExportResult(_ result: Result<URL, Error>) {
         switch result {
         case .success:
-            exportResult = .success("\(scopedItems.count)件のアイテムを書き出しました")
+            exportResult = .success("\(scopedItems.count)件のアイテムをバックアップしました")
         case .failure(let error):
             if (error as? CocoaError)?.code == .userCancelled {
                 return
             }
-            exportResult = .error("エクスポートに失敗しました: \(error.localizedDescription)")
+            exportResult = .error("バックアップに失敗しました: \(error.localizedDescription)")
         }
     }
 

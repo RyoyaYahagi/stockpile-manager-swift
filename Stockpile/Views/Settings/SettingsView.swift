@@ -87,13 +87,13 @@ struct SettingsView: View {
                 Button {
                     router.present(.exportJSON)
                 } label: {
-                    Label("JSONエクスポート", systemImage: "square.and.arrow.up")
+                    Label("バックアップを書き出す", systemImage: "square.and.arrow.up")
                 }
 
                 Button {
                     router.present(.importJSON)
                 } label: {
-                    Label("JSONインポート", systemImage: "square.and.arrow.down")
+                    Label("バックアップから復元", systemImage: "square.and.arrow.down")
                 }
             } header: {
                 Text("データ")
@@ -104,7 +104,7 @@ struct SettingsView: View {
             } header: {
                 Text("開発者オプション")
             } footer: {
-                Text("既定ではiCloud/CloudKitで同一Apple IDの端末間同期を行います。家族の別Apple IDと共有する場合は家族設定からCloudKit共有リンクを作成します。Firebaseは検証用に明示的に有効化した場合のみ利用します。")
+                Text("既定ではiCloudで同一Apple IDの端末間同期を行います。家族の別Apple IDと共有する場合は家族設定からiCloud共有リンクを作成します。Firebaseは検証用に明示的に有効化した場合のみ利用します。")
             }
             
             // アプリ情報

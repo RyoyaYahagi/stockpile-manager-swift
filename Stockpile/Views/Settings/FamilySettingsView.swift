@@ -6,6 +6,8 @@ import CloudKit
 struct FamilySettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
+    @Query private var items: [Item]
+    @Query private var bags: [Bag]
 
     @Bindable var family: Family
 
@@ -25,7 +27,23 @@ struct FamilySettingsView: View {
     }
 
     private var shareButtonTitle: String {
-        family.isCloudKitSharedFamily ? "共有リンクを開く" : "家族共有を開始"
+        family.isCloudKitSharedFamily ? "共有リンクを送信" : "家族共有を開始"
+    }
+
+    private var scopedItemsCount: Int {
+        let familyItems = items.filter { $0.family?.id == family.id }
+        if !familyItems.isEmpty {
+            return familyItems.count
+        }
+        return items.filter { $0.family == nil }.count
+    }
+
+    private var scopedBagsCount: Int {
+        let familyBags = bags.filter { $0.family?.id == family.id }
+        if !familyBags.isEmpty {
+            return familyBags.count
+        }
+        return bags.filter { $0.family == nil }.count
     }
 
     var body: some View {
@@ -68,15 +86,15 @@ struct FamilySettingsView: View {
                 Text(
                     family.isCloudKitSharedFamily
                     ? "iCloud の共有リンクを使って家族を招待します。参加側はリンクを開くと共有を受理できます。"
-                    : "CloudKit の共有リンクを作成すると、家族の別 Apple ID 端末とも備蓄データを共有できます。"
+                    : "iCloud の共有リンクを作成すると、家族の別 Apple ID 端末とも備蓄データを共有できます。"
                 )
             }
 
             Section {
                 HStack {
-                    Label("同期方式", systemImage: "icloud")
+                    Label("共有方法", systemImage: "icloud")
                     Spacer()
-                    Text(family.isCloudKitSharedFamily ? "CloudKit共有" : "未共有")
+                    Text(family.isCloudKitSharedFamily ? "iCloud共有" : "未共有")
                         .foregroundStyle(.secondary)
                 }
 
@@ -84,7 +102,7 @@ struct FamilySettingsView: View {
                     syncFamilyDataNow()
                 } label: {
                     HStack {
-                        Label("CloudKitから最新化", systemImage: "arrow.clockwise.icloud")
+                        Label("iCloudから最新化", systemImage: "arrow.clockwise.icloud")
                         Spacer()
                         if isSyncingFamilyData {
                             ProgressView()
@@ -94,7 +112,7 @@ struct FamilySettingsView: View {
                 }
                 .disabled(isSyncingFamilyData || !family.isCloudKitSharedFamily)
             } header: {
-                Text("CloudKit同期")
+                Text("iCloud同期")
             }
 
             Section {
@@ -132,14 +150,14 @@ struct FamilySettingsView: View {
                 HStack {
                     Label("収納場所", systemImage: "bag")
                     Spacer()
-                    Text("\(family.resolvedBags.count)件")
+                    Text("\(scopedBagsCount)件")
                         .foregroundStyle(.secondary)
                 }
 
                 HStack {
                     Label("アイテム", systemImage: "archivebox")
                     Spacer()
-                    Text("\(family.resolvedItems.count)件")
+                    Text("\(scopedItemsCount)件")
                         .foregroundStyle(.secondary)
                 }
             } header: {
@@ -255,7 +273,7 @@ struct FamilySettingsView: View {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 try await sharingService.syncFamilyStateFromCloudKit(for: family)
             } catch {
-                shareError = "CloudKit同期に失敗しました: \(error.localizedDescription)"
+                shareError = "iCloud同期に失敗しました: \(error.localizedDescription)"
                 showShareError = true
             }
         }

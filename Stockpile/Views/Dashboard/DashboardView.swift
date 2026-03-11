@@ -129,14 +129,22 @@ struct DashboardView: View {
         guard let family = currentFamily else {
             return items.filter { $0.family == nil }
         }
-        return items.filter { $0.family?.id == family.id }
+        let familyItems = items.filter { $0.family?.id == family.id }
+        if !familyItems.isEmpty {
+            return familyItems
+        }
+        return items.filter { $0.family == nil }
     }
 
     private var scopedBags: [Bag] {
         guard let family = currentFamily else {
             return bags.filter { $0.family == nil }
         }
-        return bags.filter { $0.family?.id == family.id }
+        let familyBags = bags.filter { $0.family?.id == family.id }
+        if !familyBags.isEmpty {
+            return familyBags
+        }
+        return bags.filter { $0.family == nil }
     }
     
     private var dashboardData: DashboardData {

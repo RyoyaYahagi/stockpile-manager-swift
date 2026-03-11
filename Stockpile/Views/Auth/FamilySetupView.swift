@@ -21,7 +21,7 @@ struct FamilySetupView: View {
     var body: some View {
         Form {
             Section {
-                Label("家族共有はCloudKit共有リンクで行われます", systemImage: "person.3.sequence")
+                Label("家族共有はiCloud共有リンクで行われます", systemImage: "person.3.sequence")
             } footer: {
                 Text("家族を作成したあと、設定画面から共有リンクを送れます。参加側はそのリンクを開くと共有を受理できます。")
             }
