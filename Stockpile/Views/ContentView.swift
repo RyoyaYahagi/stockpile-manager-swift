@@ -43,10 +43,11 @@ enum CloudKitShareRelay {
 
 private enum FirstLaunchAction {
     case addItem
+    case familySharing
     case notificationSettings
 }
 
-private let firstLaunchTutorialStepCount = 3
+private let firstLaunchTutorialStepCount = 7
 
 struct ContentView: View {
     @State private var router = Router()
@@ -64,9 +65,26 @@ struct ContentView: View {
     @State private var hasPresentedFirstLaunchTutorialInSession = false
     @State private var tutorialStepIndex = 0
     @State private var shouldResumeTutorialAfterAction = false
+    @State private var tutorialPendingAction: FirstLaunchAction?
+    @State private var tutorialItemCountBeforeAction: Int?
+    @State private var tutorialDidAddItem = false
+    @State private var tutorialHadFamilyBeforeAction = false
+    @State private var tutorialDidSetUpFamily = false
     
     private var currentFamily: Family? {
         families.first
+    }
+
+    private var tutorialScopedItemCount: Int {
+        guard let family = currentFamily else {
+            return items.filter { $0.family == nil }.count
+        }
+
+        let familyItemsCount = items.filter { $0.family?.id == family.id }.count
+        if familyItemsCount > 0 {
+            return familyItemsCount
+        }
+        return items.filter { $0.family == nil }.count
     }
 
     private var notificationRescheduleSignature: String {
@@ -176,6 +194,8 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showFirstLaunchTutorial) {
             FirstLaunchTutorialView(
                 stepIndex: $tutorialStepIndex,
+                didAddItem: tutorialDidAddItem,
+                didSetUpFamily: tutorialDidSetUpFamily,
                 onTryStep: handleFirstLaunchTutorialTryStep,
                 onAdvanceStep: handleFirstLaunchTutorialAdvance,
                 onFinish: handleFirstLaunchTutorialFinish,
@@ -234,6 +254,11 @@ struct ContentView: View {
     private func startTutorial(at index: Int) {
         tutorialStepIndex = min(max(0, index), firstLaunchTutorialStepCount - 1)
         shouldResumeTutorialAfterAction = false
+        tutorialPendingAction = nil
+        tutorialItemCountBeforeAction = nil
+        tutorialDidAddItem = false
+        tutorialHadFamilyBeforeAction = currentFamily != nil
+        tutorialDidSetUpFamily = currentFamily != nil
         showFirstLaunchTutorial = true
     }
 
@@ -241,12 +266,28 @@ struct ContentView: View {
         let nextStep = min(tutorialStepIndex + 1, firstLaunchTutorialStepCount - 1)
         tutorialStepIndex = nextStep
         shouldResumeTutorialAfterAction = true
+        tutorialPendingAction = action
+        if action == .addItem {
+            tutorialItemCountBeforeAction = tutorialScopedItemCount
+        } else {
+            tutorialItemCountBeforeAction = nil
+        }
+        if action == .familySharing {
+            tutorialHadFamilyBeforeAction = currentFamily != nil
+        }
         showFirstLaunchTutorial = false
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             switch action {
             case .addItem:
                 router.present(.addItem())
+            case .familySharing:
+                router.popToRoot()
+                if let family = currentFamily {
+                    router.push(.familySettings(family))
+                } else {
+                    router.push(.familySetup)
+                }
             case .notificationSettings:
                 router.popToRoot()
                 router.push(.notificationSettings)
@@ -282,7 +323,17 @@ struct ContentView: View {
         guard router.path.isEmpty else { return }
         guard router.presentedSheet == nil else { return }
 
+        if tutorialPendingAction == .addItem {
+            let previousCount = tutorialItemCountBeforeAction ?? 0
+            tutorialDidAddItem = tutorialScopedItemCount > previousCount
+        }
+        if tutorialPendingAction == .familySharing {
+            tutorialDidSetUpFamily = currentFamily != nil || tutorialHadFamilyBeforeAction
+        }
+
         shouldResumeTutorialAfterAction = false
+        tutorialPendingAction = nil
+        tutorialItemCountBeforeAction = nil
         showFirstLaunchTutorial = true
     }
 
@@ -347,6 +398,8 @@ struct ContentView: View {
 
 private struct FirstLaunchTutorialView: View {
     @Binding var stepIndex: Int
+    let didAddItem: Bool
+    let didSetUpFamily: Bool
     let onTryStep: (FirstLaunchAction) -> Void
     let onAdvanceStep: () -> Void
     let onFinish: () -> Void
@@ -354,35 +407,85 @@ private struct FirstLaunchTutorialView: View {
     
     private struct Step {
         let title: String
-        let description: String
+        let message: String
+        let detail: String?
         let primaryTitle: String
         let action: FirstLaunchAction?
+        let secondaryTitle: String?
         let helperText: String?
     }
-    
-    private let steps: [Step] = [
-        Step(
-            title: "まずは備蓄品を登録",
-            description: "実際に追加画面を開いて、最初の備蓄品を登録してみましょう。",
-            primaryTitle: "この操作を試す",
-            action: .addItem,
-            helperText: "追加画面から戻ると、このガイドの続きが自動で再表示されます。"
-        ),
-        Step(
-            title: "通知設定を確認",
-            description: "通知時刻と通知タイミングを確認して、自動通知を有効化しましょう。",
-            primaryTitle: "この操作を試す",
-            action: .notificationSettings,
-            helperText: "設定確認後に戻ると、最終ステップに進めます。"
-        ),
-        Step(
-            title: "準備完了です",
-            description: "家族共有を使うと、備蓄品の更新が自動同期されます。すぐに使い始めましょう。",
-            primaryTitle: "チュートリアル完了",
-            action: nil,
-            helperText: nil
-        )
-    ]
+
+    private var steps: [Step] {
+        [
+            Step(
+                title: "このアプリで最初にやること",
+                message: "家にある食べ物や日用品を、ひとつずつメモしていくアプリです。",
+                detail: "最初は1件登録できれば十分です。細かい設定はあとで変えられます。",
+                primaryTitle: "使い方を見る",
+                action: nil,
+                secondaryTitle: nil,
+                helperText: nil
+            ),
+            Step(
+                title: "まずは右下の + を押します",
+                message: "右下の + を押すと、登録画面が開きます。",
+                detail: "よく使う物や忘れやすい物を、ひとつ登録してみましょう。",
+                primaryTitle: "+ボタンを開く",
+                action: .addItem,
+                secondaryTitle: "今は説明だけ見る",
+                helperText: "登録画面を閉じると、この続きに自動で戻ります。"
+            ),
+            Step(
+                title: didAddItem ? "登録できました" : "名前だけでも保存できます",
+                message: didAddItem
+                    ? "一覧に1件増えていれば、最初の登録は完了です。"
+                    : "登録画面では、名前を入れて保存すれば使い始められます。",
+                detail: "数量や場所はあとから直せます。入力に迷ったら、まず保存で大丈夫です。",
+                primaryTitle: "次へ進む",
+                action: nil,
+                secondaryTitle: nil,
+                helperText: nil
+            ),
+            Step(
+                title: "期限は分かるときだけで大丈夫です",
+                message: "賞味期限が分からない物は、あとで追加できます。",
+                detail: "カメラ読み取りは便利機能なので、慣れてから使えば問題ありません。",
+                primaryTitle: "次へ進む",
+                action: nil,
+                secondaryTitle: nil,
+                helperText: nil
+            ),
+            Step(
+                title: "通知は必要になってから設定できます",
+                message: "通知を開くと、いつお知らせするかを決められます。",
+                detail: "今すぐ設定しなくても使えます。必要なときに見直せます。",
+                primaryTitle: "通知を開く",
+                action: .notificationSettings,
+                secondaryTitle: "今は設定しない",
+                helperText: "通知設定を閉じると、この続きに戻ります。"
+            ),
+            Step(
+                title: didSetUpFamily ? "家族共有の準備もできます" : "家族と使うときは共有を設定できます",
+                message: didSetUpFamily
+                    ? "家族設定から、家族に共有リンクを送れる状態です。"
+                    : "家族共有を開くと、家族で同じ一覧を見るための設定画面が開きます。",
+                detail: "ひとりで使う場合は後回しで大丈夫です。必要になったら設定から開けます。",
+                primaryTitle: "家族共有を開く",
+                action: .familySharing,
+                secondaryTitle: "今は設定しない",
+                helperText: "家族設定を閉じると、この続きに戻ります。"
+            ),
+            Step(
+                title: "これで使い始められます",
+                message: "分からなくなっても、設定から「はじめての使い方」を見直せます。",
+                detail: "次は必要な物を少しずつ追加していきましょう。",
+                primaryTitle: "使い始める",
+                action: nil,
+                secondaryTitle: nil,
+                helperText: nil
+            )
+        ]
+    }
     
     var body: some View {
         let safeStepIndex = min(max(stepIndex, 0), steps.count - 1)
@@ -395,14 +498,20 @@ private struct FirstLaunchTutorialView: View {
                     .foregroundStyle(.blue)
                 
                 VStack(spacing: 10) {
-                    Text("はじめてのガイド")
+                    Text("はじめての使い方")
                         .font(.title2.bold())
                     Text(step.title)
                         .font(.title3.weight(.semibold))
-                    Text(step.description)
+                    Text(step.message)
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                    if let detail = step.detail {
+                        Text(detail)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                 }
                 
                 HStack(spacing: 8) {
@@ -422,7 +531,7 @@ private struct FirstLaunchTutorialView: View {
                         .controlSize(.large)
                         .frame(maxWidth: .infinity)
 
-                        Button("この手順はあとで試す（次へ）") {
+                        Button(step.secondaryTitle ?? "次へ進む") {
                             onAdvanceStep()
                         }
                         .buttonStyle(.bordered)
@@ -430,7 +539,11 @@ private struct FirstLaunchTutorialView: View {
                         .frame(maxWidth: .infinity)
                     } else {
                         Button(step.primaryTitle) {
-                            onFinish()
+                            if safeStepIndex == steps.count - 1 {
+                                onFinish()
+                            } else {
+                                onAdvanceStep()
+                            }
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
@@ -444,7 +557,7 @@ private struct FirstLaunchTutorialView: View {
                             .multilineTextAlignment(.center)
                     }
 
-                    Button("閉じる") {
+                    Button("あとで見る") {
                         onClose()
                     }
                     .buttonStyle(.borderedProminent)
@@ -456,7 +569,7 @@ private struct FirstLaunchTutorialView: View {
                 Spacer()
             }
             .padding(24)
-            .navigationTitle("チュートリアル")
+            .navigationTitle("はじめての使い方")
             .navigationBarTitleDisplayMode(.inline)
         }
     }

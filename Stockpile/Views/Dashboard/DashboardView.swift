@@ -299,7 +299,7 @@ struct DashboardView: View {
                     ContentUnavailableView(
                         "備蓄品がありません",
                         systemImage: "tray",
-                        description: Text("右下の+ボタンで備蓄品を追加しましょう")
+                        description: Text("まずは右下の+から、1件登録してみましょう")
                     )
                 } else {
                     ForEach(data.filteredItems) { item in

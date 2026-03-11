@@ -76,7 +76,7 @@ struct SettingsView: View {
                     tutorialReplayRequestToken += 1
                     router.popToRoot()
                 } label: {
-                    Label("チュートリアルを見直す", systemImage: "questionmark.circle")
+                    Label("はじめての使い方を見る", systemImage: "questionmark.circle")
                 }
             } header: {
                 Text("ガイド")
