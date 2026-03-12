@@ -277,6 +277,30 @@ final class FamilySharingService {
         remoteBags: [FirebaseBagInfo],
         remoteItems: [FirebaseItemInfo]
     ) throws {
+        let sanitizedRemoteBags = remoteBags.compactMap { bag -> FirebaseBagInfo? in
+            guard let normalizedName = normalizedNonEmptyString(bag.name) else { return nil }
+            return FirebaseBagInfo(
+                id: bag.id,
+                name: normalizedName,
+                createdAt: bag.createdAt
+            )
+        }
+        let sanitizedRemoteItems = remoteItems.compactMap { item -> FirebaseItemInfo? in
+            guard let normalizedName = normalizedNonEmptyString(item.name) else { return nil }
+            return FirebaseItemInfo(
+                id: item.id,
+                name: normalizedName,
+                quantity: item.quantity,
+                expiryDate: item.expiryDate,
+                bagId: item.bagId,
+                locationNote: normalizedOptionalString(item.locationNote),
+                notified30: item.notified30,
+                notified7: item.notified7,
+                notified1: item.notified1,
+                createdAt: item.createdAt
+            )
+        }
+
         let allBags = try modelContext.fetch(FetchDescriptor<Bag>())
         let allItems = try modelContext.fetch(FetchDescriptor<Item>())
         let localFamilyBags = allBags.filter { $0.family?.id == family.id }
@@ -285,7 +309,7 @@ final class FamilySharingService {
         var bagById = Dictionary(
             uniqueKeysWithValues: localFamilyBags.map { ($0.id.uuidString, $0) }
         )
-        for remoteBag in remoteBags {
+        for remoteBag in sanitizedRemoteBags {
             guard let remoteBagID = UUID(uuidString: remoteBag.id) else { continue }
             if let existingBag = bagById[remoteBag.id] {
                 existingBag.name = remoteBag.name
@@ -304,7 +328,7 @@ final class FamilySharingService {
         var itemById = Dictionary(
             uniqueKeysWithValues: localFamilyItems.map { ($0.id.uuidString, $0) }
         )
-        for remoteItem in remoteItems {
+        for remoteItem in sanitizedRemoteItems {
             guard let remoteItemID = UUID(uuidString: remoteItem.id) else { continue }
             let linkedBag = remoteItem.bagId.flatMap { bagById[$0] }
 
@@ -338,12 +362,12 @@ final class FamilySharingService {
             }
         }
 
-        let remoteItemIDs = Set(remoteItems.map(\.id))
+        let remoteItemIDs = Set(sanitizedRemoteItems.map(\.id))
         for localItem in localFamilyItems where !remoteItemIDs.contains(localItem.id.uuidString) {
             modelContext.delete(localItem)
         }
 
-        let remoteBagIDs = Set(remoteBags.map(\.id))
+        let remoteBagIDs = Set(sanitizedRemoteBags.map(\.id))
         for localBag in localFamilyBags where !remoteBagIDs.contains(localBag.id.uuidString) {
             modelContext.delete(localBag)
         }
@@ -589,11 +613,15 @@ final class CloudKitFamilySharingService {
         currentFamily.cloudKitZoneOwnerName = zoneID.ownerName
         currentFamily.cloudKitDatabaseScope = scope
 
-        var bagMap: [UUID: Bag] = [:]
-        let remoteBagIDs = Set(bags.compactMap { uuidValue(from: $0["id"]) })
-        for bagRecord in bags {
+        let validBagRecords = bags.compactMap { bagRecord -> (UUID, String)? in
             guard let bagID = uuidValue(from: bagRecord["id"]),
-                  let bagName = bagRecord["name"] as? String else { continue }
+                  let bagName = normalizedNonEmptyString(bagRecord["name"] as? String) else { return nil }
+            return (bagID, bagName)
+        }
+
+        var bagMap: [UUID: Bag] = [:]
+        let remoteBagIDs = Set(validBagRecords.map(\.0))
+        for (bagID, bagName) in validBagRecords {
 
             let descriptor = FetchDescriptor<Bag>(predicate: #Predicate { $0.id == bagID })
             let bag = try modelContext.fetch(descriptor).first ?? {
@@ -612,10 +640,13 @@ final class CloudKitFamilySharingService {
             modelContext.delete(existingBag)
         }
 
-        let remoteItemIDs = Set(items.compactMap { uuidValue(from: $0["id"]) })
-        for itemRecord in items {
+        let validItemRecords = items.compactMap { itemRecord -> (CKRecord, UUID, String)? in
             guard let itemID = uuidValue(from: itemRecord["id"]),
-                  let itemName = itemRecord["name"] as? String else { continue }
+                  let itemName = normalizedNonEmptyString(itemRecord["name"] as? String) else { return nil }
+            return (itemRecord, itemID, itemName)
+        }
+        let remoteItemIDs = Set(validItemRecords.map(\.1))
+        for (itemRecord, itemID, itemName) in validItemRecords {
 
             let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemID })
             let item = try modelContext.fetch(descriptor).first ?? {
@@ -628,7 +659,7 @@ final class CloudKitFamilySharingService {
             item.name = itemName
             item.quantity = intValue(from: itemRecord["quantity"]) ?? item.quantity
             item.expiryDate = itemRecord["expiryDate"] as? Date
-            item.locationNote = itemRecord["locationNote"] as? String
+            item.locationNote = normalizedOptionalString(itemRecord["locationNote"] as? String)
             item.notified30 = (itemRecord["notified30"] as? NSNumber)?.boolValue ?? item.notified30
             item.notified7 = (itemRecord["notified7"] as? NSNumber)?.boolValue ?? item.notified7
             item.notified1 = (itemRecord["notified1"] as? NSNumber)?.boolValue ?? item.notified1
@@ -1121,10 +1152,18 @@ final class FirebaseMigrationService {
         let orphanItems = try modelContext.fetch(orphanItemDescriptor)
 
         for bag in orphanBags {
+            guard normalizedNonEmptyString(bag.name) != nil else {
+                modelContext.delete(bag)
+                continue
+            }
             bag.family = family
         }
 
         for item in orphanItems {
+            guard normalizedNonEmptyString(item.name) != nil else {
+                modelContext.delete(item)
+                continue
+            }
             item.family = family
         }
     }
@@ -1182,24 +1221,26 @@ private func buildLocalFamilySnapshots(
 
     let bagSnapshots = allBags
         .filter { $0.family?.id == family.id }
-        .map { bag in
-            BagSnapshot(
+        .compactMap { bag -> BagSnapshot? in
+            guard let normalizedName = normalizedNonEmptyString(bag.name) else { return nil }
+            return BagSnapshot(
                 id: bag.id.uuidString,
-                name: bag.name,
+                name: normalizedName,
                 createdAt: bag.createdAt
             )
         }
 
     let itemSnapshots = allItems
         .filter { $0.family?.id == family.id }
-        .map { item in
-            ItemSnapshot(
+        .compactMap { item -> ItemSnapshot? in
+            guard let normalizedName = normalizedNonEmptyString(item.name) else { return nil }
+            return ItemSnapshot(
                 id: item.id.uuidString,
-                name: item.name,
+                name: normalizedName,
                 quantity: item.quantity,
                 expiryDate: item.expiryDate,
                 bagId: item.bag?.id.uuidString,
-                locationNote: item.locationNote,
+                locationNote: normalizedOptionalString(item.locationNote),
                 notified30: item.notified30,
                 notified7: item.notified7,
                 notified1: item.notified1,
@@ -1252,6 +1293,127 @@ struct FirebaseItemInfo: Sendable {
     let notified7: Bool
     let notified1: Bool
     let createdAt: Date
+}
+
+private func normalizedOptionalString(_ value: String?) -> String? {
+    guard let value else { return nil }
+    let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return normalized.isEmpty ? nil : normalized
+}
+
+private func normalizedNonEmptyString(_ value: String?) -> String? {
+    normalizedOptionalString(value)
+}
+
+@MainActor
+final class LocalDataRepairService {
+    private let modelContext: ModelContext
+
+    init(modelContext: ModelContext) {
+        self.modelContext = modelContext
+    }
+
+    func repairInvalidAndDuplicateRecordsIfNeeded() {
+        do {
+            let allBags = try modelContext.fetch(FetchDescriptor<Bag>())
+            let allItems = try modelContext.fetch(FetchDescriptor<Item>())
+            var didChange = false
+
+            let invalidBags = allBags.filter { normalizedNonEmptyString($0.name) == nil }
+            for bag in invalidBags {
+                for item in bag.resolvedItems {
+                    if item.bag?.persistentModelID == bag.persistentModelID {
+                        item.bag = nil
+                    }
+                }
+                modelContext.delete(bag)
+                didChange = true
+            }
+
+            let invalidItems = allItems.filter { normalizedNonEmptyString($0.name) == nil }
+            for item in invalidItems {
+                modelContext.delete(item)
+                didChange = true
+            }
+
+            let validBags = allBags.filter { normalizedNonEmptyString($0.name) != nil }
+            let validItems = allItems.filter { normalizedNonEmptyString($0.name) != nil }
+
+            for duplicates in Dictionary(grouping: validBags, by: \.id).values where duplicates.count > 1 {
+                let keeper = preferredBag(in: duplicates)
+                keeper.name = normalizedNonEmptyString(keeper.name) ?? keeper.name
+                keeper.createdAt = duplicates.map(\.createdAt).min() ?? keeper.createdAt
+                keeper.family = duplicates.compactMap(\.family).first ?? keeper.family
+
+                for duplicate in duplicates where duplicate.persistentModelID != keeper.persistentModelID {
+                    for item in duplicate.resolvedItems {
+                        item.bag = keeper
+                    }
+                    modelContext.delete(duplicate)
+                    didChange = true
+                }
+            }
+
+            for duplicates in Dictionary(grouping: validItems, by: \.id).values where duplicates.count > 1 {
+                let keeper = preferredItem(in: duplicates)
+                keeper.name = duplicates
+                    .compactMap { normalizedNonEmptyString($0.name) }
+                    .max(by: { $0.count < $1.count }) ?? keeper.name
+                keeper.quantity = duplicates.map(\.quantity).max() ?? keeper.quantity
+                keeper.expiryDate = duplicates.compactMap(\.expiryDate).min() ?? keeper.expiryDate
+                keeper.locationNote = duplicates.compactMap(\.locationNote).compactMap(normalizedOptionalString).first ?? keeper.locationNote
+                keeper.notified30 = duplicates.contains { $0.notified30 }
+                keeper.notified7 = duplicates.contains { $0.notified7 }
+                keeper.notified1 = duplicates.contains { $0.notified1 }
+                keeper.createdAt = duplicates.map(\.createdAt).min() ?? keeper.createdAt
+                keeper.family = duplicates.compactMap(\.family).first ?? keeper.family
+                keeper.bag = duplicates.compactMap(\.bag).first ?? keeper.bag
+
+                for duplicate in duplicates where duplicate.persistentModelID != keeper.persistentModelID {
+                    modelContext.delete(duplicate)
+                    didChange = true
+                }
+            }
+
+            if didChange {
+                try modelContext.save()
+            }
+        } catch {
+            #if DEBUG
+            print("データ修復に失敗: \(error)")
+            #endif
+        }
+    }
+
+    private func preferredBag(in bags: [Bag]) -> Bag {
+        bags.max { lhs, rhs in
+            score(of: lhs) < score(of: rhs)
+        } ?? bags[0]
+    }
+
+    private func preferredItem(in items: [Item]) -> Item {
+        items.max { lhs, rhs in
+            score(of: lhs) < score(of: rhs)
+        } ?? items[0]
+    }
+
+    private func score(of bag: Bag) -> Int {
+        var score = 0
+        if normalizedNonEmptyString(bag.name) != nil { score += 4 }
+        if bag.family != nil { score += 2 }
+        score += min(bag.resolvedItems.count, 3)
+        return score
+    }
+
+    private func score(of item: Item) -> Int {
+        var score = 0
+        if normalizedNonEmptyString(item.name) != nil { score += 8 }
+        if item.family != nil { score += 4 }
+        if item.bag != nil { score += 2 }
+        if item.expiryDate != nil { score += 1 }
+        if normalizedOptionalString(item.locationNote) != nil { score += 1 }
+        return score
+    }
 }
 
 @MainActor
@@ -1788,8 +1950,9 @@ private actor FirebaseSDKClient {
                     let normalizedID = (id?.isEmpty == false) ? id! : document.documentID
                     guard !normalizedID.isEmpty else { return nil }
 
-                    let name = (data["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let normalizedName = (name?.isEmpty == false) ? name! : "収納場所"
+                    guard let normalizedName = normalizedNonEmptyString(data["name"] as? String) else {
+                        return nil
+                    }
                     let createdAt = self.dateValue(from: data["createdAt"]) ?? .distantPast
 
                     return FirebaseBagInfo(
@@ -1825,12 +1988,13 @@ private actor FirebaseSDKClient {
                     let normalizedID = (id?.isEmpty == false) ? id! : document.documentID
                     guard !normalizedID.isEmpty else { return nil }
 
-                    let name = (data["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let normalizedName = (name?.isEmpty == false) ? name! : "備蓄品"
+                    guard let normalizedName = normalizedNonEmptyString(data["name"] as? String) else {
+                        return nil
+                    }
                     let quantity = max(1, self.intValue(from: data["quantity"]) ?? 1)
                     let expiryDate = self.dateValue(from: data["expiryDate"])
                     let bagID = self.stringValue(from: data["bagId"])
-                    let locationNote = self.stringValue(from: data["locationNote"])
+                    let locationNote = normalizedOptionalString(self.stringValue(from: data["locationNote"]))
                     let notified30 = self.boolValue(from: data["notified30"]) ?? false
                     let notified7 = self.boolValue(from: data["notified7"]) ?? false
                     let notified1 = self.boolValue(from: data["notified1"]) ?? false
@@ -2063,8 +2227,7 @@ private actor FirebaseSDKClient {
 
     nonisolated private func stringValue(from raw: Any?) -> String? {
         guard let value = raw as? String else { return nil }
-        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return normalized.isEmpty ? nil : normalized
+        return normalizedOptionalString(value)
     }
 
     nonisolated private func intValue(from raw: Any?) -> Int? {

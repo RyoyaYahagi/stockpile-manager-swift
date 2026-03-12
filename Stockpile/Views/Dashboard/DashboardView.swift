@@ -127,24 +127,34 @@ struct DashboardView: View {
 
     private var scopedItems: [Item] {
         guard let family = currentFamily else {
-            return items.filter { $0.family == nil }
+            return deduplicatedItems(items.filter { $0.family == nil })
         }
-        let familyItems = items.filter { $0.family?.id == family.id }
+        let familyItems = deduplicatedItems(items.filter { $0.family?.id == family.id })
         if !familyItems.isEmpty {
             return familyItems
         }
-        return items.filter { $0.family == nil }
+        return deduplicatedItems(items.filter { $0.family == nil })
     }
 
     private var scopedBags: [Bag] {
         guard let family = currentFamily else {
-            return bags.filter { $0.family == nil }
+            return deduplicatedBags(bags.filter { $0.family == nil })
         }
-        let familyBags = bags.filter { $0.family?.id == family.id }
+        let familyBags = deduplicatedBags(bags.filter { $0.family?.id == family.id })
         if !familyBags.isEmpty {
             return familyBags
         }
-        return bags.filter { $0.family == nil }
+        return deduplicatedBags(bags.filter { $0.family == nil })
+    }
+
+    private func deduplicatedItems(_ source: [Item]) -> [Item] {
+        var seen = Set<UUID>()
+        return source.filter { seen.insert($0.id).inserted }
+    }
+
+    private func deduplicatedBags(_ source: [Bag]) -> [Bag] {
+        var seen = Set<UUID>()
+        return source.filter { seen.insert($0.id).inserted }
     }
     
     private var dashboardData: DashboardData {

@@ -138,6 +138,8 @@ struct ContentView: View {
                 .environment(router)
         }
         .task {
+            LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
+
             if let pendingUserInfo = NotificationTapRelay.consumePending() {
                 handleNotificationTap(
                     Notification(
@@ -169,6 +171,7 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, newValue in
             guard newValue == .active else { return }
+            LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
             FamilyRealtimeSyncCoordinator.shared.requestImmediateSync()
             requestRescheduleForCurrentData()
             resumeTutorialIfNeeded()

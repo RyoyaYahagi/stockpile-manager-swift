@@ -61,7 +61,11 @@ struct ItemFormSheet: View {
         guard let family = currentFamily else {
             return bags.filter { $0.family == nil }
         }
-        return bags.filter { $0.family?.id == family.id }
+        let familyBags = bags.filter { $0.family?.id == family.id }
+        if !familyBags.isEmpty {
+            return familyBags
+        }
+        return bags.filter { $0.family == nil }
     }
     
     var body: some View {
