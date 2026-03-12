@@ -1,6 +1,7 @@
 import SwiftUI
 @preconcurrency import AVFoundation
 import Vision
+import ImageIO
 
 /// OCRカメラビュー（賞味期限読み取り）
 struct OCRCameraView: View {
@@ -124,8 +125,14 @@ final class OCRCameraViewModel {
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
             request.recognitionLanguages = ["ja-JP", "en-US"]
+            request.usesLanguageCorrection = true
+            request.customWords = ["賞味期限", "消費期限", "期限", "EXP", "BEST", "BY", "BB"]
             
-            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            let handler = VNImageRequestHandler(
+                cgImage: cgImage,
+                orientation: image.cgImagePropertyOrientation,
+                options: [:]
+            )
             
             var resultText = ""
             do {
@@ -218,12 +225,16 @@ final class OCRCameraViewModel {
         var results: [(year: Int, month: Int, day: Int, position: Int)] = []
         
         let patterns: [(pattern: String, isReiwa: Bool)] = [
+            // YYYY MM DD（空白区切り）
+            (#"(\d{4})\s+(\d{1,2})\s+(\d{1,2})"#, false),
             // YYYY. M. D（スペースあり）
             (#"(\d{4})\s*[.]\s*(\d{1,2})\s*[.]\s*(\d{1,2})"#, false),
             // YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD
             (#"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})"#, false),
             // YYYY年MM月DD日
             (#"(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日"#, false),
+            // YY-MM-DD, YY.MM.DD
+            (#"(\d{2})[-.](\d{1,2})[-.](\d{1,2})"#, false),
             // YY.MM.DD（2桁年）
             (#"(\d{2})[.]\s*(\d{1,2})[.]\s*(\d{1,2})"#, false),
             // YY/MM/DD（2桁年）
@@ -278,8 +289,16 @@ final class OCRCameraViewModel {
         let patterns: [(pattern: String, isReiwa: Bool)] = [
             // YYYY年MM月（日なし）
             (#"(\d{4})年\s*(\d{1,2})月(?!\s*\d)"#, false),
+            // YY年MM月（日なし）
+            (#"(\d{2})年\s*(\d{1,2})月(?!\s*\d)"#, false),
             // YYYY.MM or YYYY/MM（日なし）
             (#"(\d{4})[./](\d{1,2})(?![./\d])"#, false),
+            // YYYY-MM（日なし）
+            (#"(\d{4})-(\d{1,2})(?![-\d])"#, false),
+            // YY.MM or YY/MM（日なし）
+            (#"(\d{2})[./](\d{1,2})(?![./\d])"#, false),
+            // YY-MM（日なし）
+            (#"(\d{2})-(\d{1,2})(?![-\d])"#, false),
             // 令和YY年MM月（日なし）
             (#"令和\s*(\d{1,2})年\s*(\d{1,2})月(?!\s*\d)"#, true),
             // R YY.MM（日なし）
@@ -348,6 +367,22 @@ final class OCRCameraViewModel {
     /// うるう年判定
     nonisolated private static func isLeapYear(_ year: Int) -> Bool {
         return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+    }
+}
+
+private extension UIImage {
+    var cgImagePropertyOrientation: CGImagePropertyOrientation {
+        switch imageOrientation {
+        case .up: return .up
+        case .down: return .down
+        case .left: return .left
+        case .right: return .right
+        case .upMirrored: return .upMirrored
+        case .downMirrored: return .downMirrored
+        case .leftMirrored: return .leftMirrored
+        case .rightMirrored: return .rightMirrored
+        @unknown default: return .up
+        }
     }
 }
 
@@ -507,7 +542,6 @@ extension CameraViewController: AVCapturePhotoCaptureDelegate {
 }
 
 #Preview {
-    OCRCameraView { date in
-        print("Detected: \(String(describing: date))")
+    OCRCameraView { _ in
     }
 }

@@ -99,11 +99,7 @@ struct ItemDetailView: View {
         }
         .navigationTitle(item.name)
         .navigationBarTitleDisplayMode(.large)
-        .confirmationDialog(
-            "この備蓄品を削除しますか？",
-            isPresented: $showDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
+        .alert("この備蓄品を削除しますか？", isPresented: $showDeleteConfirmation) {
             Button("削除", role: .destructive) {
                 let deletedItemInfo = DeletedItemInfo(
                     id: item.id,
@@ -144,6 +140,8 @@ struct ItemDetailView: View {
                 }
             }
             Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("削除した備蓄品は元に戻せません。")
         }
     }
     
