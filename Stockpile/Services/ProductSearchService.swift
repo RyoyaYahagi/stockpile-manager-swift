@@ -70,16 +70,16 @@ actor ProductSearchService {
             throw ProductSearchError.invalidJANCode
         }
         
-        // 1. Open Food Facts API（無料・登録不要）
-        if let product = try? await searchOpenFoodFacts(janCode: cleanedCode) {
-            return product
-        }
-        
-        // 2. 楽天APIにフォールバック
+        // 1. 楽天APIを最優先
         if APIConfig.isRakutenConfigured {
             if let product = try? await searchRakuten(janCode: cleanedCode) {
                 return product
             }
+        }
+        
+        // 2. Open Food Facts API（無料・登録不要）
+        if let product = try? await searchOpenFoodFacts(janCode: cleanedCode) {
+            return product
         }
         
         // 3. Yahoo APIにフォールバック
