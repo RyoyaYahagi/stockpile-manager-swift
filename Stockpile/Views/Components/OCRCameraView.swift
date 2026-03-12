@@ -2,6 +2,8 @@ import SwiftUI
 @preconcurrency import AVFoundation
 import Vision
 import ImageIO
+import CoreImage
+import CoreImage.CIFilterBuiltins
 
 /// OCRカメラビュー（賞味期限読み取り）
 struct OCRCameraView: View {
@@ -109,49 +111,124 @@ final class OCRCameraViewModel {
     var detectedText = ""
     var detectedDate: Date?
     var isProcessing = false
+    private let ciContext = CIContext()
     
     func processImage(_ image: UIImage) {
         isProcessing = true
         detectedText = ""
         detectedDate = nil
-        
-        guard let cgImage = image.cgImage else {
-            isProcessing = false
-            return
-        }
-        
-        // バックグラウンドスレッドでOCR処理
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let request = VNRecognizeTextRequest()
-            request.recognitionLevel = .accurate
-            request.recognitionLanguages = ["ja-JP", "en-US"]
-            request.usesLanguageCorrection = true
-            request.customWords = ["賞味期限", "消費期限", "期限", "EXP", "BEST", "BY", "BB"]
-            
-            let handler = VNImageRequestHandler(
-                cgImage: cgImage,
-                orientation: image.cgImagePropertyOrientation,
-                options: [:]
-            )
-            
-            var resultText = ""
-            do {
-                try handler.perform([request])
-                let observations = request.results ?? []
-                resultText = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
-            } catch {
-                resultText = ""
+            guard let self else { return }
+
+            let candidates = self.makeOCRCandidates(from: image)
+            var bestText = ""
+            var bestDate: Date?
+
+            for candidate in candidates {
+                let resultText = self.recognizeText(from: candidate)
+                if bestText.isEmpty && !resultText.isEmpty {
+                    bestText = resultText
+                }
+
+                if let date = Self.extractDate(from: resultText) {
+                    bestText = resultText
+                    bestDate = date
+                    break
+                }
             }
-            
-            let date = Self.extractDate(from: resultText)
             
             // メインスレッドでUI更新
             DispatchQueue.main.async {
-                self?.isProcessing = false
-                self?.detectedText = resultText
-                self?.detectedDate = date
+                self.isProcessing = false
+                self.detectedText = bestText
+                self.detectedDate = bestDate
             }
         }
+    }
+
+    private func recognizeText(from image: UIImage) -> String {
+        guard let cgImage = image.cgImage else { return "" }
+
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["ja-JP", "en-US"]
+        request.usesLanguageCorrection = true
+        request.customWords = ["賞味期限", "消費期限", "期限", "開封前", "EXP", "BEST", "BY", "BB"]
+
+        let handler = VNImageRequestHandler(
+            cgImage: cgImage,
+            orientation: image.cgImagePropertyOrientation,
+            options: [:]
+        )
+
+        do {
+            try handler.perform([request])
+            let observations = request.results ?? []
+            return observations
+                .compactMap { $0.topCandidates(1).first?.string }
+                .joined(separator: " ")
+        } catch {
+            return ""
+        }
+    }
+
+    private func makeOCRCandidates(from image: UIImage) -> [UIImage] {
+        var candidates: [UIImage] = [image]
+
+        if let cropped = cropExpiryRegion(from: image) {
+            candidates.append(cropped)
+            if let enhancedCropped = enhancedMonochromeImage(from: cropped) {
+                candidates.append(enhancedCropped)
+            }
+        }
+
+        if let enhanced = enhancedMonochromeImage(from: image) {
+            candidates.append(enhanced)
+        }
+
+        return candidates
+    }
+
+    private func cropExpiryRegion(from image: UIImage) -> UIImage? {
+        let scale = image.scale
+        let size = image.size
+        let rect = CGRect(
+            x: size.width * 0.08,
+            y: size.height * 0.14,
+            width: size.width * 0.52,
+            height: size.height * 0.28
+        )
+
+        let scaledRect = CGRect(
+            x: rect.origin.x * scale,
+            y: rect.origin.y * scale,
+            width: rect.size.width * scale,
+            height: rect.size.height * scale
+        ).integral
+
+        guard let cgImage = image.cgImage?.cropping(to: scaledRect) else { return nil }
+        return UIImage(cgImage: cgImage, scale: scale, orientation: image.imageOrientation)
+    }
+
+    private func enhancedMonochromeImage(from image: UIImage) -> UIImage? {
+        guard let inputImage = CIImage(image: image) else { return nil }
+
+        let controls = CIFilter.colorControls()
+        controls.inputImage = inputImage
+        controls.saturation = 0
+        controls.contrast = 1.8
+        controls.brightness = 0.1
+
+        guard let controlsOutput = controls.outputImage else { return nil }
+
+        let sharpen = CIFilter.sharpenLuminance()
+        sharpen.inputImage = controlsOutput
+        sharpen.sharpness = 0.7
+
+        guard let sharpened = sharpen.outputImage else { return nil }
+        guard let cgImage = ciContext.createCGImage(sharpened, from: sharpened.extent) else { return nil }
+        return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
     }
     
     /// テキストから日付を抽出
@@ -216,8 +293,27 @@ final class OCRCameraViewModel {
         // 改行をスペースに
         result = result.replacingOccurrences(of: "\n", with: " ")
         result = result.replacingOccurrences(of: "\r", with: " ")
+
+        result = normalizeOCRConfusions(in: result)
         
         return result
+    }
+
+    nonisolated private static func normalizeOCRConfusions(in text: String) -> String {
+        let replacements: [String: String] = [
+            "O": "0", "o": "0", "D": "0", "Q": "0",
+            "I": "1", "l": "1", "|": "1",
+            "S": "5", "s": "5",
+            "B": "8"
+        ]
+
+        return String(text.map { character in
+            let scalar = String(character)
+            if let replacement = replacements[scalar] {
+                return Character(replacement)
+            }
+            return character
+        })
     }
     
     /// 年月日の完全な日付を探す
@@ -225,6 +321,8 @@ final class OCRCameraViewModel {
         var results: [(year: Int, month: Int, day: Int, position: Int)] = []
         
         let patterns: [(pattern: String, isReiwa: Bool)] = [
+            // YYYYMMDD（連続8桁）
+            (#"(?<!\d)(\d{4})(\d{2})(\d{2})(?!\d)"#, false),
             // YYYY MM DD（空白区切り）
             (#"(\d{4})\s+(\d{1,2})\s+(\d{1,2})"#, false),
             // YYYY. M. D（スペースあり）
@@ -287,6 +385,8 @@ final class OCRCameraViewModel {
         var results: [(year: Int, month: Int, day: Int, position: Int)] = []
         
         let patterns: [(pattern: String, isReiwa: Bool)] = [
+            // YYYYMM（連続6桁）
+            (#"(?<!\d)(\d{4})(\d{2})(?!\d)"#, false),
             // YYYY年MM月（日なし）
             (#"(\d{4})年\s*(\d{1,2})月(?!\s*\d)"#, false),
             // YY年MM月（日なし）
