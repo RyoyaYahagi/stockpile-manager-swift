@@ -63,7 +63,7 @@ struct StockpileApp: App {
             }
         }
         
-        let configuration = ModelConfiguration(cloudKitDatabase: .automatic)
+        let configuration = ModelConfiguration()
         
         do {
             return try ModelContainer(
