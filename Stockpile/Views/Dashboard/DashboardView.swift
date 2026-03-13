@@ -391,6 +391,27 @@ struct DashboardView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     Text("備蓄品管理")
                         .font(.headline)
+
+                    if let family = currentFamily, family.shareState != .localOnly {
+                        Button {
+                            refreshCloudKitNow()
+                        } label: {
+                            Group {
+                                if isRefreshingCloudKit {
+                                    ProgressView()
+                                        .tint(.primary)
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.headline.weight(.semibold))
+                                }
+                            }
+                            .frame(width: 28, height: 28)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isRefreshingCloudKit)
+                        .accessibilityLabel("iCloudから更新")
+                        .padding(.leading, 6)
+                    }
                 }
             }
             
@@ -465,30 +486,6 @@ struct DashboardView: View {
                         .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
                 }
                 .padding()
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            if let family = currentFamily, family.shareState != .localOnly {
-                Button {
-                    refreshCloudKitNow()
-                } label: {
-                    Group {
-                        if isRefreshingCloudKit {
-                            ProgressView()
-                                .tint(.primary)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.headline.weight(.semibold))
-                        }
-                    }
-                    .foregroundStyle(.primary)
-                    .frame(width: 44, height: 44)
-                    .background(.thinMaterial, in: Circle())
-                }
-                .disabled(isRefreshingCloudKit)
-                .accessibilityLabel("iCloudから更新")
-                .padding(.top, 8)
-                .padding(.trailing, scopedItems.isEmpty ? 16 : 108)
             }
         }
         .overlay(alignment: .bottom) {
