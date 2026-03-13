@@ -5,6 +5,7 @@ import UIKit
 import FirebaseAuth
 import FirebaseFirestore
 import Network
+import OSLog
 
 /// 家族共有サービス
 /// 招待コードの生成・検証、家族への参加・離脱を管理
@@ -445,6 +446,7 @@ final class CloudKitFamilySharingService {
         static let itemRecordType = "Item"
     }
 
+    private let logger = Logger(subsystem: "com.stockpile-manager.app", category: "CloudKitSharing")
     private let modelContext: ModelContext
     private let container: CKContainer
 
@@ -454,11 +456,45 @@ final class CloudKitFamilySharingService {
     }
 
     func prepareShare(for family: Family) async throws -> CKShare {
-        do {
-            return try await prepareShare(for: family, resettingMetadataOnFailure: true)
-        } catch {
-            throw normalizeSharePreparationError(error)
+        let retryIntervalsInNanoseconds: [UInt64] = [
+            0,
+            750_000_000,
+            1_500_000_000,
+            3_000_000_000
+        ]
+        var lastError: Error?
+
+        for (index, interval) in retryIntervalsInNanoseconds.enumerated() {
+            if interval > 0 {
+                try await Task.sleep(nanoseconds: interval)
+            }
+
+            do {
+                return try await prepareShare(
+                    for: family,
+                    resettingMetadataOnFailure: index == 0
+                )
+            } catch {
+                lastError = error
+                logShareError(error, phase: "prepareShare.retry[\(index)]")
+
+                if index < retryIntervalsInNanoseconds.count - 1,
+                   let existingShare = try await fetchExistingShareAfterTransientFailure(for: family) {
+                    family.cloudKitShareURL = existingShare.url
+                    try? modelContext.save()
+                    return existingShare
+                }
+
+                guard shouldRetrySharePreparation(after: error),
+                      index < retryIntervalsInNanoseconds.count - 1 else {
+                    throw normalizeSharePreparationError(error)
+                }
+            }
         }
+
+        throw normalizeSharePreparationError(
+            lastError ?? CloudKitSharingError.sharePreparationFailed(detail: "不明なエラー")
+        )
     }
 
     private func prepareShare(
@@ -475,6 +511,7 @@ final class CloudKitFamilySharingService {
         let database = container.privateCloudDatabase
         if let existingShare = try await fetchExistingShare(for: family, in: database) {
             family.cloudKitShareURL = existingShare.url
+            family.cloudKitPendingSync = false
             try? modelContext.save()
             return existingShare
         }
@@ -490,9 +527,11 @@ final class CloudKitFamilySharingService {
             }
 
             family.cloudKitShareURL = savedShare.url
+            family.cloudKitPendingSync = false
             try? modelContext.save()
             return savedShare
         } catch {
+            logShareError(error, phase: "prepareShare.saveShare")
             if shouldResetMetadataOnFailure,
                shouldRetrySharePreparation(after: error) {
                 resetShareMetadata(for: family)
@@ -505,19 +544,18 @@ final class CloudKitFamilySharingService {
 
     @discardableResult
     func acceptShare(metadata: CKShare.Metadata) async throws -> Family {
-        try await accept(metadata: metadata, using: container)
-
-        guard let rootRecord = metadata.rootRecord else {
-            throw CloudKitSharingError.invalidShareMetadata
+        let acceptedShare = try await accept(metadata: metadata, using: container)
+        let acceptedZoneID = acceptedShare.recordID.zoneID
+        do {
+            return try await syncAcceptedShareToLocal(zoneID: acceptedZoneID)
+        } catch {
+            createOrUpdatePendingFamily(
+                from: metadata,
+                acceptedShare: acceptedShare,
+                zoneID: acceptedZoneID
+            )
+            throw error
         }
-
-        let acceptedZoneID = rootRecord.recordID.zoneID
-        let family = try await syncZoneToLocal(
-            zoneID: acceptedZoneID,
-            database: container.sharedCloudDatabase,
-            scope: .sharedDatabase
-        )
-        return family
     }
 
     func syncFamilyDataToCloudKit(for family: Family) async throws {
@@ -572,6 +610,7 @@ final class CloudKitFamilySharingService {
         family.cloudKitZoneName = nil
         family.cloudKitZoneOwnerName = nil
         family.cloudKitDatabaseScope = nil
+        family.cloudKitPendingSync = false
         try? modelContext.save()
     }
 
@@ -612,6 +651,7 @@ final class CloudKitFamilySharingService {
         currentFamily.cloudKitZoneName = zoneID.zoneName
         currentFamily.cloudKitZoneOwnerName = zoneID.ownerName
         currentFamily.cloudKitDatabaseScope = scope
+        currentFamily.cloudKitPendingSync = false
 
         let validBagRecords = bags.compactMap { bagRecord -> (UUID, String)? in
             guard let bagID = uuidValue(from: bagRecord["id"]),
@@ -681,6 +721,42 @@ final class CloudKitFamilySharingService {
         return currentFamily
     }
 
+    private func syncAcceptedShareToLocal(zoneID: CKRecordZone.ID) async throws -> Family {
+        let retryIntervalsInNanoseconds: [UInt64] = [
+            0,
+            500_000_000,
+            1_500_000_000,
+            3_000_000_000
+        ]
+        var lastError: Error?
+
+        for (index, interval) in retryIntervalsInNanoseconds.enumerated() {
+            if interval > 0 {
+                try await Task.sleep(nanoseconds: interval)
+            }
+
+            do {
+                return try await syncZoneToLocal(
+                    zoneID: zoneID,
+                    database: container.sharedCloudDatabase,
+                    scope: .sharedDatabase
+                )
+            } catch {
+                lastError = error
+                logger.error(
+                    "CloudKit shared sync failed phase=acceptShare.sync[\(index)] zone=\(zoneID.zoneName, privacy: .public) owner=\(zoneID.ownerName, privacy: .public) message=\(error.localizedDescription, privacy: .public)"
+                )
+
+                guard shouldRetryAcceptedShareSync(after: error),
+                      index < retryIntervalsInNanoseconds.count - 1 else {
+                    throw error
+                }
+            }
+        }
+
+        throw lastError ?? CloudKitSharingError.invalidShareMetadata
+    }
+
     private func fetchOrCreateFamily(id: UUID, fallbackName: String) throws -> Family {
         let descriptor = FetchDescriptor<Family>(predicate: #Predicate { $0.id == id })
         if let existing = try modelContext.fetch(descriptor).first {
@@ -702,6 +778,9 @@ final class CloudKitFamilySharingService {
         }
         if family.cloudKitDatabaseScope == nil {
             family.cloudKitDatabaseScope = .privateDatabase
+        }
+        if family.cloudKitShareURL == nil {
+            family.cloudKitPendingSync = true
         }
         // メタデータをローカルDBに永続化（isCloudKitSharedFamily が正しく評価されるよう保証）
         try? modelContext.save()
@@ -725,7 +804,7 @@ final class CloudKitFamilySharingService {
 
     private func shouldRetrySharePreparation(after error: Error) -> Bool {
         if let sharingError = error as? CloudKitSharingError,
-           sharingError == .recordNotFound {
+           case .recordNotFound = sharingError {
             return true
         }
 
@@ -734,7 +813,8 @@ final class CloudKitFamilySharingService {
         }
 
         switch ckError.code {
-        case .unknownItem, .zoneNotFound, .userDeletedZone:
+        case .unknownItem, .zoneNotFound, .userDeletedZone, .networkFailure,
+             .networkUnavailable, .serviceUnavailable, .requestRateLimited, .zoneBusy:
             return true
         case .partialFailure:
             if let partialErrors = ckError.partialErrorsByItemID?.values {
@@ -751,14 +831,62 @@ final class CloudKitFamilySharingService {
         family.cloudKitZoneName = nil
         family.cloudKitZoneOwnerName = nil
         family.cloudKitDatabaseScope = .privateDatabase
+        family.cloudKitPendingSync = false
         try? modelContext.save()
     }
 
     private func normalizeSharePreparationError(_ error: Error) -> Error {
         if shouldRetrySharePreparation(after: error) {
-            return CloudKitSharingError.sharePreparationFailed
+            return CloudKitSharingError.sharePreparationFailed(detail: makeShareErrorDetail(from: error))
         }
         return error
+    }
+
+    private func fetchExistingShareAfterTransientFailure(for family: Family) async throws -> CKShare? {
+        let fallbackIntervalsInNanoseconds: [UInt64] = [
+            250_000_000,
+            1_000_000_000
+        ]
+
+        for interval in fallbackIntervalsInNanoseconds {
+            try await Task.sleep(nanoseconds: interval)
+            if let existingShare = try await fetchExistingShare(for: family, in: container.privateCloudDatabase) {
+                logger.notice("Recovered existing CKShare after transient failure for family=\(family.id.uuidString, privacy: .public)")
+                return existingShare
+            }
+        }
+
+        return nil
+    }
+
+    private func makeShareErrorDetail(from error: Error) -> String {
+        if let ckError = error as? CKError {
+            let code = ckError.code.rawValue
+            let description = ckError.localizedDescription
+            return "CKError(\(code)): \(description)"
+        }
+        return error.localizedDescription
+    }
+
+    private func logShareError(_ error: Error, phase: String) {
+        if let ckError = error as? CKError {
+            logger.error(
+                "CloudKit share failed phase=\(phase, privacy: .public) code=\(ckError.code.rawValue, privacy: .public) message=\(ckError.localizedDescription, privacy: .public)"
+            )
+
+            if let partialErrors = ckError.partialErrorsByItemID {
+                for (itemID, partialError) in partialErrors {
+                    logger.error(
+                        "CloudKit partial failure item=\(String(describing: itemID), privacy: .public) message=\(partialError.localizedDescription, privacy: .public)"
+                    )
+                }
+            }
+            return
+        }
+
+        logger.error(
+            "CloudKit share failed phase=\(phase, privacy: .public) message=\(error.localizedDescription, privacy: .public)"
+        )
     }
 
     /// ゾーンに Family レコードが存在することを保証する
@@ -980,13 +1108,92 @@ final class CloudKitFamilySharingService {
         return nil
     }
 
-    private func accept(metadata: CKShare.Metadata, using container: CKContainer) async throws {
+    private func shouldRetryAcceptedShareSync(after error: Error) -> Bool {
+        if let sharingError = error as? CloudKitSharingError,
+           sharingError == .familyRecordNotFound {
+            return true
+        }
+
+        guard let ckError = error as? CKError else {
+            return false
+        }
+
+        switch ckError.code {
+        case .zoneNotFound, .unknownItem, .networkFailure, .networkUnavailable,
+             .serviceUnavailable, .requestRateLimited, .zoneBusy:
+            return true
+        case .partialFailure:
+            if let partialErrors = ckError.partialErrorsByItemID?.values {
+                return partialErrors.contains { shouldRetryAcceptedShareSync(after: $0) }
+            }
+            return false
+        default:
+            return false
+        }
+    }
+
+    private func createOrUpdatePendingFamily(
+        from metadata: CKShare.Metadata,
+        acceptedShare: CKShare,
+        zoneID: CKRecordZone.ID
+    ) {
+        let fallbackName = normalizedNonEmptyString(metadata.rootRecord?["name"] as? String)
+            ?? normalizedNonEmptyString(acceptedShare[CKShare.SystemFieldKey.title] as? String)
+            ?? "共有中の家族"
+
+        let resolvedFamilyID = uuidValue(from: metadata.rootRecord?["id"])
+            ?? metadata.rootRecord.flatMap { rootRecord in
+                let recordName = rootRecord.recordID.recordName
+                guard recordName.hasPrefix("family-") else { return nil }
+                return UUID(uuidString: String(recordName.dropFirst("family-".count)))
+            }
+
+        let family: Family
+        if let resolvedFamilyID,
+           let existing = try? modelContext.fetch(
+                FetchDescriptor<Family>(predicate: #Predicate { $0.id == resolvedFamilyID })
+           ).first {
+            family = existing
+        } else if let existing = try? modelContext.fetch(FetchDescriptor<Family>()).first(where: {
+            $0.cloudKitZoneName == zoneID.zoneName && $0.cloudKitZoneOwnerName == zoneID.ownerName
+        }) {
+            family = existing
+        } else {
+            family = Family(name: fallbackName)
+            if let resolvedFamilyID {
+                family.id = resolvedFamilyID
+            }
+            modelContext.insert(family)
+        }
+
+        family.name = fallbackName
+        family.cloudKitZoneName = zoneID.zoneName
+        family.cloudKitZoneOwnerName = zoneID.ownerName
+        family.cloudKitDatabaseScope = .sharedDatabase
+        family.cloudKitPendingSync = true
+        try? modelContext.save()
+    }
+
+    private func accept(metadata: CKShare.Metadata, using container: CKContainer) async throws -> CKShare {
         try await withCheckedThrowingContinuation { continuation in
             let operation = CKAcceptSharesOperation(shareMetadatas: [metadata])
+            var acceptedShare: CKShare?
+
+            if #available(iOS 15.0, *) {
+                operation.perShareResultBlock = { _, result in
+                    if case .success(let share) = result {
+                        acceptedShare = share
+                    }
+                }
+            }
             operation.acceptSharesResultBlock = { result in
                 switch result {
                 case .success:
-                    continuation.resume(returning: ())
+                    if let acceptedShare {
+                        continuation.resume(returning: acceptedShare)
+                    } else {
+                        continuation.resume(throwing: CloudKitSharingError.invalidShareMetadata)
+                    }
                 case .failure(let error):
                     continuation.resume(throwing: error)
                 }
@@ -1002,7 +1209,7 @@ private enum CloudKitSharingError: LocalizedError, Equatable {
     case invalidShareMetadata
     case familyRecordNotFound
     case recordNotFound
-    case sharePreparationFailed
+    case sharePreparationFailed(detail: String)
 
     var errorDescription: String? {
         switch self {
@@ -1014,8 +1221,8 @@ private enum CloudKitSharingError: LocalizedError, Equatable {
             return "共有された家族データが見つかりません。"
         case .recordNotFound:
             return "CloudKit上のレコードが見つかりません。"
-        case .sharePreparationFailed:
-            return "共有リンクの再準備に失敗しました。しばらく待ってからもう一度お試しください。"
+        case .sharePreparationFailed(let detail):
+            return "共有リンクの再準備に失敗しました。\(detail)"
         }
     }
 }
@@ -1315,9 +1522,14 @@ final class LocalDataRepairService {
 
     func repairInvalidAndDuplicateRecordsIfNeeded() {
         do {
+            let allFamilies = try modelContext.fetch(FetchDescriptor<Family>())
+            let allUsers = try modelContext.fetch(FetchDescriptor<User>())
             let allBags = try modelContext.fetch(FetchDescriptor<Bag>())
             let allItems = try modelContext.fetch(FetchDescriptor<Item>())
             var didChange = false
+
+            didChange = repairFamilies(allFamilies) || didChange
+            didChange = repairUsers(allUsers) || didChange
 
             let invalidBags = allBags.filter { normalizedNonEmptyString($0.name) == nil }
             for bag in invalidBags {
@@ -1391,6 +1603,16 @@ final class LocalDataRepairService {
         } ?? bags[0]
     }
 
+    private func preferredFamily(in families: [Family]) -> Family {
+        CurrentFamilyResolver.currentFamily(from: families) ?? families[0]
+    }
+
+    private func preferredUser(in users: [User]) -> User {
+        users.max { lhs, rhs in
+            score(of: lhs) < score(of: rhs)
+        } ?? users[0]
+    }
+
     private func preferredItem(in items: [Item]) -> Item {
         items.max { lhs, rhs in
             score(of: lhs) < score(of: rhs)
@@ -1405,6 +1627,23 @@ final class LocalDataRepairService {
         return score
     }
 
+    private func score(of family: Family) -> Int {
+        var score = 0
+        switch family.shareState {
+        case .shared:
+            score += 50
+        case .preparing:
+            score += 25
+        case .localOnly:
+            break
+        }
+        score += min(family.uniqueMembers.count, 5) * 3
+        score += min(family.resolvedBags.count, 5) * 2
+        score += min(family.resolvedItems.count, 10)
+        if family.cloudKitShareURL != nil { score += 5 }
+        return score
+    }
+
     private func score(of item: Item) -> Int {
         var score = 0
         if normalizedNonEmptyString(item.name) != nil { score += 8 }
@@ -1413,6 +1652,116 @@ final class LocalDataRepairService {
         if item.expiryDate != nil { score += 1 }
         if normalizedOptionalString(item.locationNote) != nil { score += 1 }
         return score
+    }
+
+    private func score(of user: User) -> Int {
+        var score = 0
+        if let uid = user.lineUserId, !uid.isEmpty { score += 8 }
+        if let email = user.email, !email.isEmpty { score += 4 }
+        if !user.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { score += 2 }
+        if user.family != nil { score += 1 }
+        return score
+    }
+
+    private func repairFamilies(_ families: [Family]) -> Bool {
+        var didChange = false
+
+        for duplicates in Dictionary(grouping: families, by: \.id).values where duplicates.count > 1 {
+            let keeper = preferredFamily(in: duplicates)
+            mergeFamilies(duplicates, into: keeper)
+            didChange = true
+        }
+
+        let familiesAfterMerge = (try? modelContext.fetch(FetchDescriptor<Family>())) ?? families
+        let zoneKeyFamilies = Dictionary(
+            grouping: familiesAfterMerge.filter { $0.cloudKitZoneIdentity != nil },
+            by: { $0.cloudKitZoneIdentity! }
+        )
+        for duplicates in zoneKeyFamilies.values where duplicates.count > 1 {
+            let keeper = preferredFamily(in: duplicates)
+            mergeFamilies(duplicates, into: keeper)
+            didChange = true
+        }
+
+        let currentFamilies = (try? modelContext.fetch(FetchDescriptor<Family>())) ?? familiesAfterMerge
+        let hasBetterFamily = currentFamilies.contains { $0.shareState != .localOnly }
+        for family in currentFamilies where shouldDeleteOrphanFamily(family, hasBetterFamily: hasBetterFamily) {
+            modelContext.delete(family)
+            didChange = true
+        }
+
+        return didChange
+    }
+
+    private func repairUsers(_ users: [User]) -> Bool {
+        var didChange = false
+        let grouped = Dictionary(grouping: users) { user in
+            let familyID = user.family?.id.uuidString ?? "no-family"
+            if let uid = user.lineUserId?.trimmingCharacters(in: .whitespacesAndNewlines), !uid.isEmpty {
+                return "family:\(familyID):uid:\(uid)"
+            }
+            if let email = user.email?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !email.isEmpty {
+                return "family:\(familyID):email:\(email)"
+            }
+            return "family:\(familyID):local:\(user.id.uuidString)"
+        }
+
+        for duplicates in grouped.values where duplicates.count > 1 {
+            let keeper = preferredUser(in: duplicates)
+            keeper.displayName = duplicates
+                .map(\.displayName)
+                .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+                ?? keeper.displayName
+            keeper.email = duplicates.compactMap(\.email).first(where: { !$0.isEmpty }) ?? keeper.email
+            keeper.lineUserId = duplicates.compactMap(\.lineUserId).first(where: { !$0.isEmpty }) ?? keeper.lineUserId
+            keeper.family = duplicates.compactMap(\.family).first ?? keeper.family
+
+            for duplicate in duplicates where duplicate.persistentModelID != keeper.persistentModelID {
+                modelContext.delete(duplicate)
+                didChange = true
+            }
+        }
+
+        return didChange
+    }
+
+    private func mergeFamilies(_ families: [Family], into keeper: Family) {
+        keeper.name = families
+            .compactMap { normalizedNonEmptyString($0.name) }
+            .max(by: { $0.count < $1.count }) ?? keeper.name
+        keeper.inviteCode = families
+            .compactMap { normalizedNonEmptyString($0.inviteCode) }
+            .first ?? keeper.inviteCode
+        keeper.lineGroupId = families.compactMap(\.lineGroupId).first ?? keeper.lineGroupId
+        keeper.cloudKitZoneName = families.compactMap(\.cloudKitZoneName).first ?? keeper.cloudKitZoneName
+        keeper.cloudKitZoneOwnerName = families.compactMap(\.cloudKitZoneOwnerName).first ?? keeper.cloudKitZoneOwnerName
+        keeper.cloudKitDatabaseScope = families.compactMap(\.cloudKitDatabaseScope).first ?? keeper.cloudKitDatabaseScope
+        keeper.cloudKitShareURL = families.compactMap(\.cloudKitShareURL).first ?? keeper.cloudKitShareURL
+        keeper.cloudKitPendingSync = families.contains { $0.cloudKitPendingSync }
+        keeper.createdAt = families.map(\.createdAt).min() ?? keeper.createdAt
+
+        for family in families where family.persistentModelID != keeper.persistentModelID {
+            for user in family.resolvedMembers {
+                user.family = keeper
+            }
+            for bag in family.resolvedBags {
+                bag.family = keeper
+            }
+            for item in family.resolvedItems {
+                item.family = keeper
+            }
+            modelContext.delete(family)
+        }
+    }
+
+    private func shouldDeleteOrphanFamily(_ family: Family, hasBetterFamily: Bool) -> Bool {
+        guard hasBetterFamily else { return false }
+        guard family.shareState == .localOnly else { return false }
+        guard normalizedNonEmptyString(family.lineGroupId) == nil else { return false }
+        guard family.cloudKitZoneName == nil,
+              family.cloudKitZoneOwnerName == nil,
+              family.cloudKitShareURL == nil else { return false }
+        return family.resolvedBags.isEmpty && family.resolvedItems.isEmpty && family.uniqueMembers.isEmpty
     }
 }
 

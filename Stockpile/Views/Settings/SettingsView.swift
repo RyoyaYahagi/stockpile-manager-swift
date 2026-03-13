@@ -13,7 +13,7 @@ struct SettingsView: View {
     private var tutorialReplayRequestToken = 0
     
     private var currentFamily: Family? {
-        families.first
+        CurrentFamilyResolver.currentFamily(from: families)
     }
     
     var body: some View {
@@ -34,7 +34,7 @@ struct SettingsView: View {
                     HStack {
                         Label("メンバー", systemImage: "person.2")
                         Spacer()
-                        Text("\(family.resolvedMembers.count)人")
+                        Text("\(family.uniqueMembers.count)人")
                             .foregroundStyle(.secondary)
                     }
                 } else {

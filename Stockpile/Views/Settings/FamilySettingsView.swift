@@ -24,11 +24,17 @@ struct FamilySettingsView: View {
     @State private var showShareSheet = false
 
     private var isParticipantFamily: Bool {
-        family.cloudKitDatabaseScope == .sharedDatabase
+        family.cloudKitDatabaseScope == .sharedDatabase && !family.cloudKitPendingSync
     }
 
     private var shareButtonTitle: String {
-        family.isCloudKitSharedFamily ? "共有リンクを送信" : "家族共有を開始"
+        family.shareState == .localOnly ? "家族共有を開始" : "共有リンクを送信"
+    }
+
+    private var memberSectionFooter: String {
+        family.shareState == .localOnly
+            ? "メンバー情報はこの端末のローカルデータです"
+            : "共有状態に応じて重複を除いたメンバーを表示しています"
     }
 
     private var scopedItemsCount: Int {
@@ -85,9 +91,9 @@ struct FamilySettingsView: View {
                 Text("招待")
             } footer: {
                 Text(
-                    family.isCloudKitSharedFamily
-                    ? "iCloud の共有リンクを使って家族を招待します。参加側はリンクを開くと共有を受理できます。"
-                    : "iCloud の共有リンクを作成すると、家族の別 Apple ID 端末とも備蓄データを共有できます。"
+                    family.shareState == .localOnly
+                    ? "iCloud の共有リンクを作成すると、家族の別 Apple ID 端末とも備蓄データを共有できます。"
+                    : "iCloud の共有リンクを使って家族を招待します。参加側はリンクを開くと共有を受理できます。"
                 )
             }
 
@@ -95,7 +101,7 @@ struct FamilySettingsView: View {
                 HStack {
                     Label("共有方法", systemImage: "icloud")
                     Spacer()
-                    Text(family.isCloudKitSharedFamily ? "iCloud共有" : "未共有")
+                    Text(family.shareState.label)
                         .foregroundStyle(.secondary)
                 }
 
@@ -111,13 +117,17 @@ struct FamilySettingsView: View {
                         }
                     }
                 }
-                .disabled(isSyncingFamilyData || !family.isCloudKitSharedFamily)
+                .disabled(isSyncingFamilyData || family.shareState == .localOnly)
             } header: {
                 Text("iCloud同期")
+            } footer: {
+                if family.shareState == .preparing {
+                    Text("共有受理後の同期を再試行できます。共有準備中の間は、家族名やメンバーが先に見えることがあります。")
+                }
             }
 
             Section {
-                ForEach(family.resolvedMembers) { member in
+                ForEach(family.uniqueMembers) { member in
                     HStack {
                         Image(systemName: "person.circle.fill")
                             .font(.title2)
@@ -135,16 +145,18 @@ struct FamilySettingsView: View {
                     }
                 }
 
-                if family.resolvedMembers.isEmpty {
+                if family.uniqueMembers.isEmpty {
                     HStack {
                         Image(systemName: "person.badge.plus")
                             .foregroundStyle(.secondary)
-                        Text("メンバー情報は端末ローカルです")
+                        Text(memberSectionFooter)
                             .foregroundStyle(.secondary)
                     }
                 }
             } header: {
-                Text("メンバー (\(family.resolvedMembers.count)人)")
+                Text("メンバー (\(family.uniqueMembers.count)人)")
+            } footer: {
+                Text(memberSectionFooter)
             }
 
             Section {
@@ -281,7 +293,7 @@ struct FamilySettingsView: View {
     }
 
     private var requiresFamilyNameBeforeSharing: Bool {
-        !family.isCloudKitSharedFamily
+        family.shareState == .localOnly
             && family.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -348,7 +360,7 @@ struct FamilySettingsView: View {
     }
 
     private func autoSyncFamilyStateIfPossible() async {
-        guard family.isCloudKitSharedFamily else { return }
+        guard family.shareState != .localOnly else { return }
         guard autoSyncedFamilyID != family.id else { return }
         autoSyncedFamilyID = family.id
 

@@ -72,7 +72,7 @@ struct ContentView: View {
     @State private var tutorialDidSetUpFamily = false
     
     private var currentFamily: Family? {
-        families.first
+        CurrentFamilyResolver.currentFamily(from: families)
     }
 
     private var tutorialScopedItemCount: Int {

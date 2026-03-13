@@ -54,7 +54,7 @@ struct ItemFormSheet: View {
     }
 
     private var currentFamily: Family? {
-        families.first
+        CurrentFamilyResolver.currentFamily(from: families)
     }
 
     private var scopedBags: [Bag] {

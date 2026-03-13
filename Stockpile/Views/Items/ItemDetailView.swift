@@ -8,6 +8,10 @@ struct ItemDetailView: View {
     @Bindable var item: Item
     
     @State private var showDeleteConfirmation = false
+
+    private var currentFamily: Family? {
+        CurrentFamilyResolver.currentFamily(from: families)
+    }
     
     var body: some View {
         let expiryStatus = item.expiryStatus
@@ -119,7 +123,7 @@ struct ItemDetailView: View {
                     return
                 }
                 NotificationManager.shared.requestReschedule(using: modelContext)
-                if let family = families.first {
+                if let family = currentFamily {
                     Task {
                         do {
                             let sharingService = CloudKitFamilySharingService(modelContext: modelContext)

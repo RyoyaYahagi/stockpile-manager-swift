@@ -15,7 +15,7 @@ struct BagListView: View {
     @State private var undoWorkItem: DispatchWorkItem?
 
     private var currentFamily: Family? {
-        families.first
+        CurrentFamilyResolver.currentFamily(from: families)
     }
 
     private var scopedBags: [Bag] {
@@ -211,7 +211,7 @@ struct BagFormSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("追加") {
                         let bag = Bag(name: name.trimmingCharacters(in: .whitespacesAndNewlines))
-                        bag.family = families.first
+                        bag.family = CurrentFamilyResolver.currentFamily(from: families)
                         modelContext.insert(bag)
                         do {
                             try modelContext.save()
@@ -220,7 +220,7 @@ struct BagFormSheet: View {
                             print("ローカル保存に失敗: \(error)")
                             #endif
                         }
-                        if let family = families.first {
+                        if let family = CurrentFamilyResolver.currentFamily(from: families) {
                             Task {
                                 do {
                                     let sharingService = CloudKitFamilySharingService(modelContext: modelContext)

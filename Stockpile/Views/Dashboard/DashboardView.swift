@@ -122,7 +122,7 @@ struct DashboardView: View {
     }
 
     private var currentFamily: Family? {
-        families.first
+        CurrentFamilyResolver.currentFamily(from: families)
     }
 
     private var scopedItems: [Item] {

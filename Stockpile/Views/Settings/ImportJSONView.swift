@@ -17,7 +17,7 @@ struct ImportJSONView: View {
     }
 
     private var currentFamily: Family? {
-        families.first
+        CurrentFamilyResolver.currentFamily(from: families)
     }
     
     var body: some View {
@@ -318,7 +318,7 @@ struct ExportJSONView: View {
     }
 
     private var currentFamily: Family? {
-        families.first
+        CurrentFamilyResolver.currentFamily(from: families)
     }
 
     private var scopedItems: [Item] {
