@@ -15,7 +15,8 @@ struct FamilySettingsView: View {
     @State private var editedName = ""
     @State private var showLeaveConfirmation = false
     @State private var isStartingShare = false
-    @State private var isSyncingFamilyData = false
+    @State private var isRefreshingFamilyData = false
+    @State private var isSavingFamilyDataToCloud = false
     @State private var autoSyncedFamilyID: UUID?
     @State private var shareError: String?
     @State private var showShareError = false
@@ -51,6 +52,10 @@ struct FamilySettingsView: View {
             return familyBags.count
         }
         return bags.filter { $0.family == nil }.count
+    }
+
+    private var isAnyCloudSyncInFlight: Bool {
+        isRefreshingFamilyData || isSavingFamilyDataToCloud
     }
 
     var body: some View {
@@ -109,15 +114,16 @@ struct FamilySettingsView: View {
                     saveFamilyDataToCloudKitNow()
                 } label: {
                     HStack {
-                        Label("iCloudに保存", systemImage: "arrow.up.circle.icloud")
+                        Image(systemName: "icloud")
+                        Label("iCloudに保存", systemImage: "arrow.up.circle")
                         Spacer()
-                        if isSyncingFamilyData {
+                        if isSavingFamilyDataToCloud {
                             ProgressView()
                                 .progressViewStyle(.circular)
                         }
                     }
                 }
-                .disabled(isSyncingFamilyData || family.shareState == .localOnly)
+                .disabled(isAnyCloudSyncInFlight || family.shareState == .localOnly)
 
                 Button {
                     syncFamilyDataNow()
@@ -125,13 +131,13 @@ struct FamilySettingsView: View {
                     HStack {
                         Label("iCloudから最新化", systemImage: "arrow.clockwise.icloud")
                         Spacer()
-                        if isSyncingFamilyData {
+                        if isRefreshingFamilyData {
                             ProgressView()
                                 .progressViewStyle(.circular)
                         }
                     }
                 }
-                .disabled(isSyncingFamilyData || family.shareState == .localOnly)
+                .disabled(isAnyCloudSyncInFlight || family.shareState == .localOnly)
             } header: {
                 Text("iCloud同期")
             } footer: {
@@ -358,10 +364,10 @@ struct FamilySettingsView: View {
     }
 
     private func syncFamilyDataNow() {
-        isSyncingFamilyData = true
+        isRefreshingFamilyData = true
 
         Task {
-            defer { isSyncingFamilyData = false }
+            defer { isRefreshingFamilyData = false }
 
             do {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
@@ -374,10 +380,10 @@ struct FamilySettingsView: View {
     }
 
     private func saveFamilyDataToCloudKitNow() {
-        isSyncingFamilyData = true
+        isSavingFamilyDataToCloud = true
 
         Task {
-            defer { isSyncingFamilyData = false }
+            defer { isSavingFamilyDataToCloud = false }
 
             do {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
