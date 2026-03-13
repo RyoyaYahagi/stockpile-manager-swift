@@ -403,22 +403,6 @@ struct DashboardView: View {
             }
             
             ToolbarItem(placement: .topBarTrailing) {
-                if let family = currentFamily, family.shareState != .localOnly {
-                    Button {
-                        refreshCloudKitNow()
-                    } label: {
-                        if isRefreshingCloudKit {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                    }
-                    .disabled(isRefreshingCloudKit)
-                    .accessibilityLabel("iCloudから更新")
-                }
-            }
-
-            ToolbarItem(placement: .topBarTrailing) {
                 if !scopedItems.isEmpty {
                     Button(isSelectionMode ? "完了" : "選択") {
                         withAnimation {
@@ -481,6 +465,30 @@ struct DashboardView: View {
                         .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
                 }
                 .padding()
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if let family = currentFamily, family.shareState != .localOnly {
+                Button {
+                    refreshCloudKitNow()
+                } label: {
+                    Group {
+                        if isRefreshingCloudKit {
+                            ProgressView()
+                                .tint(.primary)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.headline.weight(.semibold))
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .background(.thinMaterial, in: Circle())
+                }
+                .disabled(isRefreshingCloudKit)
+                .accessibilityLabel("iCloudから更新")
+                .padding(.top, 8)
+                .padding(.trailing, scopedItems.isEmpty ? 16 : 108)
             }
         }
         .overlay(alignment: .bottom) {
