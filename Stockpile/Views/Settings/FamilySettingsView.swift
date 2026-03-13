@@ -106,6 +106,20 @@ struct FamilySettingsView: View {
                 }
 
                 Button {
+                    saveFamilyDataToCloudKitNow()
+                } label: {
+                    HStack {
+                        Label("iCloudに保存", systemImage: "arrow.up.circle.icloud")
+                        Spacer()
+                        if isSyncingFamilyData {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                        }
+                    }
+                }
+                .disabled(isSyncingFamilyData || family.shareState == .localOnly)
+
+                Button {
                     syncFamilyDataNow()
                 } label: {
                     HStack {
@@ -354,6 +368,23 @@ struct FamilySettingsView: View {
                 try await sharingService.syncFamilyStateFromCloudKit(for: family)
             } catch {
                 shareError = "iCloud同期に失敗しました: \(error.localizedDescription)"
+                showShareError = true
+            }
+        }
+    }
+
+    private func saveFamilyDataToCloudKitNow() {
+        isSyncingFamilyData = true
+
+        Task {
+            defer { isSyncingFamilyData = false }
+
+            do {
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                try await sharingService.syncFamilyDataToCloudKit(for: family)
+                try await sharingService.syncFamilyStateFromCloudKit(for: family)
+            } catch {
+                shareError = "iCloud保存に失敗しました: \(error.localizedDescription)"
                 showShareError = true
             }
         }
