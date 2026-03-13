@@ -391,27 +391,6 @@ struct DashboardView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     Text("備蓄品管理")
                         .font(.headline)
-
-                    if let family = currentFamily, family.shareState != .localOnly {
-                        Button {
-                            refreshCloudKitNow()
-                        } label: {
-                            Group {
-                                if isRefreshingCloudKit {
-                                    ProgressView()
-                                        .tint(.primary)
-                                } else {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.headline.weight(.semibold))
-                                }
-                            }
-                            .frame(width: 28, height: 28)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isRefreshingCloudKit)
-                        .accessibilityLabel("iCloudから更新")
-                        .padding(.leading, 6)
-                    }
                 }
             }
             
@@ -424,12 +403,34 @@ struct DashboardView: View {
             }
             
             ToolbarItem(placement: .topBarTrailing) {
-                if !scopedItems.isEmpty {
-                    Button(isSelectionMode ? "完了" : "選択") {
-                        withAnimation {
-                            isSelectionMode.toggle()
-                            if !isSelectionMode {
-                                selectedItems.removeAll()
+                HStack(spacing: 18) {
+                    if let family = currentFamily, family.shareState != .localOnly {
+                        Button {
+                            refreshCloudKitNow()
+                        } label: {
+                            Group {
+                                if isRefreshingCloudKit {
+                                    ProgressView()
+                                        .tint(.primary)
+                                } else {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.title3.weight(.semibold))
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isRefreshingCloudKit)
+                        .accessibilityLabel("iCloudから更新")
+                        .frame(width: 28, height: 28)
+                    }
+
+                    if !scopedItems.isEmpty {
+                        Button(isSelectionMode ? "完了" : "選択") {
+                            withAnimation {
+                                isSelectionMode.toggle()
+                                if !isSelectionMode {
+                                    selectedItems.removeAll()
+                                }
                             }
                         }
                     }
