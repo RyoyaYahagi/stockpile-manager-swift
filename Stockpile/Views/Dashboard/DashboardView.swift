@@ -403,34 +403,12 @@ struct DashboardView: View {
             }
             
             ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 18) {
-                    if let family = currentFamily, family.shareState != .localOnly {
-                        Button {
-                            refreshCloudKitNow()
-                        } label: {
-                            Group {
-                                if isRefreshingCloudKit {
-                                    ProgressView()
-                                        .tint(.primary)
-                                } else {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.title3.weight(.semibold))
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isRefreshingCloudKit)
-                        .accessibilityLabel("iCloudから更新")
-                        .frame(width: 28, height: 28)
-                    }
-
-                    if !scopedItems.isEmpty {
-                        Button(isSelectionMode ? "完了" : "選択") {
-                            withAnimation {
-                                isSelectionMode.toggle()
-                                if !isSelectionMode {
-                                    selectedItems.removeAll()
-                                }
+                if !scopedItems.isEmpty {
+                    Button(isSelectionMode ? "完了" : "選択") {
+                        withAnimation {
+                            isSelectionMode.toggle()
+                            if !isSelectionMode {
+                                selectedItems.removeAll()
                             }
                         }
                     }
@@ -487,6 +465,30 @@ struct DashboardView: View {
                         .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
                 }
                 .padding()
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if let family = currentFamily, family.shareState != .localOnly {
+                Button {
+                    refreshCloudKitNow()
+                } label: {
+                    Group {
+                        if isRefreshingCloudKit {
+                            ProgressView()
+                                .tint(.primary)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.title3.weight(.semibold))
+                        }
+                    }
+                    .frame(width: 28, height: 28)
+                    .foregroundStyle(.primary)
+                }
+                .buttonStyle(.plain)
+                .disabled(isRefreshingCloudKit)
+                .accessibilityLabel("iCloudから更新")
+                .padding(.top, -46)
+                .padding(.trailing, scopedItems.isEmpty ? 84 : 104)
             }
         }
         .overlay(alignment: .bottom) {
