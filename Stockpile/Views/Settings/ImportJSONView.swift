@@ -157,6 +157,30 @@ struct ImportJSONView: View {
             let expiryDate: String?
             let bagName: String?
             let locationNote: String?
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                name = try container.decode(String.self, forKey: .name)
+                quantity = try container.decodeIfPresent(Int.self, forKey: .quantity)
+                expiryDate = try container.decodeIfPresent(String.self, forKey: .expiryDate)
+                locationNote = try container.decodeIfPresent(String.self, forKey: .locationNote)
+                bagName =
+                    try container.decodeIfPresent(String.self, forKey: .bagName)
+                    ?? container.decodeIfPresent(String.self, forKey: .bagname)
+                    ?? container.decodeIfPresent(String.self, forKey: .bag_name)
+                    ?? container.decodeIfPresent(String.self, forKey: .storageName)
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case name
+                case quantity
+                case expiryDate
+                case locationNote
+                case bagName
+                case bagname
+                case bag_name
+                case storageName
+            }
         }
         
         struct ItemSignature: Hashable {
@@ -177,6 +201,11 @@ struct ImportJSONView: View {
             guard let value else { return nil }
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : trimmed
+        }
+
+        func bagLookupKey(_ value: String?) -> String? {
+            guard let normalized = normalized(value) else { return nil }
+            return normalized.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
         }
         
         func signature(
@@ -207,7 +236,9 @@ struct ImportJSONView: View {
         }
         var bagCache: [String: Bag] = [:]
         for bag in existingBags {
-            bagCache[bag.name] = bag
+            if let key = bagLookupKey(bag.name) {
+                bagCache[key] = bag
+            }
         }
 
         // 既存のItemを重複判定用に読み込む
@@ -253,15 +284,16 @@ struct ImportJSONView: View {
             item.family = targetFamily
             
             // Bagの関連付け
-            if let bagName = normalized(importItem.bagName) {
-                if let existingBag = bagCache[bagName] {
+            if let bagName = normalized(importItem.bagName),
+               let bagKey = bagLookupKey(bagName) {
+                if let existingBag = bagCache[bagKey] {
                     item.bag = existingBag
                 } else {
                     // 新規Bagを作成
                     let newBag = Bag(name: bagName)
                     newBag.family = targetFamily
                     modelContext.insert(newBag)
-                    bagCache[bagName] = newBag
+                    bagCache[bagKey] = newBag
                     item.bag = newBag
                 }
             }
