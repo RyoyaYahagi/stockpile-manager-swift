@@ -573,9 +573,11 @@ final class CloudKitFamilySharingService {
             try await ensureZoneExists(for: family)
         }
 
+        let scopedBags = try fetchLocalBags(for: family)
+        let scopedItems = try fetchLocalItems(for: family)
         let familyRecord = makeFamilyRecord(from: family)
-        let bagRecords = family.resolvedBags.map { makeBagRecord(from: $0, family: family) }
-        let itemRecords = family.resolvedItems.map { makeItemRecord(from: $0, family: family) }
+        let bagRecords = scopedBags.map { makeBagRecord(from: $0, family: family) }
+        let itemRecords = scopedItems.map { makeItemRecord(from: $0, family: family) }
         let recordsToSave = [familyRecord] + bagRecords + itemRecords
 
         let remoteBagIDs = try await fetchRecordIDs(
@@ -972,6 +974,22 @@ final class CloudKitFamilySharingService {
         if didChange {
             try modelContext.save()
         }
+    }
+
+    private func fetchLocalBags(for family: Family) throws -> [Bag] {
+        let familyID = family.id
+        let descriptor = FetchDescriptor<Bag>(
+            predicate: #Predicate { $0.family?.id == familyID }
+        )
+        return try modelContext.fetch(descriptor)
+    }
+
+    private func fetchLocalItems(for family: Family) throws -> [Item] {
+        let familyID = family.id
+        let descriptor = FetchDescriptor<Item>(
+            predicate: #Predicate { $0.family?.id == familyID }
+        )
+        return try modelContext.fetch(descriptor)
     }
 
     private func zoneID(for family: Family) -> CKRecordZone.ID {
