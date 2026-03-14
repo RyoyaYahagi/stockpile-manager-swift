@@ -560,6 +560,7 @@ final class CloudKitFamilySharingService {
 
     func syncFamilyDataToCloudKit(for family: Family) async throws {
         guard family.isCloudKitSharedFamily else { return }
+        try attachOrphanLocalDataIfNeeded(to: family)
 
         let database = database(for: family)
         if family.cloudKitDatabaseScope == .privateDatabase {
@@ -902,6 +903,43 @@ final class CloudKitFamilySharingService {
     private func ensureZoneExists(for family: Family) async throws {
         let zone = CKRecordZone(zoneID: zoneID(for: family))
         _ = try await save(zone: zone, in: container.privateCloudDatabase)
+    }
+
+    private func attachOrphanLocalDataIfNeeded(to family: Family) throws {
+        let orphanBagDescriptor = FetchDescriptor<Bag>(
+            predicate: #Predicate { $0.family == nil }
+        )
+        let orphanItemDescriptor = FetchDescriptor<Item>(
+            predicate: #Predicate { $0.family == nil }
+        )
+
+        let orphanBags = try modelContext.fetch(orphanBagDescriptor)
+        let orphanItems = try modelContext.fetch(orphanItemDescriptor)
+        var didChange = false
+
+        for bag in orphanBags {
+            guard normalizedNonEmptyString(bag.name) != nil else {
+                modelContext.delete(bag)
+                didChange = true
+                continue
+            }
+            bag.family = family
+            didChange = true
+        }
+
+        for item in orphanItems {
+            guard normalizedNonEmptyString(item.name) != nil else {
+                modelContext.delete(item)
+                didChange = true
+                continue
+            }
+            item.family = family
+            didChange = true
+        }
+
+        if didChange {
+            try modelContext.save()
+        }
     }
 
     private func zoneID(for family: Family) -> CKRecordZone.ID {
