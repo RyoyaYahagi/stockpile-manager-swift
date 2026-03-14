@@ -114,7 +114,6 @@ struct FamilySettingsView: View {
                     saveFamilyDataToCloudKitNow()
                 } label: {
                     HStack {
-                        Image(systemName: "icloud")
                         Label("iCloudに保存", systemImage: "arrow.up.circle")
                         Spacer()
                         if isSavingFamilyDataToCloud {
