@@ -396,6 +396,8 @@ struct FamilySettingsView: View {
             do {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 try await sharingService.syncFamilyDataToCloudKit(for: family)
+                let remoteCounts = try await sharingService.fetchRemoteRecordCounts(for: family)
+                print("[CloudKit] iCloud保存後: familyID=\(family.id.uuidString) remote(family=\(remoteCounts.familyCount), bags=\(remoteCounts.bagCount), items=\(remoteCounts.itemCount))")
                 try await sharingService.syncFamilyStateFromCloudKit(for: family)
             } catch {
                 shareError = "iCloud保存に失敗しました: \(error.localizedDescription)"

@@ -446,6 +446,12 @@ final class CloudKitFamilySharingService {
         static let itemRecordType = "Item"
     }
 
+    struct RemoteRecordCounts {
+        let familyCount: Int
+        let bagCount: Int
+        let itemCount: Int
+    }
+
     private let logger = Logger(subsystem: "com.stockpile-manager.app", category: "CloudKitSharing")
     private let modelContext: ModelContext
     private let container: CKContainer
@@ -597,6 +603,32 @@ final class CloudKitFamilySharingService {
             zoneID: zoneID(for: family),
             database: database(for: family),
             scope: family.cloudKitDatabaseScope ?? .privateDatabase
+        )
+    }
+
+    func fetchRemoteRecordCounts(for family: Family) async throws -> RemoteRecordCounts {
+        let targetZoneID = zoneID(for: family)
+        let targetDatabase = database(for: family)
+        async let familyRecords = fetchRecords(
+            forRecordType: Constants.familyRecordType,
+            in: targetZoneID,
+            database: targetDatabase
+        )
+        async let bagRecords = fetchRecords(
+            forRecordType: Constants.bagRecordType,
+            in: targetZoneID,
+            database: targetDatabase
+        )
+        async let itemRecords = fetchRecords(
+            forRecordType: Constants.itemRecordType,
+            in: targetZoneID,
+            database: targetDatabase
+        )
+
+        return try await RemoteRecordCounts(
+            familyCount: familyRecords.count,
+            bagCount: bagRecords.count,
+            itemCount: itemRecords.count
         )
     }
 
