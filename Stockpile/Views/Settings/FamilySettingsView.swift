@@ -382,7 +382,13 @@ struct FamilySettingsView: View {
         isSavingFamilyDataToCloud = true
         let zoneName = family.cloudKitZoneName ?? "family-\(family.id.uuidString)"
         let databaseScope = family.cloudKitDatabaseScope?.rawValue ?? "privateDatabase"
-        print("[CloudKit] iCloudに保存: familyID=\(family.id.uuidString) zone=\(zoneName) scope=\(databaseScope)")
+        let allItemsCount = items.count
+        let familyItemsCount = items.filter { $0.family?.id == family.id }.count
+        let orphanItemsCount = items.filter { $0.family == nil }.count
+        let allBagsCount = bags.count
+        let familyBagsCount = bags.filter { $0.family?.id == family.id }.count
+        let orphanBagsCount = bags.filter { $0.family == nil }.count
+        print("[CloudKit] iCloudに保存: familyID=\(family.id.uuidString) zone=\(zoneName) scope=\(databaseScope) items(all=\(allItemsCount), family=\(familyItemsCount), orphan=\(orphanItemsCount)) bags(all=\(allBagsCount), family=\(familyBagsCount), orphan=\(orphanBagsCount))")
 
         Task {
             defer { isSavingFamilyDataToCloud = false }
