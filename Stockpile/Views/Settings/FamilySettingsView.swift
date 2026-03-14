@@ -380,6 +380,9 @@ struct FamilySettingsView: View {
 
     private func saveFamilyDataToCloudKitNow() {
         isSavingFamilyDataToCloud = true
+        let zoneName = family.cloudKitZoneName ?? "family-\(family.id.uuidString)"
+        let databaseScope = family.cloudKitDatabaseScope?.rawValue ?? "privateDatabase"
+        print("[CloudKit] iCloudに保存: familyID=\(family.id.uuidString) zone=\(zoneName) scope=\(databaseScope)")
 
         Task {
             defer { isSavingFamilyDataToCloud = false }
