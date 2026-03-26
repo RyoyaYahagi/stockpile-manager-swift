@@ -550,11 +550,28 @@ final class CloudKitFamilySharingService {
 
     @discardableResult
     func acceptShare(metadata: CKShare.Metadata) async throws -> Family {
-        let acceptedShare = try await accept(metadata: metadata, using: container)
-        let acceptedZoneID = acceptedShare.recordID.zoneID
+        logger.notice("CloudKit share accept started")
+
+        let acceptedShare: CKShare
         do {
-            return try await syncAcceptedShareToLocal(zoneID: acceptedZoneID)
+            acceptedShare = try await accept(metadata: metadata, using: container)
         } catch {
+            logShareError(error, phase: "acceptShare.accept")
+            throw error
+        }
+
+        let acceptedZoneID = acceptedShare.recordID.zoneID
+        logger.notice(
+            "CloudKit share accepted zone=\(acceptedZoneID.zoneName, privacy: .public) owner=\(acceptedZoneID.ownerName, privacy: .public)"
+        )
+        do {
+            let family = try await syncAcceptedShareToLocal(zoneID: acceptedZoneID)
+            logger.notice(
+                "CloudKit share local sync succeeded zone=\(acceptedZoneID.zoneName, privacy: .public) owner=\(acceptedZoneID.ownerName, privacy: .public)"
+            )
+            return family
+        } catch {
+            logShareError(error, phase: "acceptShare.sync")
             createOrUpdatePendingFamily(
                 from: metadata,
                 acceptedShare: acceptedShare,

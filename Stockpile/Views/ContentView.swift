@@ -379,10 +379,20 @@ struct ContentView: View {
 
         if let metadata = CloudKitShareRelay.consumePending() {
             do {
+                #if DEBUG
+                print("[CloudKitShare] 共有メタデータを検出し、受理フローを開始します。")
+                #endif
                 _ = try await sharingService.acceptShare(metadata: metadata)
+                #if DEBUG
+                print("[CloudKitShare] 共有受理に成功しました。")
+                #endif
             } catch {
                 #if DEBUG
-                print("CloudKit共有の受理に失敗: \(error)")
+                if let ckError = error as? CKError {
+                    print("[CloudKitShare] 共有受理に失敗: CKError(\(ckError.code.rawValue)) \(ckError.localizedDescription)")
+                } else {
+                    print("[CloudKitShare] 共有受理に失敗: \(error.localizedDescription)")
+                }
                 #endif
             }
         }
@@ -392,7 +402,11 @@ struct ContentView: View {
                 try await sharingService.syncFamilyStateFromCloudKit(for: family)
             } catch {
                 #if DEBUG
-                print("共有家族のCloudKit同期に失敗: \(error)")
+                if let ckError = error as? CKError {
+                    print("[CloudKitShare] 共有家族同期に失敗 familyID=\(family.id.uuidString): CKError(\(ckError.code.rawValue)) \(ckError.localizedDescription)")
+                } else {
+                    print("[CloudKitShare] 共有家族同期に失敗 familyID=\(family.id.uuidString): \(error.localizedDescription)")
+                }
                 #endif
             }
         }

@@ -38,6 +38,7 @@
 		029 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 129 /* Secrets.plist */; };
 		031 /* FamilySharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131 /* FamilySharingService.swift */; };
 		032 /* FamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132 /* FamilySettingsView.swift */; };
+		034 /* CloudKitShareSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 134 /* CloudKitShareSceneDelegate.swift */; };
 		033F1A6A2C0A000100000001 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000011 /* FirebaseCore */; };
 		033F1A6A2C0A000100000002 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000012 /* FirebaseAuth */; };
 		033F1A6A2C0A000100000003 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000013 /* FirebaseFirestore */; };
@@ -79,6 +80,7 @@
 		131 /* FamilySharingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySharingService.swift; sourceTree = "<group>"; };
 		132 /* FamilySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySettingsView.swift; sourceTree = "<group>"; };
 		133 /* Stockpile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Stockpile.entitlements; sourceTree = "<group>"; };
+		134 /* CloudKitShareSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitShareSceneDelegate.swift; sourceTree = "<group>"; };
 		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A30EF01B2F4A7B7800979C1A /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -137,6 +139,7 @@
 			isa = PBXGroup;
 			children = (
 				101 /* StockpileApp.swift */,
+				134 /* CloudKitShareSceneDelegate.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -334,6 +337,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				001 /* StockpileApp.swift in Sources */,
+				034 /* CloudKitShareSceneDelegate.swift in Sources */,
 				002 /* ContentView.swift in Sources */,
 				003 /* Family.swift in Sources */,
 				004 /* User.swift in Sources */,

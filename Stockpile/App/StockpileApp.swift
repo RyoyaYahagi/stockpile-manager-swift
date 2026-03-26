@@ -2,7 +2,6 @@ import SwiftUI
 import SwiftData
 import UIKit
 import UserNotifications
-import CloudKit
 
 final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
     func application(
@@ -34,13 +33,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
 
     func application(
         _ application: UIApplication,
-        userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata
-    ) {
-        Task { @MainActor in
-            CloudKitShareRelay.storeAndPost(cloudKitShareMetadata)
-        }
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(
+            name: nil,
+            sessionRole: connectingSceneSession.role
+        )
+        configuration.delegateClass = CloudKitShareSceneDelegate.self
+        return configuration
     }
-    
 }
 
 @main
