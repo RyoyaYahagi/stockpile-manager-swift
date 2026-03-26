@@ -132,7 +132,7 @@ struct DashboardView: View {
             return deduplicatedItems(items.filter { $0.family == nil })
         }
         let familyItems = deduplicatedItems(items.filter { $0.family?.id == family.id })
-        if !familyItems.isEmpty {
+        if !familyItems.isEmpty || family.prefersStrictCloudKitScoping {
             return familyItems
         }
         return deduplicatedItems(items.filter { $0.family == nil })
@@ -143,7 +143,7 @@ struct DashboardView: View {
             return deduplicatedBags(bags.filter { $0.family == nil })
         }
         let familyBags = deduplicatedBags(bags.filter { $0.family?.id == family.id })
-        if !familyBags.isEmpty {
+        if !familyBags.isEmpty || family.prefersStrictCloudKitScoping {
             return familyBags
         }
         return deduplicatedBags(bags.filter { $0.family == nil })
@@ -403,6 +403,30 @@ struct DashboardView: View {
             }
             
             ToolbarItem(placement: .topBarTrailing) {
+                if let family = currentFamily, family.shareState != .localOnly {
+                    Button {
+                        refreshCloudKitNow()
+                    } label: {
+                        ZStack {
+                            if isRefreshingCloudKit {
+                                ProgressView()
+                                    .tint(.primary)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.body.weight(.semibold))
+                            }
+                        }
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isRefreshingCloudKit)
+                    .accessibilityLabel("iCloudから更新")
+                    .controlSize(.regular)
+                }
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
                 if !scopedItems.isEmpty {
                     Button(isSelectionMode ? "完了" : "選択") {
                         withAnimation {
@@ -465,30 +489,6 @@ struct DashboardView: View {
                         .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
                 }
                 .padding()
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            if let family = currentFamily, family.shareState != .localOnly {
-                Button {
-                    refreshCloudKitNow()
-                } label: {
-                    Group {
-                        if isRefreshingCloudKit {
-                            ProgressView()
-                                .tint(.primary)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.title3.weight(.semibold))
-                        }
-                    }
-                    .frame(width: 28, height: 28)
-                    .foregroundStyle(.primary)
-                }
-                .buttonStyle(.plain)
-                .disabled(isRefreshingCloudKit)
-                .accessibilityLabel("iCloudから更新")
-                .padding(.top, -46)
-                .padding(.trailing, scopedItems.isEmpty ? 84 : 104)
             }
         }
         .overlay(alignment: .bottom) {

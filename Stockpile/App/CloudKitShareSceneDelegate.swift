@@ -25,7 +25,9 @@ final class CloudKitShareSceneDelegate: NSObject, UIWindowSceneDelegate {
     }
 
     private func relay(_ metadata: CKShare.Metadata, source: String) {
-        logger.notice("Received CloudKit share metadata source=\(source, privacy: .public)")
+        logger.notice(
+            "Received CloudKit share metadata source=\(source, privacy: .public)"
+        )
         Task { @MainActor in
             CloudKitShareRelay.storeAndPost(metadata)
         }

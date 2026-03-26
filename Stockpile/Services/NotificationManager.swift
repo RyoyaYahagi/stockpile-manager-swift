@@ -57,7 +57,7 @@ final class NotificationManager: ObservableObject {
             await refreshAuthorizationStatus()
             return granted
         } catch {
-            print("Notification authorization error: \(error)")
+            debugLog("Notification authorization error: \(error)")
             return false
         }
     }
@@ -190,7 +190,7 @@ final class NotificationManager: ObservableObject {
         }
         
         #if DEBUG
-        print("📋 Scheduled \(groupedNotifications.count) grouped notifications")
+        debugLog("📋 Scheduled \(groupedNotifications.count) grouped notifications")
         #endif
     }
     
@@ -251,7 +251,7 @@ final class NotificationManager: ObservableObject {
         
         // 実際の通知発火日時を計算
         guard let scheduledDate = calendar.date(from: dateComponents) else {
-            print("⚠️ Failed to create scheduled date")
+            debugLog("⚠️ Failed to create scheduled date")
             return
         }
         
@@ -259,7 +259,7 @@ final class NotificationManager: ObservableObject {
         
         // 過去の日時は通知しない
         guard scheduledDate > now else {
-            print("⚠️ Skipped grouped notification - \(formatDate(scheduledDate)) is in the past")
+            debugLog("⚠️ Skipped grouped notification - \(formatDate(scheduledDate)) is in the past")
             return
         }
         
@@ -279,7 +279,7 @@ final class NotificationManager: ObservableObject {
             )
             effectiveScheduledDate = now.addingTimeInterval(immediateFallbackInterval)
         } else {
-            print("⚠️ Skipped grouped notification - \(formatDate(scheduledDate)) is in the past")
+            debugLog("⚠️ Skipped grouped notification - \(formatDate(scheduledDate)) is in the past")
             return
         }
         
@@ -296,9 +296,9 @@ final class NotificationManager: ObservableObject {
         
         do {
             try await UNUserNotificationCenter.current().add(request)
-            print("✅ Scheduled grouped: \(notificationItems.count)件 at \(formatDate(effectiveScheduledDate))")
+            debugLog("✅ Scheduled grouped: \(notificationItems.count)件 at \(formatDate(effectiveScheduledDate))")
         } catch {
-            print("❌ Failed to schedule grouped notification: \(error)")
+            debugLog("❌ Failed to schedule grouped notification: \(error)")
         }
     }
     
@@ -370,9 +370,9 @@ final class NotificationManager: ObservableObject {
         // 日数差を計算（時刻の影響を排除）
         let daysUntilExpiry = calendar.dateComponents([.day], from: today, to: normalizedExpiryDate).day ?? 0
         
-        print("📋 Scheduling notifications for \(item.name):")
-        print("   - Expiry date: \(formatDate(normalizedExpiryDate))")
-        print("   - Days until expiry: \(daysUntilExpiry)")
+        debugLog("📋 Scheduling notifications for \(item.name):")
+        debugLog("   - Expiry date: \(formatDate(normalizedExpiryDate))")
+        debugLog("   - Days until expiry: \(daysUntilExpiry)")
         
         // 30日前通知
         if settings.notify30DaysBefore {
@@ -506,6 +506,12 @@ final class NotificationManager: ObservableObject {
     func cancelAllNotifications() {
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
     }
+
+    private func debugLog(_ message: @autoclosure () -> String) {
+#if DEBUG
+        print(message())
+#endif
+    }
     
     private func enqueueReschedule(_ operation: @escaping @MainActor () async -> Void) {
         pendingRescheduleWorkItem?.cancel()
@@ -525,17 +531,5 @@ final class NotificationManager: ObservableObject {
     private func cancelPendingReschedule() {
         pendingRescheduleWorkItem?.cancel()
         pendingRescheduleWorkItem = nil
-    }
-    
-    // MARK: - Debug
-    
-    /// スケジュール済み通知を取得（デバッグ用）
-    func getPendingNotifications() async -> [UNNotificationRequest] {
-        await UNUserNotificationCenter.current().pendingNotificationRequests()
-    }
-
-    /// 配信済み通知を取得（デバッグ用）
-    func getDeliveredNotifications() async -> [UNNotification] {
-        await UNUserNotificationCenter.current().deliveredNotifications()
     }
 }

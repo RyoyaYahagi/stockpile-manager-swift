@@ -70,6 +70,8 @@ struct ContentView: View {
     @State private var tutorialDidAddItem = false
     @State private var tutorialHadFamilyBeforeAction = false
     @State private var tutorialDidSetUpFamily = false
+    @State private var cloudKitShareSuccessMessage: String?
+    @State private var cloudKitShareSuccessToken = UUID()
     
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
@@ -139,6 +141,7 @@ struct ContentView: View {
         }
         .task {
             LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
+            await applyFirebaseAvailabilityPreference()
 
             if let pendingUserInfo = NotificationTapRelay.consumePending() {
                 handleNotificationTap(
@@ -176,6 +179,7 @@ struct ContentView: View {
             requestRescheduleForCurrentData()
             resumeTutorialIfNeeded()
             Task {
+                await applyFirebaseAvailabilityPreference()
                 await refreshCloudKitSharedFamilies()
             }
         }
@@ -193,6 +197,23 @@ struct ContentView: View {
             Task {
                 await refreshCloudKitSharedFamilies()
             }
+        }
+        .overlay(alignment: .top) {
+            if let cloudKitShareSuccessMessage {
+                CloudKitShareSuccessBanner(
+                    message: cloudKitShareSuccessMessage,
+                    onDismiss: dismissCloudKitShareSuccessBanner
+                )
+                .padding(.top, 8)
+                .padding(.horizontal, 16)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(1)
+            }
+        }
+        .task(id: cloudKitShareSuccessToken) {
+            guard cloudKitShareSuccessMessage != nil else { return }
+            try? await Task.sleep(for: .seconds(3))
+            dismissCloudKitShareSuccessBanner()
         }
         .fullScreenCover(isPresented: $showFirstLaunchTutorial) {
             FirstLaunchTutorialView(
@@ -263,6 +284,19 @@ struct ContentView: View {
         tutorialHadFamilyBeforeAction = currentFamily != nil
         tutorialDidSetUpFamily = currentFamily != nil
         showFirstLaunchTutorial = true
+    }
+
+    private func applyFirebaseAvailabilityPreference() async {
+        do {
+            let sharingService = FamilySharingService(modelContext: modelContext)
+            try await sharingService.applyFirebaseAvailability(
+                isEnabled: APIConfig.isFirebaseDeveloperModeEnabled
+            )
+        } catch {
+            #if DEBUG
+            print("Firebase表示状態の適用に失敗: \(error)")
+            #endif
+        }
     }
 
     private func handleFirstLaunchTutorialTryStep(_ action: FirstLaunchAction) {
@@ -386,14 +420,9 @@ struct ContentView: View {
                 #if DEBUG
                 print("[CloudKitShare] 共有受理に成功しました。")
                 #endif
+                showCloudKitShareSuccess("データが共有されました")
             } catch {
-                #if DEBUG
-                if let ckError = error as? CKError {
-                    print("[CloudKitShare] 共有受理に失敗: CKError(\(ckError.code.rawValue)) \(ckError.localizedDescription)")
-                } else {
-                    print("[CloudKitShare] 共有受理に失敗: \(error.localizedDescription)")
-                }
-                #endif
+                logCloudKitShareError(error, context: "共有受理")
             }
         }
 
@@ -401,15 +430,66 @@ struct ContentView: View {
             do {
                 try await sharingService.syncFamilyStateFromCloudKit(for: family)
             } catch {
-                #if DEBUG
-                if let ckError = error as? CKError {
-                    print("[CloudKitShare] 共有家族同期に失敗 familyID=\(family.id.uuidString): CKError(\(ckError.code.rawValue)) \(ckError.localizedDescription)")
-                } else {
-                    print("[CloudKitShare] 共有家族同期に失敗 familyID=\(family.id.uuidString): \(error.localizedDescription)")
-                }
-                #endif
+                logCloudKitShareError(
+                    error,
+                    context: "共有家族同期 familyID=\(family.id.uuidString)"
+                )
             }
         }
+    }
+
+    private func logCloudKitShareError(_ error: Error, context: String) {
+        #if DEBUG
+        if let ckError = error as? CKError {
+            print(
+                "[CloudKitShare] \(context) に失敗: CKError(\(ckError.code.rawValue)) \(ckError.localizedDescription)"
+            )
+        } else {
+            print("[CloudKitShare] \(context) に失敗: \(error.localizedDescription)")
+        }
+        #endif
+    }
+
+    private func showCloudKitShareSuccess(_ message: String) {
+        withAnimation {
+            cloudKitShareSuccessMessage = message
+            cloudKitShareSuccessToken = UUID()
+        }
+    }
+
+    private func dismissCloudKitShareSuccessBanner() {
+        guard cloudKitShareSuccessMessage != nil else { return }
+        withAnimation {
+            cloudKitShareSuccessMessage = nil
+        }
+    }
+}
+
+private struct CloudKitShareSuccessBanner: View {
+    let message: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.white)
+            Text(message)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("共有完了メッセージを閉じる")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.green.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 6)
     }
 }
 

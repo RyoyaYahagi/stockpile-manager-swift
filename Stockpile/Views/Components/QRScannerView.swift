@@ -297,7 +297,6 @@ struct ManualCodeEntryView: View {
 }
 
 #Preview {
-    QRScannerView { code in
-        print("Scanned: \(code)")
+    QRScannerView { _ in
     }
 }

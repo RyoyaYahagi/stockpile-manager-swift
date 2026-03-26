@@ -111,7 +111,6 @@ final class OCRCameraViewModel {
     var detectedText = ""
     var detectedDate: Date?
     var isProcessing = false
-    private let ciContext = CIContext()
     
     func processImage(_ image: UIImage) {
         isProcessing = true
@@ -121,12 +120,12 @@ final class OCRCameraViewModel {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
 
-            let candidates = self.makeOCRCandidates(from: image)
+            let candidates = Self.makeOCRCandidates(from: image)
             var bestText = ""
             var bestDate: Date?
 
             for candidate in candidates {
-                let resultText = self.recognizeText(from: candidate)
+                let resultText = Self.recognizeText(from: candidate)
                 if bestText.isEmpty && !resultText.isEmpty {
                     bestText = resultText
                 }
@@ -139,7 +138,7 @@ final class OCRCameraViewModel {
             }
             
             // メインスレッドでUI更新
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.isProcessing = false
                 self.detectedText = bestText
                 self.detectedDate = bestDate
@@ -147,7 +146,7 @@ final class OCRCameraViewModel {
         }
     }
 
-    private func recognizeText(from image: UIImage) -> String {
+    nonisolated private static func recognizeText(from image: UIImage) -> String {
         guard let cgImage = image.cgImage else { return "" }
 
         let request = VNRecognizeTextRequest()
@@ -173,7 +172,7 @@ final class OCRCameraViewModel {
         }
     }
 
-    private func makeOCRCandidates(from image: UIImage) -> [UIImage] {
+    nonisolated private static func makeOCRCandidates(from image: UIImage) -> [UIImage] {
         var candidates: [UIImage] = [image]
 
         if let cropped = cropExpiryRegion(from: image) {
@@ -190,7 +189,7 @@ final class OCRCameraViewModel {
         return candidates
     }
 
-    private func cropExpiryRegion(from image: UIImage) -> UIImage? {
+    nonisolated private static func cropExpiryRegion(from image: UIImage) -> UIImage? {
         let scale = image.scale
         let size = image.size
         let rect = CGRect(
@@ -211,7 +210,7 @@ final class OCRCameraViewModel {
         return UIImage(cgImage: cgImage, scale: scale, orientation: image.imageOrientation)
     }
 
-    private func enhancedMonochromeImage(from image: UIImage) -> UIImage? {
+    nonisolated private static func enhancedMonochromeImage(from image: UIImage) -> UIImage? {
         guard let inputImage = CIImage(image: image) else { return nil }
 
         let controls = CIFilter.colorControls()
@@ -227,6 +226,7 @@ final class OCRCameraViewModel {
         sharpen.sharpness = 0.7
 
         guard let sharpened = sharpen.outputImage else { return nil }
+        let ciContext = CIContext()
         guard let cgImage = ciContext.createCGImage(sharpened, from: sharpened.extent) else { return nil }
         return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
     }

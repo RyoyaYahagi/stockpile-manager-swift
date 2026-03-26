@@ -1,4 +1,5 @@
 import Foundation
+import CoreImage
 
 /// 商品情報
 struct ProductInfo: Sendable {
@@ -14,6 +15,20 @@ struct ProductInfo: Sendable {
         case rakuten = "楽天"
         case yahoo = "Yahoo"
         case manual = "手動入力"
+
+        var localizedDisplayName: String {
+            let isJapanese = Locale.preferredLanguages.first?.lowercased().hasPrefix("ja") ?? true
+            switch self {
+            case .openFoodFacts:
+                return "Open Food Facts"
+            case .rakuten:
+                return isJapanese ? "楽天" : "Rakuten"
+            case .yahoo:
+                return isJapanese ? "Yahoo" : "Yahoo Shopping"
+            case .manual:
+                return isJapanese ? "手動入力" : "Manual Entry"
+            }
+        }
     }
     
     let source: Source
@@ -57,6 +72,93 @@ actor ProductSearchService {
         config.timeoutIntervalForResource = 30
         self.session = URLSession(configuration: config)
     }
+
+    private func debugLog(_ message: @autoclosure () -> String) {
+#if DEBUG
+        print(message())
+#endif
+    }
+
+    private func maskedURLString(from url: URL, sensitiveQueryNames: Set<String>) -> String {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let queryItems = components.queryItems else {
+            return url.absoluteString
+        }
+
+        components.queryItems = queryItems.map { item in
+            guard sensitiveQueryNames.contains(item.name.lowercased()) else {
+                return item
+            }
+            return URLQueryItem(name: item.name, value: "***")
+        }
+        return components.url?.absoluteString ?? url.absoluteString
+    }
+
+    private func normalizedText(_ value: Any?) -> String? {
+        guard let text = value as? String else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func preferredLanguageCandidates() -> [String] {
+        var candidates: [String] = []
+
+        for identifier in Locale.preferredLanguages {
+            let normalized = identifier.replacingOccurrences(of: "-", with: "_").lowercased()
+            candidates.append(normalized)
+            if let primary = normalized.split(separator: "_").first {
+                candidates.append(String(primary))
+            }
+        }
+
+        let current = Locale.current.identifier.replacingOccurrences(of: "-", with: "_").lowercased()
+        candidates.append(current)
+        if let primary = current.split(separator: "_").first {
+            candidates.append(String(primary))
+        }
+
+        var seen = Set<String>()
+        return candidates.filter { seen.insert($0).inserted }
+    }
+
+    private func appLanguageCode() -> String {
+        let preferred = preferredLanguageCandidates().first ?? "ja"
+        return preferred.split(separator: "_").first.map(String.init) ?? "ja"
+    }
+
+    private func localizedValue(
+        baseKey: String,
+        from payload: [String: Any],
+        preferredLanguages: [String]
+    ) -> String? {
+        for language in preferredLanguages {
+            let underscored = "\(baseKey)_\(language)"
+            if let value = normalizedText(payload[underscored]) {
+                return value
+            }
+
+            let dashed = "\(baseKey)_\(language.replacingOccurrences(of: "_", with: "-"))"
+            if let value = normalizedText(payload[dashed]) {
+                return value
+            }
+
+            if let primary = language.split(separator: "_").first {
+                let shortKey = "\(baseKey)_\(primary)"
+                if let value = normalizedText(payload[shortKey]) {
+                    return value
+                }
+            }
+        }
+
+        return normalizedText(payload[baseKey])
+    }
+
+    private func mergedProductName(brand: String?, name: String) -> String {
+        guard let brand, !name.localizedCaseInsensitiveContains(brand) else {
+            return name
+        }
+        return "\(brand) \(name)"
+    }
     
     // MARK: - Public API
     
@@ -72,6 +174,9 @@ actor ProductSearchService {
         
         // 1. 楽天APIを最優先
         if APIConfig.isRakutenConfigured {
+            if let product = try? await searchRakutenProduct(janCode: cleanedCode) {
+                return product
+            }
             if let product = try? await searchRakuten(janCode: cleanedCode) {
                 return product
             }
@@ -106,44 +211,56 @@ actor ProductSearchService {
     /// Open Food Facts API（無料・登録不要）
     /// https://world.openfoodfacts.org/data
     private func searchOpenFoodFacts(janCode: String) async throws -> ProductInfo? {
-        let url = URL(string: "https://world.openfoodfacts.org/api/v0/product/\(janCode).json")!
+        let languageCode = appLanguageCode()
+        var components = URLComponents(string: "https://world.openfoodfacts.org/api/v0/product/\(janCode).json")!
+        components.queryItems = [
+            URLQueryItem(name: "lc", value: languageCode)
+        ]
+        let url = components.url ?? URL(string: "https://world.openfoodfacts.org/api/v0/product/\(janCode).json")!
         
-        print("[ProductSearch] Open Food Facts: \(url.absoluteString)")
+        debugLog("[ProductSearch] Open Food Facts: \(url.absoluteString)")
         
         let (data, response) = try await session.data(from: url)
         
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
-            print("[ProductSearch] Open Food Facts: HTTP error")
+            debugLog("[ProductSearch] Open Food Facts: HTTP error")
             return nil
         }
         
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let status = json["status"] as? Int, status == 1,
               let product = json["product"] as? [String: Any] else {
-            print("[ProductSearch] Open Food Facts: Product not found")
+            debugLog("[ProductSearch] Open Food Facts: Product not found")
             return nil
         }
         
-        // 商品名を取得（日本語優先）
-        let productName = (product["product_name_ja"] as? String)
-            ?? (product["product_name"] as? String)
-            ?? (product["generic_name"] as? String)
-            ?? "不明な商品"
-        
-        let brands = product["brands"] as? String
-        let categories = product["categories"] as? String
-        let imageURLString = product["image_url"] as? String
+        let preferredLanguages = preferredLanguageCandidates()
+        let localizedProductName = localizedValue(
+            baseKey: "product_name",
+            from: product,
+            preferredLanguages: preferredLanguages
+        )
+        let localizedGenericName = localizedValue(
+            baseKey: "generic_name",
+            from: product,
+            preferredLanguages: preferredLanguages
+        )
+        let productName = localizedProductName ?? localizedGenericName ?? "不明な商品"
+
+        let brands = localizedValue(baseKey: "brands", from: product, preferredLanguages: preferredLanguages)
+        let categories = localizedValue(baseKey: "categories", from: product, preferredLanguages: preferredLanguages)
+        let genericDescription = localizedValue(baseKey: "generic_name", from: product, preferredLanguages: preferredLanguages)
+        let imageURLString = normalizedText(product["image_url"])
         let imageURL = imageURLString.flatMap { URL(string: $0) }
+
+        let fullName = mergedProductName(brand: brands, name: productName)
         
-        // 商品名にブランドを追加
-        let fullName = brands != nil ? "\(brands!) \(productName)" : productName
-        
-        print("[ProductSearch] Open Food Facts: Found \(fullName)")
+        debugLog("[ProductSearch] Open Food Facts: Found \(fullName)")
         
         return ProductInfo(
             name: fullName,
-            description: nil,
+            description: genericDescription,
             category: categories,
             imageURL: imageURL,
             janCode: janCode,
@@ -152,6 +269,81 @@ actor ProductSearchService {
     }
     
     // MARK: - 楽天API
+
+    /// 楽天商品価格ナビ 製品検索API
+    /// JANコード(productCode)で直接検索する
+    private func searchRakutenProduct(janCode: String) async throws -> ProductInfo? {
+        let appId = APIConfig.rakutenAppId
+        let accessKey = APIConfig.rakutenAccessKey
+
+        var components = URLComponents(string: "https://openapi.rakuten.co.jp/ichibaproduct/api/Product/Search/20250801")!
+        components.queryItems = [
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "formatVersion", value: "2"),
+            URLQueryItem(name: "applicationId", value: appId),
+            URLQueryItem(name: "accessKey", value: accessKey),
+            URLQueryItem(name: "productCode", value: janCode),
+            URLQueryItem(
+                name: "elements",
+                value: "productName,productCaption,genreName,mediumImageUrl,productUrlPC,productCode"
+            ),
+            URLQueryItem(name: "hits", value: "1")
+        ]
+
+        guard let url = components.url else {
+            debugLog("[ProductSearch] Failed to create Rakuten product URL")
+            return nil
+        }
+
+        let maskedURL = maskedURLString(from: url, sensitiveQueryNames: ["applicationid", "accesskey"])
+        debugLog("[ProductSearch] Requesting Rakuten product API: \(maskedURL)")
+
+        let (data, response) = try await session.data(from: url)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            debugLog("[ProductSearch] Rakuten product API: Invalid response")
+            return nil
+        }
+
+        debugLog("[ProductSearch] Rakuten product API HTTP Status: \(httpResponse.statusCode)")
+
+        guard httpResponse.statusCode == 200 else {
+            if let responseString = String(data: data, encoding: .utf8) {
+                debugLog("[ProductSearch] Rakuten product API error response: \(responseString)")
+            }
+            return nil
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            debugLog("[ProductSearch] Rakuten product API: Failed to parse JSON")
+            return nil
+        }
+
+        guard let items = json["items"] as? [[String: Any]],
+              let firstItem = items.first,
+              let productName = normalizedText(firstItem["productName"]) else {
+            debugLog("[ProductSearch] Rakuten product API: No items found")
+            if let responseString = String(data: data, encoding: .utf8)?.prefix(500) {
+                debugLog("[ProductSearch] Rakuten product API response: \(responseString)")
+            }
+            return nil
+        }
+
+        let description = normalizedText(firstItem["productCaption"])
+        let category = normalizedText(firstItem["genreName"])
+        let imageURL = normalizedText(firstItem["mediumImageUrl"]).flatMap(URL.init(string:))
+
+        debugLog("[ProductSearch] Rakuten product API found: \(productName)")
+
+        return ProductInfo(
+            name: productName,
+            description: description,
+            category: category,
+            imageURL: imageURL,
+            janCode: janCode,
+            source: .rakuten
+        )
+    }
     
     /// 楽天市場商品検索API
     /// https://webservice.rakuten.co.jp/documentation/ichiba-item-search
@@ -170,31 +362,32 @@ actor ProductSearchService {
         ]
         
         guard let url = components.url else {
-            print("[ProductSearch] Failed to create URL")
+            debugLog("[ProductSearch] Failed to create URL")
             return nil
         }
         
-        print("[ProductSearch] Requesting: \(url.absoluteString)")
+        let maskedURL = maskedURLString(from: url, sensitiveQueryNames: ["applicationid", "accesskey"])
+        debugLog("[ProductSearch] Requesting: \(maskedURL)")
         
         let (data, response) = try await session.data(from: url)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            print("[ProductSearch] Invalid response")
+            debugLog("[ProductSearch] Invalid response")
             return nil
         }
         
-        print("[ProductSearch] HTTP Status: \(httpResponse.statusCode)")
+        debugLog("[ProductSearch] HTTP Status: \(httpResponse.statusCode)")
         
         guard httpResponse.statusCode == 200 else {
             if let responseString = String(data: data, encoding: .utf8) {
-                print("[ProductSearch] Error response: \(responseString)")
+                debugLog("[ProductSearch] Error response: \(responseString)")
             }
             return nil
         }
         
         // JSONパース
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            print("[ProductSearch] Failed to parse JSON")
+            debugLog("[ProductSearch] Failed to parse JSON")
             return nil
         }
         
@@ -202,20 +395,20 @@ actor ProductSearchService {
               let firstItem = items.first,
               let itemData = firstItem["Item"] as? [String: Any],
               let itemName = itemData["itemName"] as? String else {
-            print("[ProductSearch] No items found in response")
+            debugLog("[ProductSearch] No items found in response")
             if let responseString = String(data: data, encoding: .utf8)?.prefix(500) {
-                print("[ProductSearch] Response: \(responseString)")
+                debugLog("[ProductSearch] Response: \(responseString)")
             }
             return nil
         }
         
-        let description = itemData["itemCaption"] as? String
-        let genreName = itemData["genreName"] as? String
+        let description = normalizedText(itemData["itemCaption"])
+        let genreName = normalizedText(itemData["genreName"])
         let imageURLString = (itemData["mediumImageUrls"] as? [[String: String]])?.first?["imageUrl"]
             ?? (itemData["smallImageUrls"] as? [[String: String]])?.first?["imageUrl"]
         let imageURL = imageURLString.flatMap { URL(string: $0) }
         
-        print("[ProductSearch] Found: \(itemName)")
+        debugLog("[ProductSearch] Found: \(itemName)")
         
         return ProductInfo(
             name: itemName,
@@ -261,8 +454,8 @@ actor ProductSearchService {
             return nil
         }
         
-        let description = firstHit["description"] as? String
-        let category = (firstHit["genreCategory"] as? [String: Any])?["name"] as? String
+        let description = normalizedText(firstHit["description"])
+        let category = normalizedText((firstHit["genreCategory"] as? [String: Any])?["name"])
         let imageId = firstHit["imageId"] as? String
         let imageURL = imageId.flatMap { URL(string: "https://item-shopping.c.yimg.jp/i/n/\($0)") }
         

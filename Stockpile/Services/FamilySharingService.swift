@@ -42,6 +42,9 @@ final class FamilySharingService {
             throw SharingError.firebaseNotConfigured
         }
 
+        family.firebaseFamilyID = family.id.uuidString
+        family.firebaseContentHidden = false
+
         let familySnapshot = FamilySnapshot(
             id: family.id.uuidString,
             name: family.name,
@@ -109,10 +112,15 @@ final class FamilySharingService {
             if let remoteFamilyID = UUID(uuidString: inviteInfo.familyId) {
                 let allFamilies = try modelContext.fetch(FetchDescriptor<Family>())
                 if let existingFamily = allFamilies.first(where: { $0.id == remoteFamilyID }) {
+                    existingFamily.firebaseFamilyID = inviteInfo.familyId
+                    existingFamily.firebaseContentHidden = false
                     return .alreadyMember(existingFamily)
                 }
                 family.id = remoteFamilyID
             }
+
+            family.firebaseFamilyID = inviteInfo.familyId
+            family.firebaseContentHidden = false
 
             modelContext.insert(family)
             try modelContext.save()
@@ -147,7 +155,8 @@ final class FamilySharingService {
         let descriptor = FetchDescriptor<Family>(
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )
-        return try? modelContext.fetch(descriptor).first
+        guard let families = try? modelContext.fetch(descriptor) else { return nil }
+        return CurrentFamilyResolver.currentFamily(from: families)
     }
 
     /// 家族から離脱
@@ -265,11 +274,73 @@ final class FamilySharingService {
         do {
             _ = try await syncFamilyMembersFromFirebase(for: family)
             _ = try await syncFamilyDataFromFirebase(for: family)
+            family.firebaseContentHidden = false
+            if family.firebaseFamilyID == nil {
+                family.firebaseFamilyID = family.id.uuidString
+            }
+            try modelContext.save()
         } catch {
             if FirebaseSyncRetryCoordinator.isRetryable(error) {
                 FirebaseSyncRetryCoordinator.shared.enqueueFamilySync(familyID: family.id)
             }
             throw error
+        }
+    }
+
+    func applyFirebaseAvailability(isEnabled: Bool) async throws {
+        if isEnabled {
+            APIConfig.configureFirebaseIfNeeded()
+            guard APIConfig.isFirebaseEnabled else { return }
+            try await restoreFirebaseBackedFamilies()
+        } else {
+            try hideFirebaseBackedFamilies()
+        }
+    }
+
+    private func hideFirebaseBackedFamilies() throws {
+        let families = try modelContext.fetch(FetchDescriptor<Family>())
+            .filter(\.isFirebaseBacked)
+
+        var didChange = false
+        for family in families {
+            for member in family.resolvedMembers {
+                modelContext.delete(member)
+            }
+            for item in family.resolvedItems {
+                modelContext.delete(item)
+            }
+            for bag in family.resolvedBags {
+                modelContext.delete(bag)
+            }
+            if !family.firebaseContentHidden {
+                family.firebaseContentHidden = true
+            }
+            didChange = true
+        }
+
+        guard didChange else { return }
+        try modelContext.save()
+        NotificationManager.shared.requestReschedule(using: modelContext)
+    }
+
+    private func restoreFirebaseBackedFamilies() async throws {
+        let families = try modelContext.fetch(FetchDescriptor<Family>())
+            .filter(\.isFirebaseBacked)
+
+        var restoredAnyFamily = false
+        for family in families {
+            do {
+                try await syncFamilyStateFromFirebase(for: family)
+                family.firebaseContentHidden = false
+                restoredAnyFamily = true
+            } catch {
+                family.firebaseContentHidden = true
+            }
+        }
+
+        try modelContext.save()
+        if restoredAnyFamily {
+            NotificationManager.shared.requestReschedule(using: modelContext)
         }
     }
 
@@ -1838,6 +1909,8 @@ final class LocalDataRepairService {
             .compactMap { normalizedNonEmptyString($0.inviteCode) }
             .first ?? keeper.inviteCode
         keeper.lineGroupId = families.compactMap(\.lineGroupId).first ?? keeper.lineGroupId
+        keeper.firebaseFamilyID = families.compactMap(\.firebaseFamilyID).first ?? keeper.firebaseFamilyID
+        keeper.firebaseContentHidden = families.allSatisfy(\.firebaseContentHidden)
         keeper.cloudKitZoneName = families.compactMap(\.cloudKitZoneName).first ?? keeper.cloudKitZoneName
         keeper.cloudKitZoneOwnerName = families.compactMap(\.cloudKitZoneOwnerName).first ?? keeper.cloudKitZoneOwnerName
         keeper.cloudKitDatabaseScope = families.compactMap(\.cloudKitDatabaseScope).first ?? keeper.cloudKitDatabaseScope
@@ -1862,6 +1935,7 @@ final class LocalDataRepairService {
     private func shouldDeleteOrphanFamily(_ family: Family, hasBetterFamily: Bool) -> Bool {
         guard hasBetterFamily else { return false }
         guard family.shareState == .localOnly else { return false }
+        guard !family.isFirebaseBacked else { return false }
         guard normalizedNonEmptyString(family.lineGroupId) == nil else { return false }
         guard family.cloudKitZoneName == nil,
               family.cloudKitZoneOwnerName == nil,

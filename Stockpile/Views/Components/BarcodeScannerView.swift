@@ -178,7 +178,7 @@ struct BarcodeScannerView: View {
                             .foregroundStyle(.secondary)
                     }
                     
-                    Text(product.source.rawValue + "で検索")
+                    Text(product.source.localizedDisplayName + "で検索")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -478,7 +478,6 @@ struct ManualJANEntryView: View {
 }
 
 #Preview {
-    BarcodeScannerView { product in
-        print("Selected: \(product.name)")
+    BarcodeScannerView { _ in
     }
 }

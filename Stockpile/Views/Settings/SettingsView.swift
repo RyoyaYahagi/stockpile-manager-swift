@@ -11,6 +11,7 @@ struct SettingsView: View {
     private var isFirebaseDeveloperModeEnabled = false
     @AppStorage("app.tutorial.replayRequestToken")
     private var tutorialReplayRequestToken = 0
+    @State private var firebaseToggleErrorMessage: String?
     
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
@@ -25,7 +26,7 @@ struct SettingsView: View {
                         HStack {
                             Label("家族共有設定", systemImage: "person.3")
                             Spacer()
-                            Text(family.name)
+                            Text(family.displayNameForCurrentState)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -34,7 +35,7 @@ struct SettingsView: View {
                     HStack {
                         Label("メンバー", systemImage: "person.2")
                         Spacer()
-                        Text("\(family.uniqueMembers.count)人")
+                        Text(family.shouldShowMemberList ? "\(family.uniqueMembers.count)人" : "同期中")
                             .foregroundStyle(.secondary)
                     }
                 } else {
@@ -120,6 +121,30 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("設定")
+        .onChange(of: isFirebaseDeveloperModeEnabled) { _, isEnabled in
+            Task {
+                do {
+                    let sharingService = FamilySharingService(modelContext: modelContext)
+                    try await sharingService.applyFirebaseAvailability(isEnabled: isEnabled)
+                } catch {
+                    firebaseToggleErrorMessage = error.localizedDescription
+                }
+            }
+        }
+        .alert("Firebase連携の更新に失敗しました", isPresented: Binding(
+            get: { firebaseToggleErrorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    firebaseToggleErrorMessage = nil
+                }
+            }
+        )) {
+            Button("OK", role: .cancel) {
+                firebaseToggleErrorMessage = nil
+            }
+        } message: {
+            Text(firebaseToggleErrorMessage ?? "")
+        }
     }
 }
 

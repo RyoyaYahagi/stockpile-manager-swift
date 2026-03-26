@@ -9,6 +9,8 @@ final class Family {
     var name: String = ""
     var inviteCode: String = ""
     var lineGroupId: String?
+    var firebaseFamilyID: String?
+    var firebaseContentHidden: Bool = false
     var cloudKitZoneName: String?
     var cloudKitZoneOwnerName: String?
     var cloudKitDatabaseScopeRawValue: String?
@@ -82,6 +84,19 @@ enum FamilyShareState {
 }
 
 extension Family {
+    var isFirebaseBacked: Bool {
+        guard let firebaseFamilyID else { return false }
+        return !firebaseFamilyID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var isVisibleInApp: Bool {
+        guard !firebaseContentHidden else { return false }
+        if APIConfig.isFirebaseDeveloperModeEnabled {
+            return true
+        }
+        return !isFirebaseBacked || isCloudKitSharedFamily
+    }
+
     var cloudKitDatabaseScope: FamilyCloudKitDatabaseScope? {
         get {
             guard let rawValue = cloudKitDatabaseScopeRawValue else { return nil }
@@ -134,6 +149,30 @@ extension Family {
         guard let cloudKitZoneName, let cloudKitZoneOwnerName else { return nil }
         return "\(cloudKitZoneOwnerName)::\(cloudKitZoneName)"
     }
+
+    var shouldHideLegacyDisplayDetails: Bool {
+        !APIConfig.isFirebaseDeveloperModeEnabled
+            && cloudKitDatabaseScope == .sharedDatabase
+            && shareState != .shared
+    }
+
+    var shouldShowMemberList: Bool {
+        if shouldHideLegacyDisplayDetails {
+            return false
+        }
+        if cloudKitDatabaseScope == .sharedDatabase && !APIConfig.isFirebaseDeveloperModeEnabled {
+            return false
+        }
+        return true
+    }
+
+    var prefersStrictCloudKitScoping: Bool {
+        shareState != .localOnly
+    }
+
+    var displayNameForCurrentState: String {
+        shouldHideLegacyDisplayDetails ? "データ同期中" : name
+    }
 }
 
 extension User {
@@ -152,7 +191,9 @@ extension User {
 
 enum CurrentFamilyResolver {
     static func currentFamily(from families: [Family]) -> Family? {
-        families.max { lhs, rhs in
+        families
+            .filter(\.isVisibleInApp)
+            .max { lhs, rhs in
             compare(lhs, rhs)
         }
     }

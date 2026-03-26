@@ -33,14 +33,24 @@ struct FamilySettingsView: View {
     }
 
     private var memberSectionFooter: String {
-        family.shareState == .localOnly
+        if family.shouldHideLegacyDisplayDetails {
+            return "CloudKit共有のデータを同期中です。Firebase由来の過去メンバーは表示していません。"
+        }
+        if family.cloudKitDatabaseScope == .sharedDatabase && !APIConfig.isFirebaseDeveloperModeEnabled {
+            return "Firebase連携が無効なため、iCloud共有のメンバー一覧は表示していません。"
+        }
+        return family.shareState == .localOnly
             ? "メンバー情報はこの端末のローカルデータです"
             : "共有状態に応じて重複を除いたメンバーを表示しています"
     }
 
+    private var displayedMembers: [User] {
+        family.shouldShowMemberList ? family.uniqueMembers : []
+    }
+
     private var scopedItemsCount: Int {
         let familyItems = items.filter { $0.family?.id == family.id }
-        if !familyItems.isEmpty {
+        if !familyItems.isEmpty || family.prefersStrictCloudKitScoping {
             return familyItems.count
         }
         return items.filter { $0.family == nil }.count
@@ -48,7 +58,7 @@ struct FamilySettingsView: View {
 
     private var scopedBagsCount: Int {
         let familyBags = bags.filter { $0.family?.id == family.id }
-        if !familyBags.isEmpty {
+        if !familyBags.isEmpty || family.prefersStrictCloudKitScoping {
             return familyBags.count
         }
         return bags.filter { $0.family == nil }.count
@@ -70,7 +80,7 @@ struct FamilySettingsView: View {
                     HStack {
                         Label("家族名", systemImage: "person.3")
                         Spacer()
-                        Text(family.name)
+                        Text(family.displayNameForCurrentState)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -141,12 +151,12 @@ struct FamilySettingsView: View {
                 Text("iCloud同期")
             } footer: {
                 if family.shareState == .preparing {
-                    Text("共有受理後の同期を再試行できます。共有準備中の間は、家族名やメンバーが先に見えることがあります。")
+                    Text("共有受理後の同期を再試行できます。CloudKitの共有データを同期中のため、Firebase由来の過去データは表示していません。")
                 }
             }
 
             Section {
-                ForEach(family.uniqueMembers) { member in
+                ForEach(displayedMembers) { member in
                     HStack {
                         Image(systemName: "person.circle.fill")
                             .font(.title2)
@@ -164,7 +174,7 @@ struct FamilySettingsView: View {
                     }
                 }
 
-                if family.uniqueMembers.isEmpty {
+                if displayedMembers.isEmpty {
                     HStack {
                         Image(systemName: "person.badge.plus")
                             .foregroundStyle(.secondary)
@@ -173,7 +183,7 @@ struct FamilySettingsView: View {
                     }
                 }
             } header: {
-                Text("メンバー (\(family.uniqueMembers.count)人)")
+                Text("メンバー (\(displayedMembers.count)人)")
             } footer: {
                 Text(memberSectionFooter)
             }

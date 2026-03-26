@@ -35,15 +35,14 @@
 		026 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126 /* BarcodeScannerView.swift */; };
 		027 /* ProductSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 127 /* ProductSearchService.swift */; };
 		028 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128 /* APIConfig.swift */; };
-		029 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 129 /* Secrets.plist */; };
 		031 /* FamilySharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131 /* FamilySharingService.swift */; };
 		032 /* FamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132 /* FamilySettingsView.swift */; };
 		034 /* CloudKitShareSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 134 /* CloudKitShareSceneDelegate.swift */; };
 		033F1A6A2C0A000100000001 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000011 /* FirebaseCore */; };
 		033F1A6A2C0A000100000002 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000012 /* FirebaseAuth */; };
 		033F1A6A2C0A000100000003 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000013 /* FirebaseFirestore */; };
-		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
 		A30EF01C2F4A7B7800979C1A /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A30EF01B2F4A7B7800979C1A /* GoogleService-Info.plist */; };
+		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -81,9 +80,10 @@
 		132 /* FamilySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySettingsView.swift; sourceTree = "<group>"; };
 		133 /* Stockpile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Stockpile.entitlements; sourceTree = "<group>"; };
 		134 /* CloudKitShareSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitShareSceneDelegate.swift; sourceTree = "<group>"; };
-		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A30EF01B2F4A7B7800979C1A /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockpileRelease.entitlements; sourceTree = "<group>"; };
+		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -123,6 +123,7 @@
 				119 /* Assets.xcassets */,
 				129 /* Secrets.plist */,
 				133 /* Stockpile.entitlements */,
+				A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */,
 			);
 			path = Stockpile;
 			sourceTree = "<group>";
@@ -324,7 +325,6 @@
 			files = (
 				019 /* Assets.xcassets in Resources */,
 				A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */,
-				029 /* Secrets.plist in Resources */,
 				A30EF01C2F4A7B7800979C1A /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -539,8 +539,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
-				CODE_SIGN_ENTITLEMENTS = Stockpile/Stockpile.entitlements;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = NO;
+				CODE_SIGN_ENTITLEMENTS = Stockpile/StockpileRelease.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
