@@ -134,7 +134,7 @@ struct APIConfig {
         isRakutenConfigured || isYahooConfigured
     }
 
-    static func rakutenPurchaseURL(for janCode: String) -> URL? {
+    static func rakutenPurchaseURL(for janCode: String, itemName: String? = nil) -> URL? {
         guard let baseURL = backendBaseURL else { return nil }
 
         let trimmedJANCode = janCode.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -148,7 +148,13 @@ struct APIConfig {
         components.path = "/" + [currentPath, "v1", "rakuten", "redirect"]
             .filter { !$0.isEmpty }
             .joined(separator: "/")
-        components.queryItems = [URLQueryItem(name: "jan", value: trimmedJANCode)]
+
+        var queryItems = [URLQueryItem(name: "jan", value: trimmedJANCode)]
+        let trimmedItemName = itemName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedItemName, !trimmedItemName.isEmpty {
+            queryItems.append(URLQueryItem(name: "name", value: trimmedItemName))
+        }
+        components.queryItems = queryItems
         return components.url
     }
 }

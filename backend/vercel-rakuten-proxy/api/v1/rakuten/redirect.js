@@ -21,6 +21,15 @@ function validateJAN(input) {
   return null;
 }
 
+function normalizeKeyword(input) {
+  const rawValue = Array.isArray(input) ? input[0] : input;
+  if (typeof rawValue !== "string") {
+    return "";
+  }
+
+  return rawValue.replace(/\s+/g, " ").trim().slice(0, 80);
+}
+
 function buildProductSearchURL(janCode, applicationId, accessKey, affiliateId) {
   const url = new URL(PRODUCT_SEARCH_URL);
   url.searchParams.set("format", "json");
@@ -49,6 +58,21 @@ function buildItemSearchURL(janCode, applicationId, accessKey, affiliateId) {
     url.searchParams.set("affiliateId", affiliateId);
   }
   url.searchParams.set("keyword", janCode);
+  url.searchParams.set("hits", "1");
+  url.searchParams.set("elements", "itemName,affiliateUrl,itemUrl");
+  return url;
+}
+
+function buildKeywordSearchURL(keyword, applicationId, accessKey, affiliateId) {
+  const url = new URL(ITEM_SEARCH_URL);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("formatVersion", "2");
+  url.searchParams.set("applicationId", applicationId);
+  url.searchParams.set("accessKey", accessKey);
+  if (affiliateId) {
+    url.searchParams.set("affiliateId", affiliateId);
+  }
+  url.searchParams.set("keyword", keyword);
   url.searchParams.set("hits", "1");
   url.searchParams.set("elements", "itemName,affiliateUrl,itemUrl");
   return url;
@@ -125,6 +149,12 @@ function sendJSON(response, statusCode, body) {
   response.send(JSON.stringify(body));
 }
 
+function buildRakutenSearchResultsURL(keyword) {
+  const normalizedKeyword = normalizeKeyword(keyword);
+  const searchKeyword = normalizedKeyword || "備蓄";
+  return `https://search.rakuten.co.jp/search/mall/${encodeURIComponent(searchKeyword)}/`;
+}
+
 export default async function handler(request, response) {
   if (request.method !== "GET") {
     response.setHeader("Allow", "GET");
@@ -150,6 +180,8 @@ export default async function handler(request, response) {
     });
   }
 
+  const itemName = normalizeKeyword(request.query?.name);
+
   try {
     const productResult = await fetchJSON(
       buildProductSearchURL(janCode, applicationId, accessKey, affiliateId)
@@ -169,13 +201,24 @@ export default async function handler(request, response) {
       return response.redirect(307, itemTarget);
     }
 
-    return sendJSON(response, 404, {
-      error: "not_found"
-    });
+    if (itemName) {
+      const keywordResult = await fetchJSON(
+        buildKeywordSearchURL(itemName, applicationId, accessKey, affiliateId)
+      );
+      const keywordTarget = readItemAffiliateURL(keywordResult.json);
+      if (keywordResult.response.ok && keywordTarget) {
+        response.setHeader("Cache-Control", "no-store");
+        return response.redirect(307, keywordTarget);
+      }
+    }
+
+    response.setHeader("Cache-Control", "no-store");
+    return response.redirect(307, buildRakutenSearchResultsURL(itemName || janCode));
   } catch (error) {
     console.error("Rakuten redirect failed", {
       message: error instanceof Error ? error.message : String(error),
-      janCode
+      janCode,
+      itemName
     });
 
     return sendJSON(response, 502, {

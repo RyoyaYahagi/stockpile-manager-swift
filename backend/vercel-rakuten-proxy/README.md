@@ -4,14 +4,16 @@ Stockpile iOS の「楽天市場で購入」ボタン用 Vercel バックエン�
 
 ## 役割
 
-- iOS アプリから受け取った `jan` を元に楽天 API を検索する
+- iOS アプリから受け取った `jan` と任意の `name` を元に楽天 API を検索する
 - 楽天キーと `affiliateId` はサーバー側の環境変数で管理する
 - 見つかった商品ページへ `307` リダイレクトする
+- 該当商品が見つからない場合は楽天市場の検索結果ページへフォールバックする
 
 ## エンドポイント
 
 - `GET /health`
 - `GET /v1/rakuten/redirect?jan=4901777300445`
+- `GET /v1/rakuten/redirect?jan=4901777300445&name=%E6%B0%B4`
 
 `/v1/*` は `vercel.json` で `/api/v1/*` に rewrite しています。
 

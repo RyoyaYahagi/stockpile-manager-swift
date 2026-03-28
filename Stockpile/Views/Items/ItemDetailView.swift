@@ -15,7 +15,7 @@ struct ItemDetailView: View {
     
     var body: some View {
         let expiryStatus = item.expiryStatus
-        let purchaseURL = item.janCode.flatMap(APIConfig.rakutenPurchaseURL(for:))
+        let purchaseURL = item.janCode.flatMap { APIConfig.rakutenPurchaseURL(for: $0, itemName: item.name) }
         
         List {
             // 期限セクション
