@@ -7,6 +7,8 @@ struct SettingsView: View {
     @Environment(Router.self) private var router
     
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
+    @AppStorage(AppLanguage.storageKey)
+    private var appLanguageRawValue = AppLanguage.system.rawValue
     @AppStorage("app.tutorial.replayRequestToken")
     private var tutorialReplayRequestToken = 0
     @State private var cloudKitMemberCount: Int?
@@ -24,14 +26,18 @@ struct SettingsView: View {
     }
 
     private var displayedMemberCountText: String {
-        guard let family = currentFamily else { return "同期中" }
+        guard let family = currentFamily else { return L10n.string("同期中") }
         guard family.shareState != .localOnly else {
-            return "\(family.uniqueMembers.count)人"
+            return L10n.format("%@人", String(family.uniqueMembers.count))
         }
         guard let cloudKitMemberCount else {
-            return isLoadingCloudKitMemberCount ? "同期中" : "同期中"
+            return L10n.string("同期中")
         }
-        return "\(cloudKitMemberCount)人"
+        return L10n.format("%@人", String(cloudKitMemberCount))
+    }
+
+    private var selectedAppLanguage: AppLanguage {
+        AppLanguage(rawValue: appLanguageRawValue) ?? .system
     }
     
     var body: some View {
@@ -86,6 +92,21 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("通知")
+            }
+
+            Section {
+                NavigationLink {
+                    LanguageSettingsView()
+                } label: {
+                    HStack {
+                        Label("言語", systemImage: "globe")
+                        Spacer()
+                        Text(selectedAppLanguage.displayName)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("表示")
             }
 
             // ガイドセクション

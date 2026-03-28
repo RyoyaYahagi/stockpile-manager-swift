@@ -69,11 +69,11 @@ enum FamilyShareState {
     var label: String {
         switch self {
         case .localOnly:
-            return "未共有"
+            return L10n.string("未共有")
         case .preparing:
-            return "共有準備中"
+            return L10n.string("共有準備中")
         case .shared:
-            return "iCloud共有"
+            return L10n.string("iCloud共有")
         }
     }
 }

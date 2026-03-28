@@ -21,11 +21,11 @@ enum ExpiryStatus: Comparable {
     
     var label: String {
         switch self {
-        case .expired: return "期限切れ"
-        case .imminent: return "期限間近"
-        case .approaching: return "まもなく期限"
-        case .safe: return "安全"
-        case .noExpiry: return "期限なし"
+        case .expired: return L10n.string("期限切れ")
+        case .imminent: return L10n.string("期限間近")
+        case .approaching: return L10n.string("まもなく期限")
+        case .safe: return L10n.string("安全")
+        case .noExpiry: return L10n.string("期限なし")
         }
     }
 }
@@ -92,15 +92,15 @@ final class Item {
     /// 期限の表示用文字列
     var expiryDisplayText: String {
         guard let days = daysUntilExpiry else {
-            return "期限なし"
+            return L10n.string("期限なし")
         }
         
         if days < 0 {
-            return "\(abs(days))日超過"
+            return L10n.format("%@日超過", String(abs(days)))
         } else if days == 0 {
-            return "本日期限"
+            return L10n.string("本日期限")
         } else {
-            return "あと\(days)日"
+            return L10n.format("あと%@日", String(days))
         }
     }
     

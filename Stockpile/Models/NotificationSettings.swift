@@ -11,11 +11,11 @@ enum NotificationTimingUnit: String, CaseIterable, Identifiable {
     var shortLabel: String {
         switch self {
         case .day:
-            return "日"
+            return L10n.string("日")
         case .week:
-            return "週"
+            return L10n.string("週")
         case .month:
-            return "月"
+            return L10n.string("月")
         }
     }
 
@@ -60,13 +60,13 @@ struct NotificationTimingRule: Hashable, Identifiable {
         switch normalized.unit {
         case .day:
             if normalized.amount == 0 {
-                return "当日"
+                return L10n.string("当日")
             }
-            return "\(normalized.amount)日前"
+            return L10n.format("%@日前", String(normalized.amount))
         case .week:
-            return "\(normalized.amount)週間前"
+            return L10n.format("%@週間前", String(normalized.amount))
         case .month:
-            return "\(normalized.amount)ヶ月前"
+            return L10n.format("%@ヶ月前", String(normalized.amount))
         }
     }
 

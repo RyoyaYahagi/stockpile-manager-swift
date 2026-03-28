@@ -17,16 +17,15 @@ struct ProductInfo: Sendable {
         case manual = "手動入力"
 
         var localizedDisplayName: String {
-            let isJapanese = Locale.preferredLanguages.first?.lowercased().hasPrefix("ja") ?? true
             switch self {
             case .openFoodFacts:
                 return "Open Food Facts"
             case .rakuten:
-                return isJapanese ? "楽天" : "Rakuten"
+                return L10n.string("楽天")
             case .yahoo:
-                return isJapanese ? "Yahoo" : "Yahoo Shopping"
+                return L10n.string("Yahoo")
             case .manual:
-                return isJapanese ? "手動入力" : "Manual Entry"
+                return L10n.string("手動入力")
             }
         }
     }
@@ -45,15 +44,15 @@ enum ProductSearchError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noAPIConfigured:
-            return "APIキーが設定されていません"
+            return L10n.string("APIキーが設定されていません")
         case .invalidJANCode:
-            return "無効なJANコードです"
+            return L10n.string("無効なJANコードです")
         case .networkError(let error):
-            return "通信エラー: \(error.localizedDescription)"
+            return L10n.format("通信エラー: %@", error.localizedDescription)
         case .parseError:
-            return "データの解析に失敗しました"
+            return L10n.string("データの解析に失敗しました")
         case .notFound:
-            return "商品が見つかりませんでした"
+            return L10n.string("商品が見つかりませんでした")
         }
     }
 }
@@ -85,7 +84,7 @@ actor ProductSearchService {
             switch self {
             case .httpStatus(_, _, let detail):
                 return .networkError(NSError(domain: "ProductSearch", code: 1, userInfo: [
-                    NSLocalizedDescriptionKey: detail ?? "APIリクエストに失敗しました"
+                    NSLocalizedDescriptionKey: detail ?? L10n.string("APIリクエストに失敗しました")
                 ]))
             case .invalidResponse(_, let detail), .parse(_, let detail):
                 return .networkError(NSError(domain: "ProductSearch", code: 2, userInfo: [
@@ -172,29 +171,12 @@ actor ProductSearchService {
     }
 
     private func preferredLanguageCandidates() -> [String] {
-        var candidates: [String] = []
-
-        for identifier in Locale.preferredLanguages {
-            let normalized = identifier.replacingOccurrences(of: "-", with: "_").lowercased()
-            candidates.append(normalized)
-            if let primary = normalized.split(separator: "_").first {
-                candidates.append(String(primary))
-            }
-        }
-
-        let current = Locale.current.identifier.replacingOccurrences(of: "-", with: "_").lowercased()
-        candidates.append(current)
-        if let primary = current.split(separator: "_").first {
-            candidates.append(String(primary))
-        }
-
-        var seen = Set<String>()
-        return candidates.filter { seen.insert($0).inserted }
+        AppLanguage.currentLanguageCandidates
+            .map { $0.replacingOccurrences(of: "-", with: "_").lowercased() }
     }
 
     private func appLanguageCode() -> String {
-        let preferred = preferredLanguageCandidates().first ?? "ja"
-        return preferred.split(separator: "_").first.map(String.init) ?? "ja"
+        AppLanguage.currentPrimaryLanguageCode
     }
 
     private func localizedValue(
@@ -375,7 +357,7 @@ actor ProductSearchService {
             from: product,
             preferredLanguages: preferredLanguages
         )
-        let productName = localizedProductName ?? localizedGenericName ?? "不明な商品"
+        let productName = localizedProductName ?? localizedGenericName ?? L10n.string("不明な商品")
 
         let brands = localizedValue(baseKey: "brands", from: product, preferredLanguages: preferredLanguages)
         let categories = localizedValue(baseKey: "categories", from: product, preferredLanguages: preferredLanguages)

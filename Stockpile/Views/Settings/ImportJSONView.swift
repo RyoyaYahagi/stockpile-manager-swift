@@ -88,11 +88,11 @@ struct ImportJSONView: View {
         """
         [
           {
-            "name": "缶詰",
+            "name": "Canned Food",
             "quantity": 3,
             "expiryDate": "2025-12-31",
-            "bagName": "非常袋",
-            "locationNote": "棚の上"
+            "bagName": "Emergency Bag",
+            "locationNote": "Top shelf"
           }
         ]
         """
@@ -105,7 +105,7 @@ struct ImportJSONView: View {
             HStack {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                Text("\(count)件のアイテムを復元しました")
+                Text(L10n.format("%@件のアイテムを復元しました", String(count)))
             }
             .padding()
             .background(Color.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
@@ -126,7 +126,7 @@ struct ImportJSONView: View {
         case .success(let url):
             do {
                 guard url.startAccessingSecurityScopedResource() else {
-                    importResult = .error("ファイルにアクセスできません")
+                    importResult = .error(L10n.string("ファイルにアクセスできません"))
                     return
                 }
                 defer { url.stopAccessingSecurityScopedResource() }
@@ -142,11 +142,11 @@ struct ImportJSONView: View {
                 importResult = .success(count: items.count)
                 
             } catch {
-                importResult = .error("復元に失敗しました: \(error.localizedDescription)")
+                importResult = .error(L10n.format("復元に失敗しました: %@", error.localizedDescription))
             }
             
         case .failure(let error):
-            importResult = .error("バックアップファイルの選択に失敗しました: \(error.localizedDescription)")
+            importResult = .error(L10n.format("バックアップファイルの選択に失敗しました: %@", error.localizedDescription))
         }
     }
     
@@ -454,11 +454,11 @@ struct ExportJSONView: View {
         """
         [
           {
-            "name": "缶詰",
+            "name": "Canned Food",
             "quantity": 3,
             "expiryDate": "2025-12-31",
-            "bagName": "非常袋",
-            "locationNote": "棚の上"
+            "bagName": "Emergency Bag",
+            "locationNote": "Top shelf"
           }
         ]
         """
@@ -495,19 +495,19 @@ struct ExportJSONView: View {
             exportResult = nil
             isExporting = true
         } catch {
-            exportResult = .error("バックアップの準備に失敗しました: \(error.localizedDescription)")
+            exportResult = .error(L10n.format("バックアップの準備に失敗しました: %@", error.localizedDescription))
         }
     }
 
     private func handleExportResult(_ result: Result<URL, Error>) {
         switch result {
         case .success:
-            exportResult = .success("\(scopedItems.count)件のアイテムをバックアップしました")
+            exportResult = .success(L10n.format("%@件のアイテムをバックアップしました", String(scopedItems.count)))
         case .failure(let error):
             if (error as? CocoaError)?.code == .userCancelled {
                 return
             }
-            exportResult = .error("バックアップに失敗しました: \(error.localizedDescription)")
+            exportResult = .error(L10n.format("バックアップに失敗しました: %@", error.localizedDescription))
         }
     }
 

@@ -38,7 +38,7 @@ struct FamilySettingsView: View {
     }
 
     private var shareButtonTitle: String {
-        family.cloudKitShareURL == nil ? "共有リンクを作成" : "共有リンクを送信"
+        family.cloudKitShareURL == nil ? L10n.string("共有リンクを作成") : L10n.string("共有リンクを送信")
     }
 
     private var canManageShare: Bool {
@@ -48,10 +48,10 @@ struct FamilySettingsView: View {
     private var memberSectionFooter: String {
         if usesCloudKitParticipantList {
             return isLoadingParticipants
-                ? "iCloud共有の参加者を読み込んでいます"
-                : "iCloud共有の参加者を表示しています"
+                ? L10n.string("iCloud共有の参加者を読み込んでいます")
+                : L10n.string("iCloud共有の参加者を表示しています")
         }
-        return "メンバー情報はこの端末のローカルデータです"
+        return L10n.string("メンバー情報はこの端末のローカルデータです")
     }
 
     private var displayedLocalMembers: [User] {
@@ -271,7 +271,7 @@ struct FamilySettingsView: View {
         .navigationTitle("家族設定")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(isEditing ? "完了" : "編集") {
+                Button(isEditing ? LocalizedStringKey("完了") : LocalizedStringKey("編集")) {
                     if isEditing {
                         saveChanges()
                     } else {
@@ -296,7 +296,7 @@ struct FamilySettingsView: View {
         .alert("エラー", isPresented: $showShareError) {
             Button("OK") {}
         } message: {
-            Text(shareError ?? "不明なエラーが発生しました")
+            Text(shareError ?? L10n.string("不明なエラーが発生しました"))
         }
         .sheet(isPresented: $showFamilyNamePrompt) {
             NavigationStack {
@@ -361,7 +361,7 @@ struct FamilySettingsView: View {
         do {
             try modelContext.save()
         } catch {
-            shareError = "家族名の保存に失敗しました: \(error.localizedDescription)"
+            shareError = L10n.format("家族名の保存に失敗しました: %@", error.localizedDescription)
             showShareError = true
             return
         }
@@ -398,7 +398,7 @@ struct FamilySettingsView: View {
             showFamilyNamePrompt = false
             prepareShareLinkAndPresentActivity()
         } catch {
-            shareError = "家族名の保存に失敗しました: \(error.localizedDescription)"
+            shareError = L10n.format("家族名の保存に失敗しました: %@", error.localizedDescription)
             showShareError = true
         }
     }
@@ -412,7 +412,7 @@ struct FamilySettingsView: View {
                 activeShare = try await sharingService.prepareShare(for: family)
                 isStartingShare = false
                 guard let shareURL = activeShare?.url ?? family.cloudKitShareURL else {
-                    shareError = "共有リンクの取得に失敗しました"
+                    shareError = L10n.string("共有リンクの取得に失敗しました")
                     showShareError = true
                     return
                 }
@@ -420,7 +420,7 @@ struct FamilySettingsView: View {
                 await refreshParticipantDisplays()
             } catch {
                 isStartingShare = false
-                shareError = "共有リンクの準備に失敗しました: \(error.localizedDescription)"
+                shareError = L10n.format("共有リンクの準備に失敗しました: %@", error.localizedDescription)
                 showShareError = true
             }
         }
@@ -438,7 +438,7 @@ struct FamilySettingsView: View {
                 await refreshParticipantDisplays()
             } catch {
                 isOpeningShareManagement = false
-                shareError = "共有設定の読み込みに失敗しました: \(error.localizedDescription)"
+                shareError = L10n.format("共有設定の読み込みに失敗しました: %@", error.localizedDescription)
                 showShareError = true
             }
         }
@@ -447,8 +447,8 @@ struct FamilySettingsView: View {
     private func presentShareActivity(for shareURL: URL) {
         let trimmedName = family.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let message = trimmedName.isEmpty
-            ? "Stockpile の家族共有リンクです。"
-            : "「\(trimmedName)」の Stockpile 家族共有リンクです。"
+            ? L10n.string("Stockpile の家族共有リンクです。")
+            : L10n.format("「%@」の Stockpile 家族共有リンクです。", trimmedName)
         sharePayload = ShareActivityPayload(message: message, url: shareURL)
     }
 
@@ -475,7 +475,7 @@ struct FamilySettingsView: View {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 try await sharingService.syncFamilyStateFromCloudKit(for: family)
             } catch {
-                shareError = "iCloud同期に失敗しました: \(error.localizedDescription)"
+                shareError = L10n.format("iCloud同期に失敗しました: %@", error.localizedDescription)
                 showShareError = true
             }
         }
@@ -503,7 +503,7 @@ struct FamilySettingsView: View {
                 print("[CloudKit] iCloud保存後: familyID=\(family.id.uuidString) remote(family=\(remoteCounts.familyCount), bags=\(remoteCounts.bagCount), items=\(remoteCounts.itemCount))")
                 try await sharingService.syncFamilyStateFromCloudKit(for: family)
             } catch {
-                shareError = "iCloud保存に失敗しました: \(error.localizedDescription)"
+                shareError = L10n.format("iCloud保存に失敗しました: %@", error.localizedDescription)
                 showShareError = true
             }
         }

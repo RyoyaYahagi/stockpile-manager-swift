@@ -9,8 +9,8 @@ struct ItemFormSheet: View {
         
         var title: String {
             switch self {
-            case .add: return "備蓄品を追加"
-            case .edit: return "備蓄品を編集"
+            case .add: return L10n.string("備蓄品を追加")
+            case .edit: return L10n.string("備蓄品を編集")
             }
         }
     }

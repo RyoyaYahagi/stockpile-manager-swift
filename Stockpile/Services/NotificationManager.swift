@@ -280,11 +280,11 @@ final class NotificationManager: ObservableObject {
         if totalCount == 1 {
             let ni = notificationItems[0]
             return (
-                title: "備蓄品の期限通知",
+                title: L10n.string("備蓄品の期限通知"),
                 body: singleNotificationMessage(for: ni.item.name, rule: ni.rule)
             )
         } else {
-            let title = "備蓄品の期限通知（\(totalCount)件）"
+            let title = L10n.format("備蓄品の期限通知（%@件）", String(totalCount))
             
             // 種類順にソートして表示
             let sortedRules = sortNotificationRules(Array(byRule.keys))
@@ -293,8 +293,8 @@ final class NotificationManager: ObservableObject {
             for rule in sortedRules {
                 guard let items = byRule[rule] else { continue }
                 let names = items.prefix(2).map { $0.name }.joined(separator: "、")
-                let suffix = items.count > 2 ? "他" : ""
-                parts.append("\(notificationDisplayText(for: rule)): \(names)\(suffix)")
+                let suffix = items.count > 2 ? L10n.string("他") : ""
+                parts.append(L10n.format("%@: %@%@", notificationDisplayText(for: rule), names, suffix))
             }
             
             let body = parts.joined(separator: " / ")
@@ -385,7 +385,7 @@ final class NotificationManager: ObservableObject {
         message: String
     ) async {
         let content = UNMutableNotificationContent()
-        content.title = "備蓄品の期限通知"
+        content.title = L10n.string("備蓄品の期限通知")
         content.body = message
         content.sound = .default
         if #available(iOS 15.0, *) {
@@ -560,9 +560,9 @@ final class NotificationManager: ObservableObject {
     private func singleNotificationMessage(for itemName: String, rule: NotificationTimingRule) -> String {
         let normalizedRule = rule.normalizedRule
         if normalizedRule.unit == .day && normalizedRule.amount == 0 {
-            return "「\(itemName)」の期限は本日です"
+            return L10n.format("「%@」の期限は本日です", itemName)
         }
-        return "「\(itemName)」の期限が近づいています（\(normalizedRule.displayText)のお知らせ）"
+        return L10n.format("「%@」の期限が近づいています（%@のお知らせ）", itemName, normalizedRule.displayText)
     }
 
     private func sortNotificationRules(_ rules: [NotificationTimingRule]) -> [NotificationTimingRule] {

@@ -40,7 +40,7 @@ enum SearchNormalizer {
 
     private static func normalize(_ text: String) -> String {
         text
-            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "ja_JP"))
+            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: AppLanguage.currentLocale)
             .replacingOccurrences(of: "[\\p{P}\\p{S}\\p{Z}]", with: "", options: .regularExpression)
     }
 
@@ -54,7 +54,7 @@ enum SearchNormalizer {
         let cfText = text as CFString
         let length = CFStringGetLength(cfText)
         let range = CFRange(location: 0, length: length)
-        let locale = CFLocaleCopyCurrent()
+        let locale = AppLanguage.currentLocale as CFLocale
         let tokenizer = CFStringTokenizerCreate(
             kCFAllocatorDefault,
             cfText,
@@ -217,16 +217,16 @@ struct DashboardView: View {
     private var selectedBagName: String {
         guard let bagId = selectedBagId,
               let bag = scopedBags.first(where: { $0.id == bagId }) else {
-            return "すべて"
+            return L10n.string("すべて")
         }
         return bag.name
     }
 
     private var deletedItemsMessage: String {
         if deletedItemInfoList.count == 1, let first = deletedItemInfoList.first {
-            return "「\(first.name)」を削除しました"
+            return L10n.format("「%@」を削除しました", first.name)
         }
-        return "\(deletedItemInfoList.count)件の備蓄品を削除しました"
+        return L10n.format("%@件の備蓄品を削除しました", String(deletedItemInfoList.count))
     }
     
     var body: some View {
@@ -428,7 +428,7 @@ struct DashboardView: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 if !scopedItems.isEmpty {
-                    Button(isSelectionMode ? "完了" : "選択") {
+                    Button(isSelectionMode ? LocalizedStringKey("完了") : LocalizedStringKey("選択")) {
                         withAnimation {
                             isSelectionMode.toggle()
                             if !isSelectionMode {
@@ -747,7 +747,7 @@ struct DashboardView: View {
 // MARK: - Supporting Views
 
 struct SummaryCard: View {
-    let title: String
+    let title: LocalizedStringKey
     let count: Int
     let color: Color
     var isSelected: Bool = false
@@ -772,7 +772,7 @@ struct SummaryCard: View {
 }
 
 struct FilterChip: View {
-    let title: String
+    let title: LocalizedStringKey
     let isSelected: Bool
     let action: () -> Void
     

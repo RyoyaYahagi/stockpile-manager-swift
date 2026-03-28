@@ -187,12 +187,12 @@ struct NotificationSettingsView: View {
     
     private var statusText: String {
         switch notificationManager.authorizationStatus {
-        case .authorized: return "許可済み"
-        case .denied: return "拒否"
-        case .provisional: return "仮許可"
-        case .ephemeral: return "一時的"
-        case .notDetermined: return "未設定"
-        @unknown default: return "不明"
+        case .authorized: return L10n.string("許可済み")
+        case .denied: return L10n.string("拒否")
+        case .provisional: return L10n.string("仮許可")
+        case .ephemeral: return L10n.string("一時的")
+        case .notDetermined: return L10n.string("未設定")
+        @unknown default: return L10n.string("不明")
         }
     }
     
@@ -206,16 +206,16 @@ struct NotificationSettingsView: View {
     }
 
     private var soundStatusText: String {
-        guard let currentSystemSettings else { return "確認中..." }
+        guard let currentSystemSettings else { return L10n.string("確認中...") }
         switch currentSystemSettings.soundSetting {
         case .enabled:
-            return "有効"
+            return L10n.string("有効")
         case .disabled:
-            return "無効"
+            return L10n.string("無効")
         case .notSupported:
-            return "未対応"
+            return L10n.string("未対応")
         @unknown default:
-            return "不明"
+            return L10n.string("不明")
         }
     }
 
@@ -288,9 +288,9 @@ struct NotificationSettingsView: View {
     private func notificationTimingLabel(for rule: NotificationTimingRule) -> String {
         let normalizedRule = rule.normalizedRule
         if normalizedRule.unit == .day && normalizedRule.amount == 0 {
-            return "当日に通知"
+            return L10n.string("当日に通知")
         }
-        return "\(normalizedRule.displayText)に通知"
+        return L10n.format("%@に通知", normalizedRule.displayText)
     }
 
     private func timingAmountField(at index: Int, settings: NotificationSettings) -> some View {

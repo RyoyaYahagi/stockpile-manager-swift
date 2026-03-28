@@ -178,7 +178,7 @@ struct BarcodeScannerView: View {
                             .foregroundStyle(.secondary)
                     }
                     
-                    Text(product.source.localizedDisplayName + "で検索")
+                    Text(L10n.format("%@で検索", product.source.localizedDisplayName))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }

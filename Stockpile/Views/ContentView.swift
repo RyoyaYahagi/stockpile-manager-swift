@@ -398,7 +398,7 @@ struct ContentView: View {
                 #if DEBUG
                 print("[CloudKitShare] 共有受理に成功しました。")
                 #endif
-                showCloudKitShareSuccess("データが共有されました")
+                showCloudKitShareSuccess(L10n.string("データが共有されました"))
             } catch {
                 logCloudKitShareError(error, context: "共有受理")
             }
@@ -481,11 +481,11 @@ private struct FirstLaunchTutorialView: View {
     let onClose: () -> Void
     
     private struct Step {
-        let title: String
-        let message: String
-        let primaryTitle: String
+        let title: LocalizedStringKey
+        let message: LocalizedStringKey
+        let primaryTitle: LocalizedStringKey
         let action: FirstLaunchAction?
-        let secondaryTitle: String?
+        let secondaryTitle: LocalizedStringKey?
     }
 
     private var steps: [Step] {
@@ -584,7 +584,7 @@ private struct FirstLaunchTutorialView: View {
                         .controlSize(.large)
                         .frame(maxWidth: .infinity)
 
-                        Button(step.secondaryTitle ?? "次へ進む") {
+                        Button(step.secondaryTitle ?? LocalizedStringKey("次へ進む")) {
                             onAdvanceStep()
                         }
                         .buttonStyle(.bordered)

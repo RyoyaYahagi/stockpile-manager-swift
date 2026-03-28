@@ -36,6 +36,9 @@
 		031 /* FamilySharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131 /* FamilySharingService.swift */; };
 		032 /* FamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132 /* FamilySettingsView.swift */; };
 		034 /* CloudKitShareSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 134 /* CloudKitShareSceneDelegate.swift */; };
+		035 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135 /* AppLocalization.swift */; };
+		036 /* LanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136 /* LanguageSettingsView.swift */; };
+		037 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 137 /* Localizable.strings */; };
 		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -71,6 +74,16 @@
 		132 /* FamilySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySettingsView.swift; sourceTree = "<group>"; };
 		133 /* Stockpile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Stockpile.entitlements; sourceTree = "<group>"; };
 		134 /* CloudKitShareSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitShareSceneDelegate.swift; sourceTree = "<group>"; };
+		135 /* AppLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalization.swift; sourceTree = "<group>"; };
+		136 /* LanguageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageSettingsView.swift; sourceTree = "<group>"; };
+		138 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		139 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
+		140 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		141 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		142 /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ko; path = ko.lproj/Localizable.strings; sourceTree = "<group>"; };
+		143 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/Localizable.strings; sourceTree = "<group>"; };
+		144 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
+		145 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockpileRelease.entitlements; sourceTree = "<group>"; };
 		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -102,6 +115,7 @@
 				A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */,
 				303 /* App */,
 				304 /* Models */,
+				315 /* Localization */,
 				305 /* Views */,
 				306 /* Utilities */,
 				313 /* Services */,
@@ -195,6 +209,7 @@
 			isa = PBXGroup;
 			children = (
 				115 /* SettingsView.swift */,
+				136 /* LanguageSettingsView.swift */,
 				132 /* FamilySettingsView.swift */,
 				118 /* ImportJSONView.swift */,
 				125 /* NotificationSettingsView.swift */,
@@ -237,6 +252,15 @@
 				128 /* APIConfig.swift */,
 			);
 			path = Config;
+			sourceTree = "<group>";
+		};
+		315 /* Localization */ = {
+			isa = PBXGroup;
+			children = (
+				135 /* AppLocalization.swift */,
+				137 /* Localizable.strings */,
+			);
+			path = Localization;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -283,7 +307,13 @@
 			knownRegions = (
 				en,
 				Base,
+				de,
+				es,
+				fr,
 				ja,
+				ko,
+				"zh-Hans",
+				"zh-Hant",
 			);
 			mainGroup = 300;
 			packageReferences = (
@@ -304,6 +334,7 @@
 			files = (
 				019 /* Assets.xcassets in Resources */,
 				029 /* Secrets.plist in Resources */,
+				037 /* Localizable.strings in Resources */,
 				A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -342,10 +373,30 @@
 				028 /* APIConfig.swift in Sources */,
 				031 /* FamilySharingService.swift in Sources */,
 				032 /* FamilySettingsView.swift in Sources */,
+				035 /* AppLocalization.swift in Sources */,
+				036 /* LanguageSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		137 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				138 /* en */,
+				139 /* ja */,
+				140 /* zh-Hans */,
+				141 /* zh-Hant */,
+				142 /* ko */,
+				143 /* fr */,
+				144 /* de */,
+				145 /* es */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		700 /* Debug */ = {

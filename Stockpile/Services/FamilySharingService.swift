@@ -26,22 +26,22 @@ final class CloudKitFamilySharingService {
             var label: String {
                 switch self {
                 case .owner:
-                    return "オーナー"
+                    return L10n.string("オーナー")
                 case .accepted:
-                    return "参加中"
+                    return L10n.string("参加中")
                 case .pending:
-                    return "招待中"
+                    return L10n.string("招待中")
                 }
             }
 
             var fallbackName: String {
                 switch self {
                 case .owner:
-                    return "オーナー"
+                    return L10n.string("オーナー")
                 case .accepted:
-                    return "参加者"
+                    return L10n.string("参加者")
                 case .pending:
-                    return "招待中の参加者"
+                    return L10n.string("招待中の参加者")
                 }
             }
         }
@@ -106,7 +106,7 @@ final class CloudKitFamilySharingService {
         }
 
         throw normalizeSharePreparationError(
-            lastError ?? CloudKitSharingError.sharePreparationFailed(detail: "不明なエラー")
+            lastError ?? CloudKitSharingError.sharePreparationFailed(detail: L10n.string("不明なエラー"))
         )
     }
 
@@ -919,7 +919,7 @@ final class CloudKitFamilySharingService {
     ) {
         let fallbackName = normalizedNonEmptyString(metadata.rootRecord?["name"] as? String)
             ?? normalizedNonEmptyString(acceptedShare[CKShare.SystemFieldKey.title] as? String)
-            ?? "共有中の家族"
+            ?? L10n.string("共有中の家族")
 
         let resolvedFamilyID = uuidValue(from: metadata.rootRecord?["id"])
             ?? metadata.rootRecord.flatMap { rootRecord in
@@ -994,15 +994,15 @@ private enum CloudKitSharingError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidShareRecord:
-            return "CloudKit共有レコードの作成に失敗しました。"
+            return L10n.string("CloudKit共有レコードの作成に失敗しました。")
         case .invalidShareMetadata:
-            return "CloudKit共有メタデータの読み取りに失敗しました。"
+            return L10n.string("CloudKit共有メタデータの読み取りに失敗しました。")
         case .familyRecordNotFound:
-            return "共有された家族データが見つかりません。"
+            return L10n.string("共有された家族データが見つかりません。")
         case .recordNotFound:
-            return "CloudKit上のレコードが見つかりません。"
+            return L10n.string("CloudKit上のレコードが見つかりません。")
         case .sharePreparationFailed(let detail):
-            return "共有リンクの再準備に失敗しました。\(detail)"
+            return L10n.format("共有リンクの再準備に失敗しました。%@", detail)
         }
     }
 }

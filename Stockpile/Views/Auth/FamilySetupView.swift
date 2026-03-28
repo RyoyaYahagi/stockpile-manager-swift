@@ -91,7 +91,7 @@ struct FamilySetupView: View {
             router.pop()
             router.push(.familySettings(family))
         } catch {
-            errorMessage = "家族の作成に失敗しました: \(error.localizedDescription)"
+            errorMessage = L10n.format("家族の作成に失敗しました: %@", error.localizedDescription)
         }
     }
 }

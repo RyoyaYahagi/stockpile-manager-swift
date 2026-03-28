@@ -71,7 +71,7 @@ struct BagListView: View {
         .overlay(alignment: .bottom) {
             if showUndoSnackbar, let info = deletedBagInfo {
                 BagUndoSnackbar(
-                    message: "「\(info.name)」を削除しました",
+                    message: L10n.format("「%@」を削除しました", info.name),
                     onUndo: {
                         undoDelete(info)
                     },
@@ -167,7 +167,7 @@ struct BagRow: View {
                 Text(bag.name)
                     .font(.body)
                 
-                Text("\(bag.resolvedItems.count)個のアイテム")
+                Text(L10n.format("%@個のアイテム", String(bag.resolvedItems.count)))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
