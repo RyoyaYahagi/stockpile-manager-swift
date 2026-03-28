@@ -3,8 +3,8 @@ import SwiftData
 
 enum NotificationTimingUnit: String, CaseIterable, Identifiable {
     case day = "d"
+    case week = "w"
     case month = "m"
-    case year = "y"
 
     var id: String { rawValue }
 
@@ -12,10 +12,10 @@ enum NotificationTimingUnit: String, CaseIterable, Identifiable {
         switch self {
         case .day:
             return "日"
+        case .week:
+            return "週"
         case .month:
-            return "ヶ月"
-        case .year:
-            return "年"
+            return "月"
         }
     }
 
@@ -23,41 +23,23 @@ enum NotificationTimingUnit: String, CaseIterable, Identifiable {
         switch self {
         case .day:
             return 0
-        case .month, .year:
+        case .week, .month:
             return 1
         }
     }
 
     var maximumAmount: Int {
-        switch self {
-        case .day:
-            return 3650
-        case .month:
-            return 120
-        case .year:
-            return 20
-        }
+        99
     }
 
     var approximateDays: Int {
         switch self {
         case .day:
             return 1
+        case .week:
+            return 7
         case .month:
             return 30
-        case .year:
-            return 365
-        }
-    }
-
-    var calendarComponent: Calendar.Component {
-        switch self {
-        case .day:
-            return .day
-        case .month:
-            return .month
-        case .year:
-            return .year
         }
     }
 }
@@ -81,10 +63,10 @@ struct NotificationTimingRule: Hashable, Identifiable {
                 return "当日"
             }
             return "\(normalized.amount)日前"
+        case .week:
+            return "\(normalized.amount)週間前"
         case .month:
             return "\(normalized.amount)ヶ月前"
-        case .year:
-            return "\(normalized.amount)年前"
         }
     }
 
@@ -109,21 +91,16 @@ final class NotificationSettings {
     static let maximumTimingRules = 5
 
     private static let defaultTimingRules = [
-        NotificationTimingRule(amount: 30, unit: .day),
-        NotificationTimingRule(amount: 7, unit: .day),
-        NotificationTimingRule(amount: 0, unit: .day)
-    ]
-    private static let suggestedTimingRules = [
-        NotificationTimingRule(amount: 1, unit: .year),
-        NotificationTimingRule(amount: 6, unit: .month),
-        NotificationTimingRule(amount: 3, unit: .month),
-        NotificationTimingRule(amount: 1, unit: .month),
-        NotificationTimingRule(amount: 30, unit: .day),
-        NotificationTimingRule(amount: 14, unit: .day),
-        NotificationTimingRule(amount: 7, unit: .day),
+        NotificationTimingRule(amount: 0, unit: .day),
         NotificationTimingRule(amount: 3, unit: .day),
-        NotificationTimingRule(amount: 1, unit: .day),
-        NotificationTimingRule(amount: 0, unit: .day)
+        NotificationTimingRule(amount: 1, unit: .week)
+    ]
+    private static let addPresetTimingRules = [
+        NotificationTimingRule(amount: 0, unit: .day),
+        NotificationTimingRule(amount: 3, unit: .day),
+        NotificationTimingRule(amount: 1, unit: .week),
+        NotificationTimingRule(amount: 1, unit: .month),
+        NotificationTimingRule(amount: 3, unit: .month)
     ]
 
     /// 通知全体の有効/無効
@@ -234,7 +211,7 @@ final class NotificationSettings {
         guard current.count < Self.maximumTimingRules else { return }
         let used = Set(current)
 
-        if let suggested = Self.suggestedTimingRules.first(where: { !used.contains($0) }) {
+        if let suggested = Self.addPresetTimingRules.first(where: { !used.contains($0) }) {
             notificationTimingRules = current + [suggested]
             return
         }
@@ -313,17 +290,20 @@ final class NotificationSettings {
     }
 
     private static func normalizeTimingRules(_ values: [NotificationTimingRule]) -> [NotificationTimingRule] {
-        Array(
-            Set(values.map(\.normalizedRule))
-        )
-        .sorted {
-            if $0.sortWeight == $1.sortWeight {
-                return $0.unit.approximateDays > $1.unit.approximateDays
+        var normalizedValues: [NotificationTimingRule] = []
+        var seen: Set<NotificationTimingRule> = []
+
+        for rule in values.map(\.normalizedRule) {
+            guard !seen.contains(rule) else { continue }
+            seen.insert(rule)
+            normalizedValues.append(rule)
+
+            if normalizedValues.count == Self.maximumTimingRules {
+                break
             }
-            return $0.sortWeight > $1.sortWeight
         }
-        .prefix(Self.maximumTimingRules)
-        .map { $0 }
+
+        return normalizedValues
     }
 
     private static func parseTimingRuleToken(_ token: String) -> NotificationTimingRule? {
@@ -334,9 +314,16 @@ final class NotificationSettings {
         }
 
         guard let rawUnit = token.last,
-              let unit = NotificationTimingUnit(rawValue: String(rawUnit)),
               let amount = Int(token.dropLast())
         else {
+            return nil
+        }
+
+        if rawUnit == "y" {
+            return NotificationTimingRule(amount: amount * 12, unit: .month)
+        }
+
+        guard let unit = NotificationTimingUnit(rawValue: String(rawUnit)) else {
             return nil
         }
 

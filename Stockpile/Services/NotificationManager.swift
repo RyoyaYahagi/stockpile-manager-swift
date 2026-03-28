@@ -506,11 +506,26 @@ final class NotificationManager: ObservableObject {
             return expiryDate
         }
 
-        return calendar.date(
-            byAdding: normalizedRule.unit.calendarComponent,
-            value: -normalizedRule.amount,
-            to: expiryDate
-        )
+        switch normalizedRule.unit {
+        case .day:
+            return calendar.date(
+                byAdding: .day,
+                value: -normalizedRule.amount,
+                to: expiryDate
+            )
+        case .week:
+            return calendar.date(
+                byAdding: .day,
+                value: -(normalizedRule.amount * 7),
+                to: expiryDate
+            )
+        case .month:
+            return calendar.date(
+                byAdding: .month,
+                value: -normalizedRule.amount,
+                to: expiryDate
+            )
+        }
     }
 
     private func scheduledNotificationDate(

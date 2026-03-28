@@ -9,14 +9,9 @@ struct NotificationSettingsView: View {
     @Query private var items: [Item]
     @State private var settings: NotificationSettings?
     @State private var currentSystemSettings: UNNotificationSettings?
-
-    private static let amountFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .none
-        formatter.generatesDecimalNumbers = false
-        formatter.zeroSymbol = "0"
-        return formatter
-    }()
+    @State private var timingInputTexts: [Int: String] = [:]
+    @State private var lastFocusedTimingIndex: Int?
+    @FocusState private var focusedTimingIndex: Int?
     
     var body: some View {
         Form {
@@ -63,81 +58,75 @@ struct NotificationSettingsView: View {
                         Text("通知タイミングは未設定です")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(Array(settings.notificationTimingRules.enumerated()), id: \.offset) { index, rule in
+                        ForEach(Array(settings.notificationTimingRules.enumerated()), id: \.offset) { index, _ in
+                            let currentRule = currentTimingRule(at: index, settings: settings)
+
                             VStack(alignment: .leading, spacing: 12) {
                                 HStack(alignment: .firstTextBaseline) {
-                                    Text("通知タイミング \(index + 1)")
-                                        .font(.subheadline.weight(.medium))
+                                    Text(notificationTimingLabel(for: currentRule))
+                                        .font(.subheadline.weight(.semibold))
                                     Spacer()
                                     Button("削除", role: .destructive) {
+                                        lastFocusedTimingIndex = nil
                                         settings.removeNotificationTimingRule(at: index)
+                                        focusedTimingIndex = nil
                                         persistSettingsAndReschedule(settings)
                                     }
+                                    .buttonStyle(.borderless)
                                     .disabled(!settings.isEnabled)
                                 }
 
                                 HStack(alignment: .center, spacing: 12) {
-                                    TextField(
-                                        "数値",
-                                        value: Binding(
-                                            get: {
-                                                currentTimingRule(at: index, settings: settings).amount
-                                            },
-                                            set: { newValue in
-                                                settings.updateNotificationTimingAmount(at: index, to: newValue)
-                                                persistSettingsAndReschedule(settings)
-                                            }
-                                        ),
-                                        formatter: Self.amountFormatter
-                                    )
+                                    TextField("0", text: Binding(
+                                        get: {
+                                            timingInputText(at: index, settings: settings)
+                                        },
+                                        set: { newValue in
+                                            updateTimingInputText(newValue, at: index)
+                                        }
+                                    ))
                                     .keyboardType(.numberPad)
                                     .multilineTextAlignment(.trailing)
                                     .textFieldStyle(.roundedBorder)
-                                    .frame(width: 88)
+                                    .frame(width: 72)
+                                    .focused($focusedTimingIndex, equals: index)
                                     .disabled(!settings.isEnabled)
-
-                                    Text("単位")
-                                        .foregroundStyle(.secondary)
-
-                                    Spacer(minLength: 0)
-                                }
-
-                                Picker(
-                                    "通知単位",
-                                    selection: Binding(
-                                        get: {
-                                            currentTimingRule(at: index, settings: settings).unit
-                                        },
-                                        set: { newValue in
-                                            settings.updateNotificationTimingUnit(at: index, to: newValue)
-                                            persistSettingsAndReschedule(settings)
+                                    
+                                    Picker(
+                                        "通知単位",
+                                        selection: Binding(
+                                            get: {
+                                                currentRule.unit
+                                            },
+                                            set: { newValue in
+                                                commitTimingInput(at: index, settings: settings)
+                                                settings.updateNotificationTimingUnit(at: index, to: newValue)
+                                                persistSettingsAndReschedule(settings)
+                                            }
+                                        )
+                                    ) {
+                                        ForEach(NotificationTimingUnit.allCases) { unit in
+                                            Text(unit.shortLabel).tag(unit)
                                         }
-                                    )
-                                ) {
-                                    ForEach(NotificationTimingUnit.allCases) { unit in
-                                        Text(unit.shortLabel).tag(unit)
                                     }
+                                    .pickerStyle(.segmented)
+                                    .labelsHidden()
+                                    .disabled(!settings.isEnabled)
                                 }
-                                .pickerStyle(.segmented)
-                                .labelsHidden()
-                                .disabled(!settings.isEnabled)
-
-                                Text(notificationTimingLabel(for: rule))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
 
                     Button("通知タイミングを追加") {
                         settings.addNotificationTimingRule()
+                        focusedTimingIndex = nil
                         persistSettingsAndReschedule(settings)
                     }
                     .disabled(!settings.isEnabled || settings.notificationTimingRules.count >= NotificationSettings.maximumTimingRules)
                 } header: {
                     Text("通知タイミング（\(settings.notificationTimingRules.count)/\(NotificationSettings.maximumTimingRules)）")
                 } footer: {
-                    Text("通知タイミングは年・ヶ月・日単位で自由に追加できます。最大\(NotificationSettings.maximumTimingRules)件まで設定でき、0日前は当日通知です。")
+                    Text("通知タイミングは日・週・月単位で設定できます。最大\(NotificationSettings.maximumTimingRules)件まで追加でき、0日は当日通知です。")
                 }
                 
                 // 通知時刻
@@ -176,6 +165,28 @@ struct NotificationSettingsView: View {
         .onAppear {
             Task {
                 await refreshSystemSettings()
+            }
+        }
+        .onChange(of: settings?.notificationTimingSignature ?? "") { _, _ in
+            syncTimingInputTexts()
+        }
+        .onChange(of: focusedTimingIndex) { _, newValue in
+            if let previousIndex = lastFocusedTimingIndex,
+               previousIndex != newValue,
+               let settings {
+                commitTimingInput(at: previousIndex, settings: settings)
+            }
+            lastFocusedTimingIndex = newValue
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完了") {
+                    if let settings, let focusedTimingIndex {
+                        commitTimingInput(at: focusedTimingIndex, settings: settings)
+                    }
+                    focusedTimingIndex = nil
+                }
             }
         }
     }
@@ -262,6 +273,7 @@ struct NotificationSettingsView: View {
                 try? modelContext.save()
             }
             settings = existing
+            syncTimingInputTexts(from: existing)
             return
         }
         
@@ -269,6 +281,7 @@ struct NotificationSettingsView: View {
         modelContext.insert(newSettings)
         try? modelContext.save()
         settings = newSettings
+        syncTimingInputTexts(from: newSettings)
     }
     
     private func timeFromComponents(using settings: NotificationSettings) -> Date {
@@ -306,6 +319,52 @@ struct NotificationSettingsView: View {
         return "\(normalizedRule.displayText)に通知"
     }
 
+    private func timingInputText(at index: Int, settings: NotificationSettings) -> String {
+        if let currentText = timingInputTexts[index] {
+            return currentText
+        }
+        return String(currentTimingRule(at: index, settings: settings).amount)
+    }
+
+    private func updateTimingInputText(_ value: String, at index: Int) {
+        let digitsOnly = String(value.filter(\.isNumber).prefix(2))
+        timingInputTexts[index] = digitsOnly
+    }
+
+    private func commitTimingInput(at index: Int, settings: NotificationSettings) {
+        let currentRule = currentTimingRule(at: index, settings: settings)
+        guard settings.notificationTimingRules.indices.contains(index) else { return }
+
+        let rawValue = timingInputTexts[index] ?? String(currentRule.amount)
+        let parsedAmount = Int(rawValue) ?? currentRule.unit.minimumAmount
+        let normalizedAmount = min(
+            max(parsedAmount, currentRule.unit.minimumAmount),
+            currentRule.unit.maximumAmount
+        )
+
+        if currentRule.amount != normalizedAmount {
+            settings.updateNotificationTimingAmount(at: index, to: normalizedAmount)
+            persistSettingsAndReschedule(settings)
+            return
+        }
+
+        timingInputTexts[index] = String(normalizedAmount)
+    }
+
+    private func syncTimingInputTexts() {
+        guard let settings else { return }
+        syncTimingInputTexts(from: settings)
+    }
+
+    private func syncTimingInputTexts(from settings: NotificationSettings) {
+        let rules = settings.notificationTimingRules
+        var syncedTexts: [Int: String] = [:]
+        for (index, rule) in rules.enumerated() {
+            syncedTexts[index] = String(rule.amount)
+        }
+        timingInputTexts = syncedTexts
+    }
+
     private func persistSettingsAndReschedule(_ settings: NotificationSettings) {
         _ = settings.migrateLegacyTimingRulesIfNeeded()
         do {
@@ -315,6 +374,7 @@ struct NotificationSettingsView: View {
             print("通知設定の保存に失敗: \(error)")
             #endif
         }
+        syncTimingInputTexts(from: settings)
         rescheduleNotifications(settings: settings)
     }
     
