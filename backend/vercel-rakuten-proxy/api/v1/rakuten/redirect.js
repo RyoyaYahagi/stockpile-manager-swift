@@ -27,7 +27,9 @@ function buildProductSearchURL(janCode, applicationId, accessKey, affiliateId) {
   url.searchParams.set("formatVersion", "2");
   url.searchParams.set("applicationId", applicationId);
   url.searchParams.set("accessKey", accessKey);
-  url.searchParams.set("affiliateId", affiliateId);
+  if (affiliateId) {
+    url.searchParams.set("affiliateId", affiliateId);
+  }
   url.searchParams.set("productCode", janCode);
   url.searchParams.set(
     "elements",
@@ -43,7 +45,9 @@ function buildItemSearchURL(janCode, applicationId, accessKey, affiliateId) {
   url.searchParams.set("formatVersion", "2");
   url.searchParams.set("applicationId", applicationId);
   url.searchParams.set("accessKey", accessKey);
-  url.searchParams.set("affiliateId", affiliateId);
+  if (affiliateId) {
+    url.searchParams.set("affiliateId", affiliateId);
+  }
   url.searchParams.set("keyword", janCode);
   url.searchParams.set("hits", "1");
   url.searchParams.set("elements", "itemName,affiliateUrl,itemUrl");
@@ -133,7 +137,7 @@ export default async function handler(request, response) {
   const accessKey = readEnv("RAKUTEN_ACCESS_KEY");
   const affiliateId = readEnv("RAKUTEN_AFFILIATE_ID");
 
-  if (!applicationId || !accessKey || !affiliateId) {
+  if (!applicationId || !accessKey) {
     return sendJSON(response, 500, {
       error: "server_not_configured"
     });

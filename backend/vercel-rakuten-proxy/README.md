@@ -19,7 +19,8 @@ Stockpile iOS の「楽天市場で購入」ボタン用 Vercel バックエン�
 
 - `RAKUTEN_APP_ID`
 - `RAKUTEN_ACCESS_KEY`
-- `RAKUTEN_AFFILIATE_ID`
+- `RAKUTEN_AFFILIATE_ID` 任意
+  設定するとアフィリエイトURLへ誘導します。未設定時は通常の楽天URLへフォールバックします。
 
 ## デプロイ手順
 
