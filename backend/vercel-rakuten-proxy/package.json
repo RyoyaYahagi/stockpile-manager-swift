@@ -1,0 +1,8 @@
+{
+  "name": "stockpile-rakuten-proxy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check api/v1/rakuten/redirect.js && node --check api/health.js"
+  }
+}
