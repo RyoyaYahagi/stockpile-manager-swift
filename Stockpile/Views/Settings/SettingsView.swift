@@ -3,14 +3,35 @@ import SwiftData
 
 /// 設定画面
 struct SettingsView: View {
+    @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
     
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     @AppStorage("app.tutorial.replayRequestToken")
     private var tutorialReplayRequestToken = 0
+    @State private var cloudKitMemberCount: Int?
+    @State private var isLoadingCloudKitMemberCount = false
     
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
+    }
+
+    private var memberCountRefreshKey: String {
+        guard let family = currentFamily else { return "none" }
+        let scope = family.cloudKitDatabaseScope?.rawValue ?? "local"
+        let shareURL = family.cloudKitShareURL?.absoluteString ?? "no-share"
+        return "\(family.id.uuidString)|\(scope)|\(shareURL)|\(family.cloudKitPendingSync)"
+    }
+
+    private var displayedMemberCountText: String {
+        guard let family = currentFamily else { return "同期中" }
+        guard family.shareState != .localOnly else {
+            return "\(family.uniqueMembers.count)人"
+        }
+        guard let cloudKitMemberCount else {
+            return isLoadingCloudKitMemberCount ? "同期中" : "同期中"
+        }
+        return "\(cloudKitMemberCount)人"
     }
     
     var body: some View {
@@ -31,7 +52,7 @@ struct SettingsView: View {
                     HStack {
                         Label("メンバー", systemImage: "person.2")
                         Spacer()
-                        Text(family.shouldShowMemberList ? "\(family.uniqueMembers.count)人" : "同期中")
+                        Text(displayedMemberCountText)
                             .foregroundStyle(.secondary)
                     }
                 } else {
@@ -109,6 +130,34 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("設定")
+        .task(id: memberCountRefreshKey) {
+            await refreshCloudKitMemberCount()
+        }
+    }
+
+    @MainActor
+    private func refreshCloudKitMemberCount() async {
+        guard let family = currentFamily else {
+            cloudKitMemberCount = nil
+            isLoadingCloudKitMemberCount = false
+            return
+        }
+
+        guard family.shareState != .localOnly else {
+            cloudKitMemberCount = nil
+            isLoadingCloudKitMemberCount = false
+            return
+        }
+
+        isLoadingCloudKitMemberCount = true
+        defer { isLoadingCloudKitMemberCount = false }
+
+        do {
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            cloudKitMemberCount = try await sharingService.fetchShareParticipants(for: family).count
+        } catch {
+            cloudKitMemberCount = nil
+        }
     }
 }
 
