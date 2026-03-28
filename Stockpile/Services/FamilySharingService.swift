@@ -372,6 +372,7 @@ final class CloudKitFamilySharingService {
             }()
 
             item.name = itemName
+            item.janCode = normalizedOptionalString(itemRecord["janCode"] as? String)
             item.quantity = intValue(from: itemRecord["quantity"]) ?? item.quantity
             item.expiryDate = itemRecord["expiryDate"] as? Date
             item.locationNote = normalizedOptionalString(itemRecord["locationNote"] as? String)
@@ -730,6 +731,9 @@ final class CloudKitFamilySharingService {
         )
         record["id"] = item.id.uuidString as CKRecordValue
         record["name"] = item.name as CKRecordValue
+        if let janCode = normalizedOptionalString(item.janCode) {
+            record["janCode"] = janCode as CKRecordValue
+        }
         record["quantity"] = item.quantity as CKRecordValue
         if let expiryDate = item.expiryDate {
             record["expiryDate"] = expiryDate as CKRecordValue
@@ -1123,6 +1127,7 @@ final class LocalDataRepairService {
         keeper.name = duplicates
             .compactMap { normalizedNonEmptyString($0.name) }
             .max(by: { $0.count < $1.count }) ?? keeper.name
+        keeper.janCode = duplicates.compactMap(\.janCode).compactMap(normalizedOptionalString).first ?? keeper.janCode
         keeper.quantity = duplicates.map(\.quantity).max() ?? keeper.quantity
         keeper.expiryDate = duplicates.compactMap(\.expiryDate).min() ?? keeper.expiryDate
         keeper.locationNote = duplicates.compactMap(\.locationNote).compactMap(normalizedOptionalString).first ?? keeper.locationNote
@@ -1215,6 +1220,7 @@ final class LocalDataRepairService {
             familyScope: familyScopeKey(for: item.family),
             bagScope: item.bag?.id.uuidString,
             name: foldedLookupKey(for: item.name) ?? item.id.uuidString,
+            janCode: normalizedOptionalString(item.janCode),
             quantity: item.quantity,
             expiryDate: expiryDayKey(for: item.expiryDate),
             locationNote: foldedLookupKey(for: item.locationNote)
@@ -1240,6 +1246,7 @@ final class LocalDataRepairService {
     private func itemContentKeyIgnoringBag(for item: Item) -> ItemContentKey {
         ItemContentKey(
             name: foldedLookupKey(for: item.name) ?? item.id.uuidString,
+            janCode: normalizedOptionalString(item.janCode),
             quantity: item.quantity,
             expiryDate: expiryDayKey(for: item.expiryDate),
             locationNote: foldedLookupKey(for: item.locationNote)
@@ -1374,6 +1381,7 @@ private struct ItemSemanticKey: Hashable {
     let familyScope: String
     let bagScope: String?
     let name: String
+    let janCode: String?
     let quantity: Int
     let expiryDate: String?
     let locationNote: String?
@@ -1381,6 +1389,7 @@ private struct ItemSemanticKey: Hashable {
 
 private struct ItemContentKey: Hashable {
     let name: String
+    let janCode: String?
     let quantity: Int
     let expiryDate: String?
     let locationNote: String?

@@ -54,6 +54,28 @@ struct APIConfig {
         
         return ""
     }
+
+    // MARK: - Backend
+
+    /// バックエンドのベースURL
+    static var backendBaseURL: URL? {
+        let environmentValue = normalizedSecretValue(ProcessInfo.processInfo.environment["BACKEND_BASE_URL"])
+        if let url = normalizedURL(environmentValue) {
+            return url
+        }
+
+        let secretsValue = normalizedSecretValue(secretsValue(for: "BackendBaseURL"))
+        if let url = normalizedURL(secretsValue) {
+            return url
+        }
+
+        let infoValue = normalizedSecretValue(Bundle.main.infoDictionary?["BackendBaseURL"] as? String)
+        if let url = normalizedURL(infoValue) {
+            return url
+        }
+
+        return nil
+    }
     
     // MARK: - Yahoo API
     
@@ -88,6 +110,12 @@ struct APIConfig {
         }
         return value
     }
+
+    private static func normalizedURL(_ value: String?) -> URL? {
+        let normalized = normalizedSecretValue(value)
+        guard !normalized.isEmpty else { return nil }
+        return URL(string: normalized)
+    }
     
     // MARK: - 設定状態の確認
     
@@ -104,5 +132,23 @@ struct APIConfig {
     /// いずれかの商品検索APIが利用可能かどうか
     static var isProductSearchAvailable: Bool {
         isRakutenConfigured || isYahooConfigured
+    }
+
+    static func rakutenPurchaseURL(for janCode: String) -> URL? {
+        guard let baseURL = backendBaseURL else { return nil }
+
+        let trimmedJANCode = janCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedJANCode.isEmpty else { return nil }
+
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+
+        let currentPath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        components.path = "/" + [currentPath, "v1", "rakuten", "redirect"]
+            .filter { !$0.isEmpty }
+            .joined(separator: "/")
+        components.queryItems = [URLQueryItem(name: "jan", value: trimmedJANCode)]
+        return components.url
     }
 }

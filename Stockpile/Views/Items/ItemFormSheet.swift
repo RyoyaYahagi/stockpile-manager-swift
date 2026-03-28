@@ -27,6 +27,7 @@ struct ItemFormSheet: View {
     @State private var quantity: Int = 1
     @State private var expiryDate: Date = Date()
     @State private var hasExpiry: Bool = true
+    @State private var janCode: String?
     @State private var selectedBagId: UUID?
     @State private var locationNote: String = ""
     @State private var showOCRCamera = false
@@ -42,6 +43,7 @@ struct ItemFormSheet: View {
             _quantity = State(initialValue: item.quantity)
             _expiryDate = State(initialValue: item.expiryDate ?? Date())
             _hasExpiry = State(initialValue: item.expiryDate != nil)
+            _janCode = State(initialValue: item.janCode)
             _selectedBagId = State(initialValue: item.bag?.id)
             _locationNote = State(initialValue: item.locationNote ?? "")
         } else {
@@ -192,6 +194,7 @@ struct ItemFormSheet: View {
                 BarcodeScannerView { product in
                     // スキャン結果を品名に反映
                     name = product.name
+                    janCode = product.janCode
                 }
             }
         }
@@ -202,6 +205,8 @@ struct ItemFormSheet: View {
 
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = locationNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedJANCode = janCode?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedJANCode = (trimmedJANCode?.isEmpty == false) ? trimmedJANCode : nil
         guard !trimmedName.isEmpty, quantity > 0 else { return }
 
         isSaving = true
@@ -213,6 +218,7 @@ struct ItemFormSheet: View {
         case .add:
             let newItem = Item(
                 name: trimmedName,
+                janCode: normalizedJANCode,
                 quantity: quantity,
                 expiryDate: hasExpiry ? expiryDate : nil,
                 locationNote: trimmedNote.isEmpty ? nil : trimmedNote
@@ -223,6 +229,7 @@ struct ItemFormSheet: View {
             
         case .edit(let item):
             item.name = trimmedName
+            item.janCode = normalizedJANCode
             item.quantity = quantity
             item.expiryDate = hasExpiry ? expiryDate : nil
             item.locationNote = trimmedNote.isEmpty ? nil : trimmedNote

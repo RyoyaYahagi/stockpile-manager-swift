@@ -588,6 +588,7 @@ struct DashboardView: View {
         for info in infoList {
             let newItem = Item(
                 name: info.name,
+                janCode: info.janCode,
                 quantity: info.quantity,
                 expiryDate: info.expiryDate,
                 locationNote: info.locationNote
@@ -656,6 +657,7 @@ struct DashboardView: View {
         for item in scopedItems where selectedItems.contains(item.id) {
             let newItem = Item(
                 name: item.name,
+                janCode: item.janCode,
                 quantity: item.quantity,
                 expiryDate: item.expiryDate,
                 locationNote: item.locationNote
@@ -733,6 +735,7 @@ struct DashboardView: View {
         DeletedItemInfo(
             id: item.id,
             name: item.name,
+            janCode: item.janCode,
             quantity: item.quantity,
             expiryDate: item.expiryDate,
             locationNote: item.locationNote,
@@ -881,6 +884,7 @@ struct BulkCopySheet: View {
 struct DeletedItemInfo {
     let id: UUID
     let name: String
+    let janCode: String?
     let quantity: Int
     let expiryDate: Date?
     let locationNote: String?

@@ -35,6 +35,7 @@ enum ExpiryStatus: Comparable {
 final class Item {
     var id: UUID = UUID()
     var name: String = ""
+    var janCode: String?
     var quantity: Int = 1
     var expiryDate: Date?
     var locationNote: String?
@@ -48,12 +49,14 @@ final class Item {
     
     init(
         name: String,
+        janCode: String? = nil,
         quantity: Int = 1,
         expiryDate: Date? = nil,
         locationNote: String? = nil
     ) {
         self.id = UUID()
         self.name = name
+        self.janCode = janCode
         self.quantity = quantity
         self.expiryDate = expiryDate
         self.locationNote = locationNote

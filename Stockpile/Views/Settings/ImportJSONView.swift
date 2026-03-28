@@ -153,6 +153,7 @@ struct ImportJSONView: View {
     private func parseJSON(_ data: Data) throws -> [Item] {
         struct ImportItem: Decodable {
             let name: String
+            let janCode: String?
             let quantity: Int?
             let expiryDate: String?
             let bagName: String?
@@ -161,6 +162,10 @@ struct ImportJSONView: View {
             init(from decoder: Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
                 name = try container.decode(String.self, forKey: .name)
+                janCode =
+                    try container.decodeIfPresent(String.self, forKey: .janCode)
+                    ?? container.decodeIfPresent(String.self, forKey: .jan)
+                    ?? container.decodeIfPresent(String.self, forKey: .barcode)
                 quantity = try container.decodeIfPresent(Int.self, forKey: .quantity)
                 expiryDate = try container.decodeIfPresent(String.self, forKey: .expiryDate)
                 locationNote = try container.decodeIfPresent(String.self, forKey: .locationNote)
@@ -173,6 +178,9 @@ struct ImportJSONView: View {
 
             private enum CodingKeys: String, CodingKey {
                 case name
+                case janCode
+                case jan
+                case barcode
                 case quantity
                 case expiryDate
                 case locationNote
@@ -185,6 +193,7 @@ struct ImportJSONView: View {
         
         struct ItemSignature: Hashable {
             let name: String
+            let janCode: String?
             let quantity: Int
             let expiryDate: String?
             let locationNote: String?
@@ -210,6 +219,7 @@ struct ImportJSONView: View {
         
         func signature(
             name: String,
+            janCode: String?,
             quantity: Int,
             expiryDate: Date?,
             locationNote: String?,
@@ -217,6 +227,7 @@ struct ImportJSONView: View {
         ) -> ItemSignature {
             ItemSignature(
                 name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                janCode: normalized(janCode),
                 quantity: quantity,
                 expiryDate: expiryDate.map { dateFormatter.string(from: $0) },
                 locationNote: normalized(locationNote),
@@ -252,6 +263,7 @@ struct ImportJSONView: View {
         var existingSignatures = Set(existingItems.map { item in
             signature(
                 name: item.name,
+                janCode: item.janCode,
                 quantity: item.quantity,
                 expiryDate: item.expiryDate,
                 locationNote: item.locationNote,
@@ -265,6 +277,7 @@ struct ImportJSONView: View {
             let quantity = importItem.quantity ?? 1
             let signature = signature(
                 name: importItem.name,
+                janCode: importItem.janCode,
                 quantity: quantity,
                 expiryDate: expiryDate,
                 locationNote: importItem.locationNote,
@@ -277,6 +290,7 @@ struct ImportJSONView: View {
             
             let item = Item(
                 name: importItem.name,
+                janCode: normalized(importItem.janCode),
                 quantity: quantity,
                 expiryDate: expiryDate,
                 locationNote: importItem.locationNote
@@ -506,6 +520,7 @@ struct ExportJSONView: View {
     private func makeExportData(from items: [Item]) throws -> Data {
         struct ExportItem: Encodable {
             let name: String
+            let janCode: String?
             let quantity: Int
             let expiryDate: String?
             let bagName: String?
@@ -518,6 +533,7 @@ struct ExportJSONView: View {
         let payload = items.map { item in
             ExportItem(
                 name: item.name,
+                janCode: item.janCode,
                 quantity: item.quantity,
                 expiryDate: item.expiryDate.map { formatter.string(from: $0) },
                 bagName: item.bag?.name,
