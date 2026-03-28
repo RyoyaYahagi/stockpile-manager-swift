@@ -356,7 +356,7 @@ struct ContentView: View {
 
     private func ensureNotificationSettings() -> NotificationSettings {
         if let existing = notificationSettingsList.first {
-            if existing.migrateLegacyTimingDaysIfNeeded() {
+            if existing.migrateLegacyTimingRulesIfNeeded() {
                 try? modelContext.save()
             }
             return existing

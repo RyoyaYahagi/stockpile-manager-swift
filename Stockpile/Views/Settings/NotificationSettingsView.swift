@@ -51,30 +51,52 @@ struct NotificationSettingsView: View {
                 
                 // 通知タイミング
                 Section {
-                    if settings.notificationTimingDays.isEmpty {
+                    if settings.notificationTimingRules.isEmpty {
                         Text("通知タイミングは未設定です")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(Array(settings.notificationTimingDays.enumerated()), id: \.offset) { index, timingDay in
-                            HStack(spacing: 12) {
-                                Stepper(
-                                    value: Binding(
-                                        get: {
-                                            currentTimingDay(at: index, settings: settings)
-                                        },
-                                        set: { newValue in
-                                            settings.updateNotificationTimingDay(at: index, to: newValue)
-                                            persistSettingsAndReschedule(settings)
+                        ForEach(Array(settings.notificationTimingRules.enumerated()), id: \.offset) { index, rule in
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Stepper(
+                                        value: Binding(
+                                            get: {
+                                                currentTimingRule(at: index, settings: settings).amount
+                                            },
+                                            set: { newValue in
+                                                settings.updateNotificationTimingAmount(at: index, to: newValue)
+                                                persistSettingsAndReschedule(settings)
+                                            }
+                                        ),
+                                        in: amountRange(for: currentTimingRule(at: index, settings: settings).unit)
+                                    ) {
+                                        Text(notificationTimingLabel(for: currentTimingRule(at: index, settings: settings)))
+                                    }
+                                    .disabled(!settings.isEnabled)
+
+                                    Picker(
+                                        "通知単位",
+                                        selection: Binding(
+                                            get: {
+                                                currentTimingRule(at: index, settings: settings).unit
+                                            },
+                                            set: { newValue in
+                                                settings.updateNotificationTimingUnit(at: index, to: newValue)
+                                                persistSettingsAndReschedule(settings)
+                                            }
+                                        )
+                                    ) {
+                                        ForEach(NotificationTimingUnit.allCases) { unit in
+                                            Text(unit.shortLabel).tag(unit)
                                         }
-                                    ),
-                                    in: 0...365
-                                ) {
-                                    Text(notificationTimingLabel(for: timingDay))
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .labelsHidden()
+                                    .disabled(!settings.isEnabled)
                                 }
-                                .disabled(!settings.isEnabled)
 
                                 Button(role: .destructive) {
-                                    settings.removeNotificationTimingDay(at: index)
+                                    settings.removeNotificationTimingRule(at: index)
                                     persistSettingsAndReschedule(settings)
                                 } label: {
                                     Image(systemName: "minus.circle.fill")
@@ -87,7 +109,7 @@ struct NotificationSettingsView: View {
                     }
 
                     Button {
-                        settings.addNotificationTimingDay()
+                        settings.addNotificationTimingRule()
                         persistSettingsAndReschedule(settings)
                     } label: {
                         Label("通知タイミングを追加", systemImage: "plus.circle")
@@ -96,7 +118,7 @@ struct NotificationSettingsView: View {
                 } header: {
                     Text("通知タイミング")
                 } footer: {
-                    Text("期限の何日前に通知するかを自由に追加できます。0日前は当日通知です。")
+                    Text("通知タイミングは年・ヶ月・日単位で自由に追加できます。0日前は当日通知です。")
                 }
                 
                 // 通知時刻
@@ -217,7 +239,7 @@ struct NotificationSettingsView: View {
         )
         
         if let existing = try? modelContext.fetch(descriptor).first {
-            if existing.migrateLegacyTimingDaysIfNeeded() {
+            if existing.migrateLegacyTimingRulesIfNeeded() {
                 try? modelContext.save()
             }
             settings = existing
@@ -249,18 +271,28 @@ struct NotificationSettingsView: View {
         notificationManager.requestReschedule(items: items, settings: settings)
     }
 
-    private func currentTimingDay(at index: Int, settings: NotificationSettings) -> Int {
-        let timings = settings.notificationTimingDays
-        guard timings.indices.contains(index) else { return 0 }
+    private func currentTimingRule(at index: Int, settings: NotificationSettings) -> NotificationTimingRule {
+        let timings = settings.notificationTimingRules
+        guard timings.indices.contains(index) else {
+            return NotificationTimingRule(amount: 0, unit: .day)
+        }
         return timings[index]
     }
 
-    private func notificationTimingLabel(for daysBefore: Int) -> String {
-        daysBefore == 0 ? "当日に通知" : "\(daysBefore)日前に通知"
+    private func notificationTimingLabel(for rule: NotificationTimingRule) -> String {
+        let normalizedRule = rule.normalizedRule
+        if normalizedRule.unit == .day && normalizedRule.amount == 0 {
+            return "当日に通知"
+        }
+        return "\(normalizedRule.displayText)に通知"
+    }
+
+    private func amountRange(for unit: NotificationTimingUnit) -> ClosedRange<Int> {
+        unit.minimumAmount...unit.maximumAmount
     }
 
     private func persistSettingsAndReschedule(_ settings: NotificationSettings) {
-        _ = settings.migrateLegacyTimingDaysIfNeeded()
+        _ = settings.migrateLegacyTimingRulesIfNeeded()
         do {
             try modelContext.save()
         } catch {
