@@ -61,6 +61,47 @@ enum ProductSearchError: Error, LocalizedError {
 /// 商品検索サービス
 /// 楽天・Yahoo APIを使用してJANコードから商品情報を取得
 actor ProductSearchService {
+    private enum SearchAttemptFailure: Error {
+        case httpStatus(source: ProductInfo.Source, statusCode: Int, detail: String?)
+        case invalidResponse(source: ProductInfo.Source, detail: String)
+        case parse(source: ProductInfo.Source, detail: String)
+        case network(source: ProductInfo.Source, underlying: Error)
+
+        var logMessage: String {
+            switch self {
+            case .httpStatus(let source, let statusCode, let detail):
+                let suffix = detail.map { " detail=\($0)" } ?? ""
+                return "[ProductSearch] \(source.localizedDisplayName): HTTP \(statusCode)\(suffix)"
+            case .invalidResponse(let source, let detail):
+                return "[ProductSearch] \(source.localizedDisplayName): Invalid response \(detail)"
+            case .parse(let source, let detail):
+                return "[ProductSearch] \(source.localizedDisplayName): Parse failure \(detail)"
+            case .network(let source, let underlying):
+                return "[ProductSearch] \(source.localizedDisplayName): Network error \(underlying.localizedDescription)"
+            }
+        }
+
+        var publicError: ProductSearchError {
+            switch self {
+            case .httpStatus(_, _, let detail):
+                return .networkError(NSError(domain: "ProductSearch", code: 1, userInfo: [
+                    NSLocalizedDescriptionKey: detail ?? "APIリクエストに失敗しました"
+                ]))
+            case .invalidResponse(_, let detail), .parse(_, let detail):
+                return .networkError(NSError(domain: "ProductSearch", code: 2, userInfo: [
+                    NSLocalizedDescriptionKey: detail
+                ]))
+            case .network(_, let underlying):
+                return .networkError(underlying)
+            }
+        }
+    }
+
+    private enum SearchAttemptOutcome {
+        case found(ProductInfo)
+        case notFound
+        case technicalFailure(SearchAttemptFailure)
+    }
     
     static let shared = ProductSearchService()
     
@@ -98,6 +139,36 @@ actor ProductSearchService {
         guard let text = value as? String else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func responseSnippet(from data: Data, limit: Int = 300) -> String? {
+        guard let responseString = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !responseString.isEmpty else {
+            return nil
+        }
+        return String(responseString.prefix(limit))
+    }
+
+    private func runSearchAttempt(
+        source: ProductInfo.Source,
+        operation: () async throws -> ProductInfo?
+    ) async -> SearchAttemptOutcome {
+        do {
+            if let product = try await operation() {
+                debugLog("[ProductSearch] \(source.localizedDisplayName): Found \(product.name)")
+                return .found(product)
+            }
+            debugLog("[ProductSearch] \(source.localizedDisplayName): Not found")
+            return .notFound
+        } catch let failure as SearchAttemptFailure {
+            debugLog(failure.logMessage)
+            return .technicalFailure(failure)
+        } catch {
+            let failure = SearchAttemptFailure.network(source: source, underlying: error)
+            debugLog(failure.logMessage)
+            return .technicalFailure(failure)
+        }
     }
 
     private func preferredLanguageCandidates() -> [String] {
@@ -171,29 +242,60 @@ actor ProductSearchService {
         guard isValidJANCode(cleanedCode) else {
             throw ProductSearchError.invalidJANCode
         }
-        
+
+        var technicalFailures: [SearchAttemptFailure] = []
+        var sawNotFound = false
+
+        func resolve(_ outcome: SearchAttemptOutcome) -> ProductInfo? {
+            switch outcome {
+            case .found(let product):
+                return product
+            case .notFound:
+                sawNotFound = true
+                return nil
+            case .technicalFailure(let failure):
+                technicalFailures.append(failure)
+                return nil
+            }
+        }
+
         // 1. 楽天APIを最優先
         if APIConfig.isRakutenConfigured {
-            if let product = try? await searchRakutenProduct(janCode: cleanedCode) {
+            if let product = resolve(await runSearchAttempt(source: .rakuten) {
+                try await searchRakutenProduct(janCode: cleanedCode)
+            }) {
                 return product
             }
-            if let product = try? await searchRakuten(janCode: cleanedCode) {
+
+            if let product = resolve(await runSearchAttempt(source: .rakuten) {
+                try await searchRakuten(janCode: cleanedCode)
+            }) {
                 return product
             }
+        } else {
+            debugLog("[ProductSearch] 楽天APIは未設定です")
         }
-        
+
         // 2. Open Food Facts API（無料・登録不要）
-        if let product = try? await searchOpenFoodFacts(janCode: cleanedCode) {
+        if let product = resolve(await runSearchAttempt(source: .openFoodFacts) {
+            try await searchOpenFoodFacts(janCode: cleanedCode)
+        }) {
             return product
         }
-        
+
         // 3. Yahoo APIにフォールバック
         if APIConfig.isYahooConfigured {
-            if let product = try? await searchYahoo(janCode: cleanedCode) {
+            if let product = resolve(await runSearchAttempt(source: .yahoo) {
+                try await searchYahoo(janCode: cleanedCode)
+            }) {
                 return product
             }
         }
-        
+
+        if let technicalFailure = technicalFailures.last, !sawNotFound {
+            throw technicalFailure.publicError
+        }
+
         throw ProductSearchError.notFound
     }
     
@@ -221,18 +323,45 @@ actor ProductSearchService {
         debugLog("[ProductSearch] Open Food Facts: \(url.absoluteString)")
         
         let (data, response) = try await session.data(from: url)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            debugLog("[ProductSearch] Open Food Facts: HTTP error")
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SearchAttemptFailure.invalidResponse(
+                source: .openFoodFacts,
+                detail: "HTTPレスポンスを取得できませんでした"
+            )
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            throw SearchAttemptFailure.httpStatus(
+                source: .openFoodFacts,
+                statusCode: httpResponse.statusCode,
+                detail: responseSnippet(from: data)
+            )
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw SearchAttemptFailure.parse(
+                source: .openFoodFacts,
+                detail: "JSONを解析できませんでした"
+            )
+        }
+
+        guard let status = json["status"] as? Int else {
+            throw SearchAttemptFailure.parse(
+                source: .openFoodFacts,
+                detail: "status が含まれていません"
+            )
+        }
+
+        guard status == 1 else {
             return nil
         }
-        
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let status = json["status"] as? Int, status == 1,
-              let product = json["product"] as? [String: Any] else {
-            debugLog("[ProductSearch] Open Food Facts: Product not found")
-            return nil
+
+        guard let product = json["product"] as? [String: Any] else {
+            throw SearchAttemptFailure.parse(
+                source: .openFoodFacts,
+                detail: "product が含まれていません"
+            )
         }
         
         let preferredLanguages = preferredLanguageCandidates()
@@ -291,8 +420,10 @@ actor ProductSearchService {
         ]
 
         guard let url = components.url else {
-            debugLog("[ProductSearch] Failed to create Rakuten product URL")
-            return nil
+            throw SearchAttemptFailure.invalidResponse(
+                source: .rakuten,
+                detail: "商品価格ナビAPIのURLを生成できませんでした"
+            )
         }
 
         let maskedURL = maskedURLString(from: url, sensitiveQueryNames: ["applicationid", "accesskey"])
@@ -301,37 +432,65 @@ actor ProductSearchService {
         let (data, response) = try await session.data(from: url)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            debugLog("[ProductSearch] Rakuten product API: Invalid response")
-            return nil
+            throw SearchAttemptFailure.invalidResponse(
+                source: .rakuten,
+                detail: "商品価格ナビAPIのHTTPレスポンスを取得できませんでした"
+            )
         }
 
         debugLog("[ProductSearch] Rakuten product API HTTP Status: \(httpResponse.statusCode)")
 
+        if httpResponse.statusCode == 404 {
+            return nil
+        }
+
         guard httpResponse.statusCode == 200 else {
-            if let responseString = String(data: data, encoding: .utf8) {
+            if let responseString = responseSnippet(from: data) {
                 debugLog("[ProductSearch] Rakuten product API error response: \(responseString)")
             }
-            return nil
+            throw SearchAttemptFailure.httpStatus(
+                source: .rakuten,
+                statusCode: httpResponse.statusCode,
+                detail: responseSnippet(from: data)
+            )
         }
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            debugLog("[ProductSearch] Rakuten product API: Failed to parse JSON")
-            return nil
+            throw SearchAttemptFailure.parse(
+                source: .rakuten,
+                detail: "商品価格ナビAPIのJSONを解析できませんでした"
+            )
         }
 
-        guard let items = json["items"] as? [[String: Any]],
-              let firstItem = items.first,
-              let productName = normalizedText(firstItem["productName"]) else {
-            debugLog("[ProductSearch] Rakuten product API: No items found")
-            if let responseString = String(data: data, encoding: .utf8)?.prefix(500) {
-                debugLog("[ProductSearch] Rakuten product API response: \(responseString)")
-            }
+        let productPayload: [String: Any]?
+        if let products = json["Products"] as? [[String: Any]], let firstProduct = products.first {
+            productPayload = (firstProduct["Product"] as? [String: Any]) ?? firstProduct
+        } else if let items = json["items"] as? [[String: Any]], let firstItem = items.first {
+            productPayload = (firstItem["Product"] as? [String: Any]) ?? firstItem
+        } else if normalizedText(json["error"] as? String) == "not_found" {
             return nil
+        } else {
+            throw SearchAttemptFailure.parse(
+                source: .rakuten,
+                detail: "商品価格ナビAPIのレスポンスに Products が含まれていません"
+            )
         }
 
-        let description = normalizedText(firstItem["productCaption"])
-        let category = normalizedText(firstItem["genreName"])
-        let imageURL = normalizedText(firstItem["mediumImageUrl"]).flatMap(URL.init(string:))
+        guard let productPayload,
+              let rawProductName = normalizedText(productPayload["productName"]) else {
+            throw SearchAttemptFailure.parse(
+                source: .rakuten,
+                detail: "商品価格ナビAPIの productName を取得できませんでした"
+            )
+        }
+
+        let productName = mergedProductName(
+            brand: normalizedText(productPayload["brandName"]),
+            name: rawProductName
+        )
+        let description = normalizedText(productPayload["productCaption"])
+        let category = normalizedText(productPayload["genreName"])
+        let imageURL = normalizedText(productPayload["mediumImageUrl"]).flatMap(URL.init(string:))
 
         debugLog("[ProductSearch] Rakuten product API found: \(productName)")
 
@@ -362,8 +521,10 @@ actor ProductSearchService {
         ]
         
         guard let url = components.url else {
-            debugLog("[ProductSearch] Failed to create URL")
-            return nil
+            throw SearchAttemptFailure.invalidResponse(
+                source: .rakuten,
+                detail: "楽天市場検索APIのURLを生成できませんでした"
+            )
         }
         
         let maskedURL = maskedURLString(from: url, sensitiveQueryNames: ["applicationid", "accesskey"])
@@ -372,34 +533,48 @@ actor ProductSearchService {
         let (data, response) = try await session.data(from: url)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            debugLog("[ProductSearch] Invalid response")
-            return nil
+            throw SearchAttemptFailure.invalidResponse(
+                source: .rakuten,
+                detail: "楽天市場検索APIのHTTPレスポンスを取得できませんでした"
+            )
         }
         
         debugLog("[ProductSearch] HTTP Status: \(httpResponse.statusCode)")
         
+        if httpResponse.statusCode == 404 {
+            return nil
+        }
+
         guard httpResponse.statusCode == 200 else {
-            if let responseString = String(data: data, encoding: .utf8) {
+            if let responseString = responseSnippet(from: data) {
                 debugLog("[ProductSearch] Error response: \(responseString)")
             }
-            return nil
+            throw SearchAttemptFailure.httpStatus(
+                source: .rakuten,
+                statusCode: httpResponse.statusCode,
+                detail: responseSnippet(from: data)
+            )
         }
         
         // JSONパース
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            debugLog("[ProductSearch] Failed to parse JSON")
-            return nil
+            throw SearchAttemptFailure.parse(
+                source: .rakuten,
+                detail: "楽天市場検索APIのJSONを解析できませんでした"
+            )
         }
         
         guard let items = json["Items"] as? [[String: Any]],
               let firstItem = items.first,
-              let itemData = firstItem["Item"] as? [String: Any],
-              let itemName = itemData["itemName"] as? String else {
-            debugLog("[ProductSearch] No items found in response")
-            if let responseString = String(data: data, encoding: .utf8)?.prefix(500) {
-                debugLog("[ProductSearch] Response: \(responseString)")
-            }
+              let itemData = firstItem["Item"] as? [String: Any] else {
             return nil
+        }
+
+        guard let itemName = normalizedText(itemData["itemName"]) else {
+            throw SearchAttemptFailure.parse(
+                source: .rakuten,
+                detail: "楽天市場検索APIの itemName を取得できませんでした"
+            )
         }
         
         let description = normalizedText(itemData["itemCaption"])
@@ -436,22 +611,47 @@ actor ProductSearchService {
         ]
         
         guard let url = components.url else {
-            return nil
+            throw SearchAttemptFailure.invalidResponse(
+                source: .yahoo,
+                detail: "Yahoo検索APIのURLを生成できませんでした"
+            )
         }
         
         let (data, response) = try await session.data(from: url)
         
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            return nil
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SearchAttemptFailure.invalidResponse(
+                source: .yahoo,
+                detail: "Yahoo検索APIのHTTPレスポンスを取得できませんでした"
+            )
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            throw SearchAttemptFailure.httpStatus(
+                source: .yahoo,
+                statusCode: httpResponse.statusCode,
+                detail: responseSnippet(from: data)
+            )
         }
         
         // JSONパース
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let hits = json["hits"] as? [[String: Any]],
-              let firstHit = hits.first,
-              let itemName = firstHit["name"] as? String else {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw SearchAttemptFailure.parse(
+                source: .yahoo,
+                detail: "Yahoo検索APIのJSONを解析できませんでした"
+            )
+        }
+
+        guard let hits = json["hits"] as? [[String: Any]],
+              let firstHit = hits.first else {
             return nil
+        }
+
+        guard let itemName = normalizedText(firstHit["name"]) else {
+            throw SearchAttemptFailure.parse(
+                source: .yahoo,
+                detail: "Yahoo検索APIの name を取得できませんでした"
+            )
         }
         
         let description = normalizedText(firstHit["description"])

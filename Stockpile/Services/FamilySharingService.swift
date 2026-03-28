@@ -17,6 +17,48 @@ final class CloudKitFamilySharingService {
         let itemCount: Int
     }
 
+    struct ShareParticipantDisplay: Identifiable, Sendable {
+        enum Status: Int, Sendable {
+            case owner = 0
+            case accepted = 1
+            case pending = 2
+
+            var label: String {
+                switch self {
+                case .owner:
+                    return "オーナー"
+                case .accepted:
+                    return "参加中"
+                case .pending:
+                    return "招待中"
+                }
+            }
+
+            var fallbackName: String {
+                switch self {
+                case .owner:
+                    return "オーナー"
+                case .accepted:
+                    return "参加者"
+                case .pending:
+                    return "招待中の参加者"
+                }
+            }
+        }
+
+        let id: String
+        let displayName: String
+        let status: Status
+
+        var statusLabel: String {
+            status.label
+        }
+
+        var isOwner: Bool {
+            status == .owner
+        }
+    }
+
     private let logger = Logger(subsystem: "com.stockpile-manager.app", category: "CloudKitSharing")
     private let modelContext: ModelContext
     private let container: CKContainer
@@ -215,6 +257,21 @@ final class CloudKitFamilySharingService {
             bagCount: bagRecords.count,
             itemCount: itemRecords.count
         )
+    }
+
+    func fetchShareParticipants(for family: Family) async throws -> [ShareParticipantDisplay] {
+        guard family.shareState != .localOnly else { return [] }
+        guard let share = try await fetchZoneWideShare(for: family) else { return [] }
+
+        return share.participants.enumerated().compactMap { index, participant in
+            participantDisplay(from: participant, index: index)
+        }
+        .sorted { lhs, rhs in
+            if lhs.status.rawValue != rhs.status.rawValue {
+                return lhs.status.rawValue < rhs.status.rawValue
+            }
+            return lhs.displayName.localizedStandardCompare(rhs.displayName) == .orderedAscending
+        }
     }
 
     func leaveFamily(_ family: Family) async throws {
@@ -419,6 +476,53 @@ final class CloudKitFamilySharingService {
             }
             throw error
         }
+    }
+
+    private func fetchZoneWideShare(for family: Family) async throws -> CKShare? {
+        try await fetchExistingShare(for: family, in: database(for: family))
+    }
+
+    private func participantDisplay(
+        from participant: CKShare.Participant,
+        index: Int
+    ) -> ShareParticipantDisplay? {
+        let status: ShareParticipantDisplay.Status
+        if participant.role == .owner {
+            status = .owner
+        } else {
+            switch participant.acceptanceStatus {
+            case .accepted:
+                status = .accepted
+            case .pending:
+                status = .pending
+            case .removed, .unknown:
+                return nil
+            @unknown default:
+                return nil
+            }
+        }
+
+        let displayName = participantDisplayName(from: participant, fallback: status.fallbackName)
+        let recordName = participant.userIdentity.userRecordID?.recordName
+        let id = recordName ?? "\(status.rawValue)-\(displayName)-\(index)"
+        return ShareParticipantDisplay(id: id, displayName: displayName, status: status)
+    }
+
+    private func participantDisplayName(from participant: CKShare.Participant, fallback: String) -> String {
+        if let nameComponents = participant.userIdentity.nameComponents {
+            let formatter = PersonNameComponentsFormatter()
+            let formatted = formatter.string(from: nameComponents).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !formatted.isEmpty {
+                return formatted
+            }
+        }
+
+        if let contact = participant.userIdentity.contactIdentifiers.first,
+           !contact.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return contact
+        }
+
+        return fallback
     }
 
     private func shouldRetrySharePreparation(after error: Error) -> Bool {

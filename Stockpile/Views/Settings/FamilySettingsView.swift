@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import CloudKit
+import UIKit
 
 /// 家族設定画面
 struct FamilySettingsView: View {
@@ -22,24 +23,43 @@ struct FamilySettingsView: View {
     @State private var showShareError = false
     @State private var showFamilyNamePrompt = false
     @State private var activeShare: CKShare?
-    @State private var showShareSheet = false
+    @State private var showShareManagementSheet = false
+    @State private var sharePayload: ShareActivityPayload?
+    @State private var participantDisplays: [CloudKitFamilySharingService.ShareParticipantDisplay] = []
+    @State private var isLoadingParticipants = false
+    @State private var isOpeningShareManagement = false
 
     private var isParticipantFamily: Bool {
         family.cloudKitDatabaseScope == .sharedDatabase && !family.cloudKitPendingSync
     }
 
+    private var usesCloudKitParticipantList: Bool {
+        family.shareState != .localOnly
+    }
+
     private var shareButtonTitle: String {
-        family.shareState == .localOnly ? "家族共有を開始" : "共有リンクを送信"
+        family.cloudKitShareURL == nil ? "共有リンクを作成" : "共有リンクを送信"
+    }
+
+    private var canManageShare: Bool {
+        !isParticipantFamily && family.cloudKitShareURL != nil
     }
 
     private var memberSectionFooter: String {
-        return family.shareState == .localOnly
-            ? "メンバー情報はこの端末のローカルデータです"
-            : "iCloud共有の状態に応じて重複を除いたメンバーを表示しています"
+        if usesCloudKitParticipantList {
+            return isLoadingParticipants
+                ? "iCloud共有の参加者を読み込んでいます"
+                : "iCloud共有の参加者を表示しています"
+        }
+        return "メンバー情報はこの端末のローカルデータです"
     }
 
-    private var displayedMembers: [User] {
+    private var displayedLocalMembers: [User] {
         family.uniqueMembers
+    }
+
+    private var displayedMemberCount: Int {
+        usesCloudKitParticipantList ? participantDisplays.count : displayedLocalMembers.count
     }
 
     private var scopedItemsCount: Int {
@@ -82,28 +102,46 @@ struct FamilySettingsView: View {
                 Text("家族情報")
             }
 
-            Section {
-                Button {
-                    handleShareButtonTap()
-                } label: {
-                    HStack {
-                        Label(shareButtonTitle, systemImage: "square.and.arrow.up")
-                        Spacer()
-                        if isStartingShare {
-                            ProgressView()
-                                .progressViewStyle(.circular)
+            if !isParticipantFamily {
+                Section {
+                    Button {
+                        handleShareButtonTap()
+                    } label: {
+                        HStack {
+                            Label(shareButtonTitle, systemImage: "link")
+                            Spacer()
+                            if isStartingShare {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                            }
                         }
                     }
+                    .disabled(isStartingShare || isOpeningShareManagement)
+
+                    if canManageShare {
+                        Button {
+                            openShareManagement()
+                        } label: {
+                            HStack {
+                                Label("共有設定を管理", systemImage: "person.crop.circle.badge.checkmark")
+                                Spacer()
+                                if isOpeningShareManagement {
+                                    ProgressView()
+                                        .progressViewStyle(.circular)
+                                }
+                            }
+                        }
+                        .disabled(isStartingShare || isOpeningShareManagement)
+                    }
+                } header: {
+                    Text("招待")
+                } footer: {
+                    Text(
+                        family.cloudKitShareURL == nil
+                        ? "先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。"
+                        : "作成済みの共有リンクを送信できます。参加者の管理や共有停止は「共有設定を管理」から行えます。"
+                    )
                 }
-                .disabled(isStartingShare)
-            } header: {
-                Text("招待")
-            } footer: {
-                Text(
-                    family.shareState == .localOnly
-                    ? "iCloud の共有リンクを作成すると、家族の別 Apple ID 端末とも備蓄データを共有できます。"
-                    : "iCloud の共有リンクを使って家族を招待します。参加側はリンクを開くと共有を受理できます。"
-                )
             }
 
             Section {
@@ -150,25 +188,43 @@ struct FamilySettingsView: View {
             }
 
             Section {
-                ForEach(displayedMembers) { member in
-                    HStack {
-                        Image(systemName: "person.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(.blue)
+                if usesCloudKitParticipantList {
+                    ForEach(participantDisplays) { participant in
+                        HStack {
+                            Image(systemName: participant.isOwner ? "person.crop.circle.badge.checkmark" : "person.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(participant.isOwner ? .orange : .blue)
 
-                        VStack(alignment: .leading) {
-                            Text(member.displayName)
-                                .font(.body)
-                            if let email = member.email {
-                                Text(email)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(participant.displayName)
+                                    .font(.body)
+                                Text(participant.statusLabel)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
                     }
+                } else {
+                    ForEach(displayedLocalMembers) { member in
+                        HStack {
+                            Image(systemName: "person.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.blue)
+
+                            VStack(alignment: .leading) {
+                                Text(member.displayName)
+                                    .font(.body)
+                                if let email = member.email {
+                                    Text(email)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
                 }
 
-                if displayedMembers.isEmpty {
+                if displayedMemberCount == 0 {
                     HStack {
                         Image(systemName: "person.badge.plus")
                             .foregroundStyle(.secondary)
@@ -177,7 +233,7 @@ struct FamilySettingsView: View {
                     }
                 }
             } header: {
-                Text("メンバー (\(displayedMembers.count)人)")
+                Text("メンバー (\(displayedMemberCount)人)")
             } footer: {
                 Text(memberSectionFooter)
             }
@@ -270,8 +326,11 @@ struct FamilySettingsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showShareSheet, onDismiss: {
+        .sheet(isPresented: $showShareManagementSheet, onDismiss: {
             activeShare = nil
+            Task {
+                await refreshParticipantDisplays()
+            }
         }) {
             if let activeShare {
                 CloudKitSharingSheet(
@@ -284,8 +343,12 @@ struct FamilySettingsView: View {
                 )
             }
         }
+        .sheet(item: $sharePayload) { payload in
+            ShareActivitySheet(payload: payload)
+        }
         .task(id: family.id) {
             await autoSyncFamilyStateIfPossible()
+            await refreshParticipantDisplays()
         }
     }
 
@@ -312,7 +375,11 @@ struct FamilySettingsView: View {
             return
         }
 
-        presentCloudKitShareSheet()
+        if let shareURL = family.cloudKitShareURL {
+            presentShareActivity(for: shareURL)
+        } else {
+            prepareShareLinkAndPresentActivity()
+        }
     }
 
     private var requiresFamilyNameBeforeSharing: Bool {
@@ -329,14 +396,14 @@ struct FamilySettingsView: View {
         do {
             try modelContext.save()
             showFamilyNamePrompt = false
-            presentCloudKitShareSheet()
+            prepareShareLinkAndPresentActivity()
         } catch {
             shareError = "家族名の保存に失敗しました: \(error.localizedDescription)"
             showShareError = true
         }
     }
 
-    private func presentCloudKitShareSheet() {
+    private func prepareShareLinkAndPresentActivity() {
         isStartingShare = true
 
         Task {
@@ -344,13 +411,45 @@ struct FamilySettingsView: View {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 activeShare = try await sharingService.prepareShare(for: family)
                 isStartingShare = false
-                showShareSheet = true
+                guard let shareURL = activeShare?.url ?? family.cloudKitShareURL else {
+                    shareError = "共有リンクの取得に失敗しました"
+                    showShareError = true
+                    return
+                }
+                presentShareActivity(for: shareURL)
+                await refreshParticipantDisplays()
             } catch {
                 isStartingShare = false
                 shareError = "共有リンクの準備に失敗しました: \(error.localizedDescription)"
                 showShareError = true
             }
         }
+    }
+
+    private func openShareManagement() {
+        isOpeningShareManagement = true
+
+        Task {
+            do {
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                activeShare = try await sharingService.prepareShare(for: family)
+                isOpeningShareManagement = false
+                showShareManagementSheet = true
+                await refreshParticipantDisplays()
+            } catch {
+                isOpeningShareManagement = false
+                shareError = "共有設定の読み込みに失敗しました: \(error.localizedDescription)"
+                showShareError = true
+            }
+        }
+    }
+
+    private func presentShareActivity(for shareURL: URL) {
+        let trimmedName = family.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let message = trimmedName.isEmpty
+            ? "Stockpile の家族共有リンクです。"
+            : "「\(trimmedName)」の Stockpile 家族共有リンクです。"
+        sharePayload = ShareActivityPayload(message: message, url: shareURL)
     }
 
     private func leaveFamily() {
@@ -422,6 +521,43 @@ struct FamilySettingsView: View {
             // 自動同期の失敗はUI操作を妨げない。
         }
     }
+
+    private func refreshParticipantDisplays() async {
+        guard usesCloudKitParticipantList else {
+            participantDisplays = []
+            isLoadingParticipants = false
+            return
+        }
+
+        isLoadingParticipants = true
+        defer { isLoadingParticipants = false }
+
+        do {
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            participantDisplays = try await sharingService.fetchShareParticipants(for: family)
+        } catch {
+            participantDisplays = []
+        }
+    }
+}
+
+private struct ShareActivityPayload: Identifiable {
+    let id = UUID()
+    let message: String
+    let url: URL
+}
+
+private struct ShareActivitySheet: UIViewControllerRepresentable {
+    let payload: ShareActivityPayload
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(
+            activityItems: [payload.message, payload.url],
+            applicationActivities: nil
+        )
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 struct CloudKitSharingSheet: UIViewControllerRepresentable {
