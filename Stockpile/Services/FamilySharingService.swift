@@ -244,6 +244,7 @@ final class FamilySharingService {
         let remoteItems = try await firebaseClient.fetchItems(familyId: family.id.uuidString)
         try applyRemoteFamilyData(in: family, remoteBags: remoteBags, remoteItems: remoteItems)
         try modelContext.save()
+        LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
         NotificationManager.shared.requestReschedule(using: modelContext)
         return (bags: remoteBags.count, items: remoteItems.count)
     }
@@ -254,6 +255,7 @@ final class FamilySharingService {
             return
         }
 
+        LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
         let snapshots = try buildLocalFamilySnapshots(for: family, modelContext: modelContext)
         do {
             try await firebaseClient.syncFamily(
@@ -655,6 +657,7 @@ final class CloudKitFamilySharingService {
     func syncFamilyDataToCloudKit(for family: Family) async throws {
         guard family.isCloudKitSharedFamily else { return }
         try attachOrphanLocalDataIfNeeded(to: family)
+        LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
 
         let database = database(for: family)
         if family.cloudKitDatabaseScope == .privateDatabase {
@@ -840,6 +843,7 @@ final class CloudKitFamilySharingService {
         }
 
         try modelContext.save()
+        LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
         NotificationManager.shared.requestReschedule(using: modelContext)
         return currentFamily
     }
