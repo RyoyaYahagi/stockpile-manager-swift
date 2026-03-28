@@ -1727,41 +1727,8 @@ final class LocalDataRepairService {
             let validBags = allBags.filter { normalizedNonEmptyString($0.name) != nil }
             let validItems = allItems.filter { normalizedNonEmptyString($0.name) != nil }
 
-            for duplicates in Dictionary(grouping: validBags, by: \.id).values where duplicates.count > 1 {
-                let keeper = preferredBag(in: duplicates)
-                keeper.name = normalizedNonEmptyString(keeper.name) ?? keeper.name
-                keeper.createdAt = duplicates.map(\.createdAt).min() ?? keeper.createdAt
-                keeper.family = duplicates.compactMap(\.family).first ?? keeper.family
-
-                for duplicate in duplicates where duplicate.persistentModelID != keeper.persistentModelID {
-                    for item in duplicate.resolvedItems {
-                        item.bag = keeper
-                    }
-                    modelContext.delete(duplicate)
-                    didChange = true
-                }
-            }
-
-            for duplicates in Dictionary(grouping: validItems, by: \.id).values where duplicates.count > 1 {
-                let keeper = preferredItem(in: duplicates)
-                keeper.name = duplicates
-                    .compactMap { normalizedNonEmptyString($0.name) }
-                    .max(by: { $0.count < $1.count }) ?? keeper.name
-                keeper.quantity = duplicates.map(\.quantity).max() ?? keeper.quantity
-                keeper.expiryDate = duplicates.compactMap(\.expiryDate).min() ?? keeper.expiryDate
-                keeper.locationNote = duplicates.compactMap(\.locationNote).compactMap(normalizedOptionalString).first ?? keeper.locationNote
-                keeper.notified30 = duplicates.contains { $0.notified30 }
-                keeper.notified7 = duplicates.contains { $0.notified7 }
-                keeper.notified1 = duplicates.contains { $0.notified1 }
-                keeper.createdAt = duplicates.map(\.createdAt).min() ?? keeper.createdAt
-                keeper.family = duplicates.compactMap(\.family).first ?? keeper.family
-                keeper.bag = duplicates.compactMap(\.bag).first ?? keeper.bag
-
-                for duplicate in duplicates where duplicate.persistentModelID != keeper.persistentModelID {
-                    modelContext.delete(duplicate)
-                    didChange = true
-                }
-            }
+            didChange = repairBags(validBags) || didChange
+            didChange = repairItems(validItems) || didChange
 
             if didChange {
                 try modelContext.save()
@@ -1770,6 +1737,79 @@ final class LocalDataRepairService {
             #if DEBUG
             print("データ修復に失敗: \(error)")
             #endif
+        }
+    }
+
+    private func repairBags(_ bags: [Bag]) -> Bool {
+        var didChange = false
+
+        for duplicates in Dictionary(grouping: bags, by: \.id).values where duplicates.count > 1 {
+            mergeBagDuplicates(duplicates)
+            didChange = true
+        }
+
+        let currentBags = ((try? modelContext.fetch(FetchDescriptor<Bag>())) ?? bags)
+            .filter { normalizedNonEmptyString($0.name) != nil }
+        let semanticGroups = Dictionary(grouping: currentBags, by: bagSemanticKey(for:))
+        for duplicates in semanticGroups.values where duplicates.count > 1 {
+            guard shouldMergeSemanticBagGroup(duplicates) else { continue }
+            mergeBagDuplicates(duplicates)
+            didChange = true
+        }
+
+        return didChange
+    }
+
+    private func repairItems(_ items: [Item]) -> Bool {
+        var didChange = false
+
+        for duplicates in Dictionary(grouping: items, by: \.id).values where duplicates.count > 1 {
+            mergeItemDuplicates(duplicates)
+            didChange = true
+        }
+
+        let currentItems = ((try? modelContext.fetch(FetchDescriptor<Item>())) ?? items)
+            .filter { normalizedNonEmptyString($0.name) != nil }
+        let semanticGroups = Dictionary(grouping: currentItems, by: itemSemanticKey(for:))
+        for duplicates in semanticGroups.values where duplicates.count > 1 {
+            mergeItemDuplicates(duplicates)
+            didChange = true
+        }
+
+        return didChange
+    }
+
+    private func mergeBagDuplicates(_ duplicates: [Bag]) {
+        let keeper = preferredBag(in: duplicates)
+        keeper.name = normalizedNonEmptyString(keeper.name) ?? keeper.name
+        keeper.createdAt = duplicates.map(\.createdAt).min() ?? keeper.createdAt
+        keeper.family = duplicates.compactMap(\.family).first ?? keeper.family
+
+        for duplicate in duplicates where duplicate.persistentModelID != keeper.persistentModelID {
+            for item in duplicate.resolvedItems {
+                item.bag = keeper
+            }
+            modelContext.delete(duplicate)
+        }
+    }
+
+    private func mergeItemDuplicates(_ duplicates: [Item]) {
+        let keeper = preferredItem(in: duplicates)
+        keeper.name = duplicates
+            .compactMap { normalizedNonEmptyString($0.name) }
+            .max(by: { $0.count < $1.count }) ?? keeper.name
+        keeper.quantity = duplicates.map(\.quantity).max() ?? keeper.quantity
+        keeper.expiryDate = duplicates.compactMap(\.expiryDate).min() ?? keeper.expiryDate
+        keeper.locationNote = duplicates.compactMap(\.locationNote).compactMap(normalizedOptionalString).first ?? keeper.locationNote
+        keeper.notified30 = duplicates.contains { $0.notified30 }
+        keeper.notified7 = duplicates.contains { $0.notified7 }
+        keeper.notified1 = duplicates.contains { $0.notified1 }
+        keeper.createdAt = duplicates.map(\.createdAt).min() ?? keeper.createdAt
+        keeper.family = duplicates.compactMap(\.family).first ?? keeper.family
+        keeper.bag = duplicates.compactMap(\.bag).first ?? keeper.bag
+
+        for duplicate in duplicates where duplicate.persistentModelID != keeper.persistentModelID {
+            modelContext.delete(duplicate)
         }
     }
 
@@ -1837,6 +1877,78 @@ final class LocalDataRepairService {
         if !user.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { score += 2 }
         if user.family != nil { score += 1 }
         return score
+    }
+
+    private func bagSemanticKey(for bag: Bag) -> String {
+        let familyScope = familyScopeKey(for: bag.family)
+        let nameKey = foldedLookupKey(for: bag.name) ?? bag.id.uuidString
+        return "\(familyScope)::bag::\(nameKey)"
+    }
+
+    private func itemSemanticKey(for item: Item) -> ItemSemanticKey {
+        ItemSemanticKey(
+            familyScope: familyScopeKey(for: item.family),
+            bagScope: item.bag?.id.uuidString,
+            name: foldedLookupKey(for: item.name) ?? item.id.uuidString,
+            quantity: item.quantity,
+            expiryDate: expiryDayKey(for: item.expiryDate),
+            locationNote: foldedLookupKey(for: item.locationNote)
+        )
+    }
+
+    private func shouldMergeSemanticBagGroup(_ bags: [Bag]) -> Bool {
+        if bags.contains(where: { $0.resolvedItems.isEmpty }) {
+            return true
+        }
+
+        let itemSignatureSets = bags.map { bag in
+            Set(bag.resolvedItems.map(itemContentKeyIgnoringBag(for:)))
+        }
+
+        guard let firstSet = itemSignatureSets.first else {
+            return false
+        }
+
+        return itemSignatureSets.dropFirst().allSatisfy { $0 == firstSet }
+    }
+
+    private func itemContentKeyIgnoringBag(for item: Item) -> ItemContentKey {
+        ItemContentKey(
+            name: foldedLookupKey(for: item.name) ?? item.id.uuidString,
+            quantity: item.quantity,
+            expiryDate: expiryDayKey(for: item.expiryDate),
+            locationNote: foldedLookupKey(for: item.locationNote)
+        )
+    }
+
+    private func familyScopeKey(for family: Family?) -> String {
+        guard let family else { return "no-family" }
+        if let zoneIdentity = family.cloudKitZoneIdentity {
+            return "cloudkit:\(zoneIdentity)"
+        }
+        if let firebaseFamilyID = normalizedNonEmptyString(family.firebaseFamilyID) {
+            return "firebase:\(firebaseFamilyID)"
+        }
+        return "local:\(family.id.uuidString)"
+    }
+
+    private func foldedLookupKey(for value: String?) -> String? {
+        guard let normalized = normalizedNonEmptyString(value) else { return nil }
+        return normalized.folding(
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+            locale: .current
+        )
+    }
+
+    private func expiryDayKey(for date: Date?) -> String? {
+        guard let date else { return nil }
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        guard let year = components.year,
+              let month = components.month,
+              let day = components.day else {
+            return nil
+        }
+        return String(format: "%04d-%02d-%02d", year, month, day)
     }
 
     private func repairFamilies(_ families: [Family]) -> Bool {
@@ -1942,6 +2054,22 @@ final class LocalDataRepairService {
               family.cloudKitShareURL == nil else { return false }
         return family.resolvedBags.isEmpty && family.resolvedItems.isEmpty && family.uniqueMembers.isEmpty
     }
+}
+
+private struct ItemSemanticKey: Hashable {
+    let familyScope: String
+    let bagScope: String?
+    let name: String
+    let quantity: Int
+    let expiryDate: String?
+    let locationNote: String?
+}
+
+private struct ItemContentKey: Hashable {
+    let name: String
+    let quantity: Int
+    let expiryDate: String?
+    let locationNote: String?
 }
 
 @MainActor

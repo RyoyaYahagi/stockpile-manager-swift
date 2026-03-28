@@ -31,6 +31,7 @@ struct ItemFormSheet: View {
     @State private var locationNote: String = ""
     @State private var showOCRCamera = false
     @State private var showBarcodeScanner = false
+    @State private var isSaving = false
     
     init(mode: Mode, preselectedBagId: UUID? = nil) {
         self.mode = mode
@@ -176,7 +177,7 @@ struct ItemFormSheet: View {
                     Button("保存") {
                         save()
                     }
-                    .disabled(!isValid)
+                    .disabled(!isValid || isSaving)
                 }
             }
             .sheet(isPresented: $showOCRCamera) {
@@ -197,8 +198,13 @@ struct ItemFormSheet: View {
     }
     
     private func save() {
+        guard !isSaving else { return }
+
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = locationNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty, quantity > 0 else { return }
+
+        isSaving = true
         
         let selectedBag = scopedBags.first { $0.id == selectedBagId }
         let family = currentFamily
@@ -229,6 +235,7 @@ struct ItemFormSheet: View {
         do {
             try modelContext.save()
         } catch {
+            isSaving = false
             #if DEBUG
             print("ローカル保存に失敗: \(error)")
             #endif

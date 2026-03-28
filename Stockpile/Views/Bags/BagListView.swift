@@ -183,6 +183,7 @@ struct BagFormSheet: View {
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var name = ""
+    @State private var isSaving = false
     
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -209,36 +210,59 @@ struct BagFormSheet: View {
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("追加") {
-                        let bag = Bag(name: name.trimmingCharacters(in: .whitespacesAndNewlines))
-                        bag.family = CurrentFamilyResolver.currentFamily(from: families)
-                        modelContext.insert(bag)
-                        do {
-                            try modelContext.save()
-                        } catch {
-                            #if DEBUG
-                            print("ローカル保存に失敗: \(error)")
-                            #endif
+                    Button {
+                        addBag()
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                        } else {
+                            Text("追加")
                         }
-                        if let family = CurrentFamilyResolver.currentFamily(from: families) {
-                            Task {
-                                do {
-                                    let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
-                                    try await sharingService.syncFamilyDataToCloudKit(for: family)
-                                } catch {
-                                    #if DEBUG
-                                    print("CloudKit同期に失敗: \(error)")
-                                    #endif
-                                }
-                            }
-                        }
-                        dismiss()
                     }
-                    .disabled(!isValid)
+                    .disabled(!isValid || isSaving)
                 }
             }
         }
         .presentationDetents([.medium])
+    }
+
+    private func addBag() {
+        guard !isSaving else { return }
+
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+
+        isSaving = true
+
+        let bag = Bag(name: trimmedName)
+        let family = CurrentFamilyResolver.currentFamily(from: families)
+        bag.family = family
+        modelContext.insert(bag)
+
+        do {
+            try modelContext.save()
+        } catch {
+            isSaving = false
+            #if DEBUG
+            print("ローカル保存に失敗: \(error)")
+            #endif
+            return
+        }
+
+        if let family {
+            Task {
+                do {
+                    let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                    try await sharingService.syncFamilyDataToCloudKit(for: family)
+                } catch {
+                    #if DEBUG
+                    print("CloudKit同期に失敗: \(error)")
+                    #endif
+                }
+            }
+        }
+
+        dismiss()
     }
 }
 
