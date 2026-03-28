@@ -2,37 +2,54 @@ import Foundation
 
 /// API設定を管理する構造体
 struct APIConfig {
+    private static func normalizedSecretValue(_ value: String?) -> String {
+        let trimmed = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+
+        let uppercased = trimmed.uppercased()
+        if uppercased.hasPrefix("YOUR_") || uppercased.hasSuffix("_HERE") {
+            return ""
+        }
+
+        return trimmed
+    }
+
     // MARK: - 楽天API
     
     /// 楽天アプリID
     /// 楽天ウェブサービスで取得: https://webservice.rakuten.co.jp/
     static var rakutenAppId: String {
         // 1. 環境変数から取得を試みる
-        if let value = ProcessInfo.processInfo.environment["RAKUTEN_APP_ID"], !value.isEmpty {
-            return value
+        let environmentValue = normalizedSecretValue(ProcessInfo.processInfo.environment["RAKUTEN_APP_ID"])
+        if !environmentValue.isEmpty {
+            return environmentValue
         }
-        
+
         // 2. Secrets.plistから取得を試みる
-        if let value = secretsValue(for: "RakutenAppId"), !value.isEmpty {
-            return value
+        let secretsValue = normalizedSecretValue(secretsValue(for: "RakutenAppId"))
+        if !secretsValue.isEmpty {
+            return secretsValue
         }
-        
+
         // 3. Info.plistから取得を試みる
-        if let value = Bundle.main.infoDictionary?["RakutenAppId"] as? String, !value.isEmpty {
-            return value
+        let infoValue = normalizedSecretValue(Bundle.main.infoDictionary?["RakutenAppId"] as? String)
+        if !infoValue.isEmpty {
+            return infoValue
         }
-        
+
         return ""
     }
     
     /// 楽天アクセスキー
     static var rakutenAccessKey: String {
-        if let value = ProcessInfo.processInfo.environment["RAKUTEN_ACCESS_KEY"], !value.isEmpty {
-            return value
+        let environmentValue = normalizedSecretValue(ProcessInfo.processInfo.environment["RAKUTEN_ACCESS_KEY"])
+        if !environmentValue.isEmpty {
+            return environmentValue
         }
         
-        if let value = secretsValue(for: "RakutenAccessKey"), !value.isEmpty {
-            return value
+        let secretsValue = normalizedSecretValue(secretsValue(for: "RakutenAccessKey"))
+        if !secretsValue.isEmpty {
+            return secretsValue
         }
         
         return ""
@@ -43,16 +60,19 @@ struct APIConfig {
     /// Yahoo Client ID
     /// Yahoo!デベロッパーネットワークで取得: https://developer.yahoo.co.jp/
     static var yahooClientId: String {
-        if let value = ProcessInfo.processInfo.environment["YAHOO_CLIENT_ID"], !value.isEmpty {
-            return value
+        let environmentValue = normalizedSecretValue(ProcessInfo.processInfo.environment["YAHOO_CLIENT_ID"])
+        if !environmentValue.isEmpty {
+            return environmentValue
         }
         
-        if let value = secretsValue(for: "YahooClientId"), !value.isEmpty {
-            return value
+        let secretsValue = normalizedSecretValue(secretsValue(for: "YahooClientId"))
+        if !secretsValue.isEmpty {
+            return secretsValue
         }
         
-        if let value = Bundle.main.infoDictionary?["YahooClientId"] as? String, !value.isEmpty {
-            return value
+        let infoValue = normalizedSecretValue(Bundle.main.infoDictionary?["YahooClientId"] as? String)
+        if !infoValue.isEmpty {
+            return infoValue
         }
         
         return ""

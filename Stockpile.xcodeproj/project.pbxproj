@@ -32,6 +32,7 @@
 		026 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126 /* BarcodeScannerView.swift */; };
 		027 /* ProductSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 127 /* ProductSearchService.swift */; };
 		028 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128 /* APIConfig.swift */; };
+		029 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 129 /* Secrets.plist */; };
 		031 /* FamilySharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131 /* FamilySharingService.swift */; };
 		032 /* FamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132 /* FamilySettingsView.swift */; };
 		034 /* CloudKitShareSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 134 /* CloudKitShareSceneDelegate.swift */; };
@@ -302,6 +303,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				019 /* Assets.xcassets in Resources */,
+				029 /* Secrets.plist in Resources */,
 				A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
