@@ -76,42 +76,16 @@ struct NotificationSettingsView: View {
                                     .disabled(!settings.isEnabled)
                                 }
 
-                                HStack(alignment: .center, spacing: 12) {
-                                    TextField("0", text: Binding(
-                                        get: {
-                                            timingInputText(at: index, settings: settings)
-                                        },
-                                        set: { newValue in
-                                            updateTimingInputText(newValue, at: index)
-                                        }
-                                    ))
-                                    .keyboardType(.numberPad)
-                                    .multilineTextAlignment(.trailing)
-                                    .textFieldStyle(.roundedBorder)
-                                    .frame(width: 72)
-                                    .focused($focusedTimingIndex, equals: index)
-                                    .disabled(!settings.isEnabled)
-                                    
-                                    Picker(
-                                        "通知単位",
-                                        selection: Binding(
-                                            get: {
-                                                currentRule.unit
-                                            },
-                                            set: { newValue in
-                                                commitTimingInput(at: index, settings: settings)
-                                                settings.updateNotificationTimingUnit(at: index, to: newValue)
-                                                persistSettingsAndReschedule(settings)
-                                            }
-                                        )
-                                    ) {
-                                        ForEach(NotificationTimingUnit.allCases) { unit in
-                                            Text(unit.shortLabel).tag(unit)
-                                        }
+                                ViewThatFits(in: .horizontal) {
+                                    HStack(alignment: .center, spacing: 12) {
+                                        timingAmountField(at: index, settings: settings)
+                                        timingUnitPicker(at: index, settings: settings, currentRule: currentRule)
                                     }
-                                    .pickerStyle(.segmented)
-                                    .labelsHidden()
-                                    .disabled(!settings.isEnabled)
+
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        timingAmountField(at: index, settings: settings)
+                                        timingUnitPicker(at: index, settings: settings, currentRule: currentRule)
+                                    }
                                 }
                             }
                         }
@@ -317,6 +291,51 @@ struct NotificationSettingsView: View {
             return "当日に通知"
         }
         return "\(normalizedRule.displayText)に通知"
+    }
+
+    private func timingAmountField(at index: Int, settings: NotificationSettings) -> some View {
+        TextField("0", text: Binding(
+            get: {
+                timingInputText(at: index, settings: settings)
+            },
+            set: { newValue in
+                updateTimingInputText(newValue, at: index)
+            }
+        ))
+        .keyboardType(.numberPad)
+        .multilineTextAlignment(.trailing)
+        .textFieldStyle(.roundedBorder)
+        .frame(width: 72)
+        .focused($focusedTimingIndex, equals: index)
+        .disabled(!settings.isEnabled)
+    }
+
+    private func timingUnitPicker(
+        at index: Int,
+        settings: NotificationSettings,
+        currentRule: NotificationTimingRule
+    ) -> some View {
+        Picker(
+            "通知単位",
+            selection: Binding(
+                get: {
+                    currentRule.unit
+                },
+                set: { newValue in
+                    commitTimingInput(at: index, settings: settings)
+                    settings.updateNotificationTimingUnit(at: index, to: newValue)
+                    persistSettingsAndReschedule(settings)
+                }
+            )
+        ) {
+            ForEach(NotificationTimingUnit.allCases) { unit in
+                Text(unit.shortLabel).tag(unit)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .disabled(!settings.isEnabled)
+        .layoutPriority(1)
     }
 
     private func timingInputText(at index: Int, settings: NotificationSettings) -> String {
