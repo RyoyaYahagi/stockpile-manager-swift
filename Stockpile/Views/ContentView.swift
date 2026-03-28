@@ -94,9 +94,7 @@ struct ContentView: View {
         if let settings = notificationSettingsList.first {
             settingsSignature = [
                 settings.isEnabled ? "1" : "0",
-                settings.notify30DaysBefore ? "1" : "0",
-                settings.notify7DaysBefore ? "1" : "0",
-                settings.notifyOnDay ? "1" : "0",
+                settings.notificationTimingSignature,
                 "\(settings.notificationHour)",
                 "\(settings.notificationMinute)"
             ].joined(separator: ":")
@@ -358,6 +356,9 @@ struct ContentView: View {
 
     private func ensureNotificationSettings() -> NotificationSettings {
         if let existing = notificationSettingsList.first {
+            if existing.migrateLegacyTimingDaysIfNeeded() {
+                try? modelContext.save()
+            }
             return existing
         }
 

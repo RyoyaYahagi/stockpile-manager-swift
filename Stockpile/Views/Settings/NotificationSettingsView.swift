@@ -44,43 +44,59 @@ struct NotificationSettingsView: View {
                         get: { settings.isEnabled },
                         set: { newValue in
                             settings.isEnabled = newValue
-                            rescheduleNotifications(settings: settings)
+                            persistSettingsAndReschedule(settings)
                         }
                     ))
                 }
                 
                 // 通知タイミング
                 Section {
-                    Toggle("30日前に通知", isOn: Binding(
-                        get: { settings.notify30DaysBefore },
-                        set: { newValue in
-                            settings.notify30DaysBefore = newValue
-                            rescheduleNotifications(settings: settings)
+                    if settings.notificationTimingDays.isEmpty {
+                        Text("通知タイミングは未設定です")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(Array(settings.notificationTimingDays.enumerated()), id: \.offset) { index, timingDay in
+                            HStack(spacing: 12) {
+                                Stepper(
+                                    value: Binding(
+                                        get: {
+                                            currentTimingDay(at: index, settings: settings)
+                                        },
+                                        set: { newValue in
+                                            settings.updateNotificationTimingDay(at: index, to: newValue)
+                                            persistSettingsAndReschedule(settings)
+                                        }
+                                    ),
+                                    in: 0...365
+                                ) {
+                                    Text(notificationTimingLabel(for: timingDay))
+                                }
+                                .disabled(!settings.isEnabled)
+
+                                Button(role: .destructive) {
+                                    settings.removeNotificationTimingDay(at: index)
+                                    persistSettingsAndReschedule(settings)
+                                } label: {
+                                    Image(systemName: "minus.circle.fill")
+                                        .foregroundStyle(.red)
+                                }
+                                .disabled(!settings.isEnabled)
+                                .accessibilityLabel("通知タイミングを削除")
+                            }
                         }
-                    ))
-                    .disabled(!settings.isEnabled)
-                    
-                    Toggle("7日前に通知", isOn: Binding(
-                        get: { settings.notify7DaysBefore },
-                        set: { newValue in
-                            settings.notify7DaysBefore = newValue
-                            rescheduleNotifications(settings: settings)
-                        }
-                    ))
-                    .disabled(!settings.isEnabled)
-                    
-                    Toggle("当日に通知", isOn: Binding(
-                        get: { settings.notifyOnDay },
-                        set: { newValue in
-                            settings.notifyOnDay = newValue
-                            rescheduleNotifications(settings: settings)
-                        }
-                    ))
+                    }
+
+                    Button {
+                        settings.addNotificationTimingDay()
+                        persistSettingsAndReschedule(settings)
+                    } label: {
+                        Label("通知タイミングを追加", systemImage: "plus.circle")
+                    }
                     .disabled(!settings.isEnabled)
                 } header: {
                     Text("通知タイミング")
                 } footer: {
-                    Text("備蓄品の期限が近づくと通知でお知らせします。")
+                    Text("期限の何日前に通知するかを自由に追加できます。0日前は当日通知です。")
                 }
                 
                 // 通知時刻
@@ -201,12 +217,16 @@ struct NotificationSettingsView: View {
         )
         
         if let existing = try? modelContext.fetch(descriptor).first {
+            if existing.migrateLegacyTimingDaysIfNeeded() {
+                try? modelContext.save()
+            }
             settings = existing
             return
         }
         
         let newSettings = NotificationSettings.createDefault()
         modelContext.insert(newSettings)
+        try? modelContext.save()
         settings = newSettings
     }
     
@@ -222,11 +242,33 @@ struct NotificationSettingsView: View {
         let calendar = Calendar.current
         settings.notificationHour = calendar.component(.hour, from: date)
         settings.notificationMinute = calendar.component(.minute, from: date)
-        rescheduleNotifications(settings: settings)
+        persistSettingsAndReschedule(settings)
     }
     
     private func rescheduleNotifications(settings: NotificationSettings) {
         notificationManager.requestReschedule(items: items, settings: settings)
+    }
+
+    private func currentTimingDay(at index: Int, settings: NotificationSettings) -> Int {
+        let timings = settings.notificationTimingDays
+        guard timings.indices.contains(index) else { return 0 }
+        return timings[index]
+    }
+
+    private func notificationTimingLabel(for daysBefore: Int) -> String {
+        daysBefore == 0 ? "当日に通知" : "\(daysBefore)日前に通知"
+    }
+
+    private func persistSettingsAndReschedule(_ settings: NotificationSettings) {
+        _ = settings.migrateLegacyTimingDaysIfNeeded()
+        do {
+            try modelContext.save()
+        } catch {
+            #if DEBUG
+            print("通知設定の保存に失敗: \(error)")
+            #endif
+        }
+        rescheduleNotifications(settings: settings)
     }
     
     private func openSettings() {

@@ -5,30 +5,7 @@ import SwiftData
 /// 通知アイテムと種類のペア
 private struct NotificationItem {
     let item: Item
-    let type: NotificationType
-}
-
-/// 通知種類
-private enum NotificationType: String {
-    case days30 = "30days"
-    case days7 = "7days"
-    case onday = "onday"
-    
-    var displayText: String {
-        switch self {
-        case .days30: return "30日前"
-        case .days7: return "7日前"
-        case .onday: return "本日"
-        }
-    }
-    
-    var order: Int {
-        switch self {
-        case .onday: return 0
-        case .days7: return 1
-        case .days30: return 2
-        }
-    }
+    let daysBefore: Int
 }
 
 /// 通知管理サービス
@@ -113,6 +90,8 @@ final class NotificationManager: ObservableObject {
         
         guard settings.isEnabled else { return }
         guard await ensureAuthorizationForScheduling() else { return }
+        let timingDays = settings.notificationTimingDays
+        guard !timingDays.isEmpty else { return }
         
         var calendar = Calendar.current
         calendar.timeZone = TimeZone.current
@@ -137,48 +116,24 @@ final class NotificationManager: ObservableObject {
             // 過去の期限はスキップ
             guard daysUntilExpiry >= 0 else { continue }
             
-            // 30日前通知: 残り30日以下で、まだ通知日が来ていない場合は今日通知
-            if settings.notify30DaysBefore && daysUntilExpiry <= 30 && daysUntilExpiry > 7 {
-                // 残り30日以下なので今日通知
-                groupedNotifications[today, default: []].append(
-                    NotificationItem(item: item, type: .days30)
-                )
-            } else if settings.notify30DaysBefore && daysUntilExpiry > 30 {
-                // まだ30日以上あるので、30日前の日にスケジュール
-                if let notifyDate = calendar.date(byAdding: .day, value: -30, to: normalizedExpiryDate) {
-                    groupedNotifications[notifyDate, default: []].append(
-                        NotificationItem(item: item, type: .days30)
-                    )
+            for (index, daysBefore) in timingDays.enumerated() {
+                let nextLowerDays = timingDays.dropFirst(index + 1).first
+                guard let notifyDate = scheduledNotificationDate(
+                    for: daysBefore,
+                    nextLowerDays: nextLowerDays,
+                    daysUntilExpiry: daysUntilExpiry,
+                    today: today,
+                    expiryDate: normalizedExpiryDate,
+                    calendar: calendar
+                ) else {
+                    continue
                 }
-            }
-            
-            // 7日前通知: 残り7日以下で、まだ通知日が来ていない場合は今日通知
-            if settings.notify7DaysBefore && daysUntilExpiry <= 7 && daysUntilExpiry > 0 {
-                // 残り7日以下なので今日通知
-                groupedNotifications[today, default: []].append(
-                    NotificationItem(item: item, type: .days7)
-                )
-            } else if settings.notify7DaysBefore && daysUntilExpiry > 7 {
-                // まだ7日以上あるので、7日前の日にスケジュール
-                if let notifyDate = calendar.date(byAdding: .day, value: -7, to: normalizedExpiryDate) {
-                    groupedNotifications[notifyDate, default: []].append(
-                        NotificationItem(item: item, type: .days7)
-                    )
-                }
-            }
-            
-            // 当日通知
-            if settings.notifyOnDay && daysUntilExpiry == 0 {
-                groupedNotifications[today, default: []].append(
-                    NotificationItem(item: item, type: .onday)
-                )
-            } else if settings.notifyOnDay && daysUntilExpiry > 0 {
-                groupedNotifications[normalizedExpiryDate, default: []].append(
-                    NotificationItem(item: item, type: .onday)
+
+                groupedNotifications[notifyDate, default: []].append(
+                    NotificationItem(item: item, daysBefore: daysBefore)
                 )
             }
         }
-
         
         // グループ化された通知をスケジュール
         for (notifyDate, notificationItems) in groupedNotifications {
@@ -204,9 +159,13 @@ final class NotificationManager: ObservableObject {
         let settings: NotificationSettings
         if let existing = try? modelContext.fetch(settingsDescriptor).first {
             settings = existing
+            if settings.migrateLegacyTimingDaysIfNeeded() {
+                try? modelContext.save()
+            }
         } else {
             let created = NotificationSettings.createDefault()
             modelContext.insert(created)
+            try? modelContext.save()
             settings = created
         }
         
@@ -257,12 +216,6 @@ final class NotificationManager: ObservableObject {
         
         let now = Date()
         
-        // 過去の日時は通知しない
-        guard scheduledDate > now else {
-            debugLog("⚠️ Skipped grouped notification - \(formatDate(scheduledDate)) is in the past")
-            return
-        }
-        
         let trigger: UNNotificationTrigger
         let effectiveScheduledDate: Date
         if scheduledDate > now {
@@ -307,29 +260,29 @@ final class NotificationManager: ObservableObject {
         let totalCount = notificationItems.count
         
         // 種類ごとにグループ化
-        var byType: [NotificationType: [Item]] = [:]
+        var byTiming: [Int: [Item]] = [:]
         for ni in notificationItems {
-            byType[ni.type, default: []].append(ni.item)
+            byTiming[ni.daysBefore, default: []].append(ni.item)
         }
         
         if totalCount == 1 {
             let ni = notificationItems[0]
             return (
                 title: "備蓄品の期限通知",
-                body: "「\(ni.item.name)」の期限が\(ni.type.displayText)に迫っています"
+                body: singleNotificationMessage(for: ni.item.name, daysBefore: ni.daysBefore)
             )
         } else {
             let title = "備蓄品の期限通知（\(totalCount)件）"
             
             // 種類順にソートして表示
-            let sortedTypes = byType.keys.sorted { $0.order < $1.order }
+            let sortedTimings = byTiming.keys.sorted()
             var parts: [String] = []
             
-            for type in sortedTypes {
-                guard let items = byType[type] else { continue }
+            for daysBefore in sortedTimings {
+                guard let items = byTiming[daysBefore] else { continue }
                 let names = items.prefix(2).map { $0.name }.joined(separator: "、")
                 let suffix = items.count > 2 ? "他" : ""
-                parts.append("\(type.displayText): \(names)\(suffix)")
+                parts.append("\(notificationDisplayText(for: daysBefore)): \(names)\(suffix)")
             }
             
             let body = parts.joined(separator: " / ")
@@ -352,6 +305,8 @@ final class NotificationManager: ObservableObject {
         guard settings.isEnabled else { return }
         guard await ensureAuthorizationForScheduling() else { return }
         guard let expiryDate = item.expiryDate else { return }
+        let timingDays = settings.notificationTimingDays
+        guard !timingDays.isEmpty else { return }
         
         // 既存の通知をキャンセル
         await cancelNotifications(for: item)
@@ -374,40 +329,25 @@ final class NotificationManager: ObservableObject {
         debugLog("   - Expiry date: \(formatDate(normalizedExpiryDate))")
         debugLog("   - Days until expiry: \(daysUntilExpiry)")
         
-        // 30日前通知
-        if settings.notify30DaysBefore {
-            if let notifyDate = calendar.date(byAdding: .day, value: -30, to: normalizedExpiryDate) {
-                await scheduleSingleNotification(
-                    for: item,
-                    at: notifyDate,
-                    settings: settings,
-                    suffix: "30days",
-                    message: "「\(item.name)」の期限が30日後に迫っています"
-                )
+        for (index, daysBefore) in timingDays.enumerated() {
+            let nextLowerDays = timingDays.dropFirst(index + 1).first
+            guard let notifyDate = scheduledNotificationDate(
+                for: daysBefore,
+                nextLowerDays: nextLowerDays,
+                daysUntilExpiry: daysUntilExpiry,
+                today: today,
+                expiryDate: normalizedExpiryDate,
+                calendar: calendar
+            ) else {
+                continue
             }
-        }
-        
-        // 7日前通知
-        if settings.notify7DaysBefore {
-            if let notifyDate = calendar.date(byAdding: .day, value: -7, to: normalizedExpiryDate) {
-                await scheduleSingleNotification(
-                    for: item,
-                    at: notifyDate,
-                    settings: settings,
-                    suffix: "7days",
-                    message: "「\(item.name)」の期限が7日後に迫っています"
-                )
-            }
-        }
-        
-        // 当日通知
-        if settings.notifyOnDay {
+
             await scheduleSingleNotification(
                 for: item,
-                at: normalizedExpiryDate,
+                at: notifyDate,
                 settings: settings,
-                suffix: "onday",
-                message: "「\(item.name)」の期限は本日です"
+                suffix: "day\(daysBefore)",
+                message: singleNotificationMessage(for: item.name, daysBefore: daysBefore)
             )
         }
     }
@@ -493,11 +433,7 @@ final class NotificationManager: ObservableObject {
     
     /// アイテムの通知をキャンセル
     func cancelNotifications(for item: Item) async {
-        let identifiers = [
-            "\(item.id.uuidString)-30days",
-            "\(item.id.uuidString)-7days",
-            "\(item.id.uuidString)-onday"
-        ]
+        let identifiers = (0...365).map { "\(item.id.uuidString)-day\($0)" }
         UNUserNotificationCenter.current()
             .removePendingNotificationRequests(withIdentifiers: identifiers)
     }
@@ -531,5 +467,39 @@ final class NotificationManager: ObservableObject {
     private func cancelPendingReschedule() {
         pendingRescheduleWorkItem?.cancel()
         pendingRescheduleWorkItem = nil
+    }
+
+    private func scheduledNotificationDate(
+        for daysBefore: Int,
+        nextLowerDays: Int?,
+        daysUntilExpiry: Int,
+        today: Date,
+        expiryDate: Date,
+        calendar: Calendar
+    ) -> Date? {
+        if daysBefore == 0 {
+            return daysUntilExpiry == 0 ? today : expiryDate
+        }
+
+        if daysUntilExpiry <= daysBefore {
+            let lowerBound = nextLowerDays ?? -1
+            if daysUntilExpiry > lowerBound {
+                return today
+            }
+            return nil
+        }
+
+        return calendar.date(byAdding: .day, value: -daysBefore, to: expiryDate)
+    }
+
+    private func notificationDisplayText(for daysBefore: Int) -> String {
+        daysBefore == 0 ? "当日" : "\(daysBefore)日前"
+    }
+
+    private func singleNotificationMessage(for itemName: String, daysBefore: Int) -> String {
+        if daysBefore == 0 {
+            return "「\(itemName)」の期限は本日です"
+        }
+        return "「\(itemName)」の期限が近づいています（\(daysBefore)日前のお知らせ）"
     }
 }
