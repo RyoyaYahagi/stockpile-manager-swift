@@ -9,6 +9,14 @@ struct NotificationSettingsView: View {
     @Query private var items: [Item]
     @State private var settings: NotificationSettings?
     @State private var currentSystemSettings: UNNotificationSettings?
+
+    private static let amountFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .none
+        formatter.generatesDecimalNumbers = false
+        formatter.zeroSymbol = "0"
+        return formatter
+    }()
     
     var body: some View {
         Form {
@@ -56,9 +64,21 @@ struct NotificationSettingsView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(Array(settings.notificationTimingRules.enumerated()), id: \.offset) { index, rule in
-                            HStack(alignment: .top, spacing: 12) {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Stepper(
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text("通知タイミング \(index + 1)")
+                                        .font(.subheadline.weight(.medium))
+                                    Spacer()
+                                    Button("削除", role: .destructive) {
+                                        settings.removeNotificationTimingRule(at: index)
+                                        persistSettingsAndReschedule(settings)
+                                    }
+                                    .disabled(!settings.isEnabled)
+                                }
+
+                                HStack(alignment: .center, spacing: 12) {
+                                    TextField(
+                                        "数値",
                                         value: Binding(
                                             get: {
                                                 currentTimingRule(at: index, settings: settings).amount
@@ -68,57 +88,56 @@ struct NotificationSettingsView: View {
                                                 persistSettingsAndReschedule(settings)
                                             }
                                         ),
-                                        in: amountRange(for: currentTimingRule(at: index, settings: settings).unit)
-                                    ) {
-                                        Text(notificationTimingLabel(for: currentTimingRule(at: index, settings: settings)))
-                                    }
+                                        formatter: Self.amountFormatter
+                                    )
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 88)
                                     .disabled(!settings.isEnabled)
 
-                                    Picker(
-                                        "通知単位",
-                                        selection: Binding(
-                                            get: {
-                                                currentTimingRule(at: index, settings: settings).unit
-                                            },
-                                            set: { newValue in
-                                                settings.updateNotificationTimingUnit(at: index, to: newValue)
-                                                persistSettingsAndReschedule(settings)
-                                            }
-                                        )
-                                    ) {
-                                        ForEach(NotificationTimingUnit.allCases) { unit in
-                                            Text(unit.shortLabel).tag(unit)
+                                    Text("単位")
+                                        .foregroundStyle(.secondary)
+
+                                    Spacer(minLength: 0)
+                                }
+
+                                Picker(
+                                    "通知単位",
+                                    selection: Binding(
+                                        get: {
+                                            currentTimingRule(at: index, settings: settings).unit
+                                        },
+                                        set: { newValue in
+                                            settings.updateNotificationTimingUnit(at: index, to: newValue)
+                                            persistSettingsAndReschedule(settings)
                                         }
+                                    )
+                                ) {
+                                    ForEach(NotificationTimingUnit.allCases) { unit in
+                                        Text(unit.shortLabel).tag(unit)
                                     }
-                                    .pickerStyle(.segmented)
-                                    .labelsHidden()
-                                    .disabled(!settings.isEnabled)
                                 }
-
-                                Button(role: .destructive) {
-                                    settings.removeNotificationTimingRule(at: index)
-                                    persistSettingsAndReschedule(settings)
-                                } label: {
-                                    Image(systemName: "minus.circle.fill")
-                                        .foregroundStyle(.red)
-                                }
+                                .pickerStyle(.segmented)
+                                .labelsHidden()
                                 .disabled(!settings.isEnabled)
-                                .accessibilityLabel("通知タイミングを削除")
+
+                                Text(notificationTimingLabel(for: rule))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
 
-                    Button {
+                    Button("通知タイミングを追加") {
                         settings.addNotificationTimingRule()
                         persistSettingsAndReschedule(settings)
-                    } label: {
-                        Label("通知タイミングを追加", systemImage: "plus.circle")
                     }
-                    .disabled(!settings.isEnabled)
+                    .disabled(!settings.isEnabled || settings.notificationTimingRules.count >= NotificationSettings.maximumTimingRules)
                 } header: {
-                    Text("通知タイミング")
+                    Text("通知タイミング（\(settings.notificationTimingRules.count)/\(NotificationSettings.maximumTimingRules)）")
                 } footer: {
-                    Text("通知タイミングは年・ヶ月・日単位で自由に追加できます。0日前は当日通知です。")
+                    Text("通知タイミングは年・ヶ月・日単位で自由に追加できます。最大\(NotificationSettings.maximumTimingRules)件まで設定でき、0日前は当日通知です。")
                 }
                 
                 // 通知時刻
@@ -285,10 +304,6 @@ struct NotificationSettingsView: View {
             return "当日に通知"
         }
         return "\(normalizedRule.displayText)に通知"
-    }
-
-    private func amountRange(for unit: NotificationTimingUnit) -> ClosedRange<Int> {
-        unit.minimumAmount...unit.maximumAmount
     }
 
     private func persistSettingsAndReschedule(_ settings: NotificationSettings) {

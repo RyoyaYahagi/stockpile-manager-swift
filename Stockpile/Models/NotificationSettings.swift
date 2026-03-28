@@ -106,6 +106,8 @@ struct NotificationTimingRule: Hashable, Identifiable {
 /// 通知設定モデル
 @Model
 final class NotificationSettings {
+    static let maximumTimingRules = 5
+
     private static let defaultTimingRules = [
         NotificationTimingRule(amount: 30, unit: .day),
         NotificationTimingRule(amount: 7, unit: .day),
@@ -229,6 +231,7 @@ final class NotificationSettings {
 
     func addNotificationTimingRule() {
         let current = Self.normalizeTimingRules(notificationTimingRules)
+        guard current.count < Self.maximumTimingRules else { return }
         let used = Set(current)
 
         if let suggested = Self.suggestedTimingRules.first(where: { !used.contains($0) }) {
@@ -319,6 +322,8 @@ final class NotificationSettings {
             }
             return $0.sortWeight > $1.sortWeight
         }
+        .prefix(Self.maximumTimingRules)
+        .map { $0 }
     }
 
     private static func parseTimingRuleToken(_ token: String) -> NotificationTimingRule? {
