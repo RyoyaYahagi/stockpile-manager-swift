@@ -33,19 +33,13 @@ struct FamilySettingsView: View {
     }
 
     private var memberSectionFooter: String {
-        if family.shouldHideLegacyDisplayDetails {
-            return "CloudKit共有のデータを同期中です。Firebase由来の過去メンバーは表示していません。"
-        }
-        if family.cloudKitDatabaseScope == .sharedDatabase && !APIConfig.isFirebaseDeveloperModeEnabled {
-            return "Firebase連携が無効なため、iCloud共有のメンバー一覧は表示していません。"
-        }
         return family.shareState == .localOnly
             ? "メンバー情報はこの端末のローカルデータです"
-            : "共有状態に応じて重複を除いたメンバーを表示しています"
+            : "iCloud共有の状態に応じて重複を除いたメンバーを表示しています"
     }
 
     private var displayedMembers: [User] {
-        family.shouldShowMemberList ? family.uniqueMembers : []
+        family.uniqueMembers
     }
 
     private var scopedItemsCount: Int {
@@ -151,7 +145,7 @@ struct FamilySettingsView: View {
                 Text("iCloud同期")
             } footer: {
                 if family.shareState == .preparing {
-                    Text("共有受理後の同期を再試行できます。CloudKitの共有データを同期中のため、Firebase由来の過去データは表示していません。")
+                    Text("共有受理後の同期を再試行できます。CloudKit の共有データを同期中です。")
                 }
             }
 

@@ -468,7 +468,7 @@ struct DashboardView: View {
             }
         }
         .task(id: currentFamily?.id) {
-            await autoSyncFromFirebaseIfNeeded()
+            await autoSyncFromCloudKitIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: .didDeleteItems)) { notification in
             guard let deletedItems = notification.object as? [DeletedItemInfo],
@@ -696,7 +696,7 @@ struct DashboardView: View {
         }
     }
 
-    private func autoSyncFromFirebaseIfNeeded() async {
+    private func autoSyncFromCloudKitIfNeeded() async {
         guard let family = currentFamily else { return }
         guard autoSyncedFamilyID != family.id else { return }
         autoSyncedFamilyID = family.id

@@ -23,12 +23,9 @@
 		014 /* BagListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114 /* BagListView.swift */; };
 		015 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115 /* SettingsView.swift */; };
 		016 /* FamilySetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116 /* FamilySetupView.swift */; };
-		017 /* InviteCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 117 /* InviteCodeView.swift */; };
 		018 /* ImportJSONView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118 /* ImportJSONView.swift */; };
 		019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 119 /* Assets.xcassets */; };
 		020 /* StorageLocationPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120 /* StorageLocationPicker.swift */; };
-		021 /* QRCodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121 /* QRCodeGenerator.swift */; };
-		022 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 122 /* QRScannerView.swift */; };
 		023 /* NotificationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123 /* NotificationSettings.swift */; };
 		024 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124 /* NotificationManager.swift */; };
 		025 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 125 /* NotificationSettingsView.swift */; };
@@ -38,10 +35,6 @@
 		031 /* FamilySharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131 /* FamilySharingService.swift */; };
 		032 /* FamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132 /* FamilySettingsView.swift */; };
 		034 /* CloudKitShareSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 134 /* CloudKitShareSceneDelegate.swift */; };
-		033F1A6A2C0A000100000001 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000011 /* FirebaseCore */; };
-		033F1A6A2C0A000100000002 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000012 /* FirebaseAuth */; };
-		033F1A6A2C0A000100000003 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000013 /* FirebaseFirestore */; };
-		A30EF01C2F4A7B7800979C1A /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A30EF01B2F4A7B7800979C1A /* GoogleService-Info.plist */; };
 		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -63,12 +56,9 @@
 		114 /* BagListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BagListView.swift; sourceTree = "<group>"; };
 		115 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		116 /* FamilySetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySetupView.swift; sourceTree = "<group>"; };
-		117 /* InviteCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCodeView.swift; sourceTree = "<group>"; };
 		118 /* ImportJSONView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportJSONView.swift; sourceTree = "<group>"; };
 		119 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		120 /* StorageLocationPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLocationPicker.swift; sourceTree = "<group>"; };
-		121 /* QRCodeGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeGenerator.swift; sourceTree = "<group>"; };
-		122 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
 		123 /* NotificationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettings.swift; sourceTree = "<group>"; };
 		124 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		125 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
@@ -80,7 +70,6 @@
 		132 /* FamilySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySettingsView.swift; sourceTree = "<group>"; };
 		133 /* Stockpile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Stockpile.entitlements; sourceTree = "<group>"; };
 		134 /* CloudKitShareSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitShareSceneDelegate.swift; sourceTree = "<group>"; };
-		A30EF01B2F4A7B7800979C1A /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockpileRelease.entitlements; sourceTree = "<group>"; };
 		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -91,9 +80,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				033F1A6A2C0A000100000001 /* FirebaseCore in Frameworks */,
-				033F1A6A2C0A000100000002 /* FirebaseAuth in Frameworks */,
-				033F1A6A2C0A000100000003 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -103,7 +89,6 @@
 		300 = {
 			isa = PBXGroup;
 			children = (
-				A30EF01B2F4A7B7800979C1A /* GoogleService-Info.plist */,
 				301 /* Stockpile */,
 				302 /* Products */,
 			);
@@ -175,7 +160,6 @@
 			isa = PBXGroup;
 			children = (
 				107 /* Router.swift */,
-				121 /* QRCodeGenerator.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -230,9 +214,7 @@
 			children = (
 				112 /* ExpiryBadge.swift */,
 				113 /* OCRCameraView.swift */,
-				117 /* InviteCodeView.swift */,
 				120 /* StorageLocationPicker.swift */,
-				122 /* QRScannerView.swift */,
 				126 /* BarcodeScannerView.swift */,
 			);
 			path = Components;
@@ -273,9 +255,6 @@
 			);
 			name = Stockpile;
 			packageProductDependencies = (
-				033F1A6A2C0A000100000011 /* FirebaseCore */,
-				033F1A6A2C0A000100000012 /* FirebaseAuth */,
-				033F1A6A2C0A000100000013 /* FirebaseFirestore */,
 			);
 			productName = Stockpile;
 			productReference = 100 /* Stockpile.app */;
@@ -307,7 +286,6 @@
 			);
 			mainGroup = 300;
 			packageReferences = (
-				033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			productRefGroup = 302 /* Products */;
 			projectDirPath = "";
@@ -325,7 +303,6 @@
 			files = (
 				019 /* Assets.xcassets in Resources */,
 				A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */,
-				A30EF01C2F4A7B7800979C1A /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -353,11 +330,8 @@
 				014 /* BagListView.swift in Sources */,
 				015 /* SettingsView.swift in Sources */,
 				016 /* FamilySetupView.swift in Sources */,
-				017 /* InviteCodeView.swift in Sources */,
 				018 /* ImportJSONView.swift in Sources */,
 				020 /* StorageLocationPicker.swift in Sources */,
-				021 /* QRCodeGenerator.swift in Sources */,
-				022 /* QRScannerView.swift in Sources */,
 				023 /* NotificationSettings.swift in Sources */,
 				024 /* NotificationManager.swift in Sources */,
 				025 /* NotificationSettingsView.swift in Sources */,
@@ -592,34 +566,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 11.0.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		033F1A6A2C0A000100000011 /* FirebaseCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseCore;
-		};
-		033F1A6A2C0A000100000012 /* FirebaseAuth */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAuth;
-		};
-		033F1A6A2C0A000100000013 /* FirebaseFirestore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseFirestore;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 600 /* Project object */;
 }

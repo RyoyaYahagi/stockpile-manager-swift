@@ -3,15 +3,11 @@ import SwiftData
 
 /// 設定画面
 struct SettingsView: View {
-    @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
     
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
-    @AppStorage(APIConfig.firebaseDeveloperModeKey)
-    private var isFirebaseDeveloperModeEnabled = false
     @AppStorage("app.tutorial.replayRequestToken")
     private var tutorialReplayRequestToken = 0
-    @State private var firebaseToggleErrorMessage: String?
     
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
@@ -49,7 +45,7 @@ struct SettingsView: View {
                 Text("家族")
             } footer: {
                 if currentFamily != nil {
-                    Text("通常のデータ同期はiCloudで行います。Firebase連携は開発者オプション有効時のみ表示されます。")
+                    Text("通常のデータ同期と家族共有は iCloud で行います。")
                 }
             }
             
@@ -100,14 +96,6 @@ struct SettingsView: View {
                 Text("データ")
             }
 
-            Section {
-                Toggle("Firebase連携を有効化", isOn: $isFirebaseDeveloperModeEnabled)
-            } header: {
-                Text("開発者オプション")
-            } footer: {
-                Text("既定ではiCloudで同一Apple IDの端末間同期を行います。家族の別Apple IDと共有する場合は家族設定からiCloud共有リンクを作成します。Firebaseは検証用に明示的に有効化した場合のみ利用します。")
-            }
-            
             // アプリ情報
             Section {
                 HStack {
@@ -121,30 +109,6 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("設定")
-        .onChange(of: isFirebaseDeveloperModeEnabled) { _, isEnabled in
-            Task {
-                do {
-                    let sharingService = FamilySharingService(modelContext: modelContext)
-                    try await sharingService.applyFirebaseAvailability(isEnabled: isEnabled)
-                } catch {
-                    firebaseToggleErrorMessage = error.localizedDescription
-                }
-            }
-        }
-        .alert("Firebase連携の更新に失敗しました", isPresented: Binding(
-            get: { firebaseToggleErrorMessage != nil },
-            set: { newValue in
-                if !newValue {
-                    firebaseToggleErrorMessage = nil
-                }
-            }
-        )) {
-            Button("OK", role: .cancel) {
-                firebaseToggleErrorMessage = nil
-            }
-        } message: {
-            Text(firebaseToggleErrorMessage ?? "")
-        }
     }
 }
 

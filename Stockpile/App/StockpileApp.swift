@@ -9,7 +9,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        APIConfig.configureFirebaseIfNeeded()
         return true
     }
     
@@ -84,14 +83,6 @@ struct StockpileApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .task {
-                    FirebaseSyncRetryCoordinator.shared.configure(
-                        modelContext: sharedModelContainer.mainContext
-                    )
-                    FamilyRealtimeSyncCoordinator.shared.configure(
-                        modelContext: sharedModelContainer.mainContext
-                    )
-                }
         }
         .modelContainer(sharedModelContainer)
     }
