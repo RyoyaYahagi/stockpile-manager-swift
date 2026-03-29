@@ -177,6 +177,12 @@ function buildItemSearchURL(keyword, applicationId, accessKey) {
   return url;
 }
 
+function buildRakutenSearchResultsURL(keyword) {
+  const normalizedKeyword = normalizeKeyword(keyword);
+  const searchKeyword = normalizedKeyword || "備蓄";
+  return `https://search.rakuten.co.jp/search/mall/${encodeURIComponent(searchKeyword)}/`;
+}
+
 async function fetchJSON(url) {
   const response = await fetch(url, {
     headers: {
@@ -195,6 +201,17 @@ async function fetchJSON(url) {
   }
 
   return { response, json, text };
+}
+
+async function fetchText(url) {
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "stockpile-rakuten-proxy/1.0"
+    }
+  });
+
+  const text = await response.text();
+  return { response, text };
 }
 
 function shouldTreatAsUpstreamFailure(statusCode) {
@@ -296,6 +313,43 @@ function readItemResult(json, janCode) {
   };
 }
 
+function readSearchResultsPageResult(html, janCode) {
+  if (typeof html !== "string" || !html.trim()) {
+    return null;
+  }
+
+  const carouselMatch = html.match(/"structuredDataCarousel":"((?:\\.|[^"])*)"/s);
+  if (!carouselMatch) {
+    return null;
+  }
+
+  try {
+    const decodedCarousel = JSON.parse(`"${carouselMatch[1]}"`);
+    const carousel = JSON.parse(decodedCarousel);
+    const listItem = firstObject(carousel?.itemListElement);
+    const item = listItem?.item;
+    const name = trimText(item?.name);
+    if (!name) {
+      return null;
+    }
+
+    const imageURL = Array.isArray(item?.image)
+      ? trimText(item.image[0])
+      : trimText(item?.image);
+
+    return {
+      name,
+      description: null,
+      category: null,
+      imageURL,
+      janCode,
+      source: "rakuten"
+    };
+  } catch {
+    return null;
+  }
+}
+
 function sendJSON(response, statusCode, body) {
   response.status(statusCode).setHeader("Cache-Control", "no-store");
   response.setHeader("Referrer-Policy", "no-referrer");
@@ -337,6 +391,7 @@ export default async function handler(request, response) {
 
   const itemName = normalizeKeyword(request.query?.name);
   let sawUpstreamFailure = false;
+  let sawSearchResultsPageResponse = false;
 
   try {
     const productResult = await fetchJSON(
@@ -386,7 +441,23 @@ export default async function handler(request, response) {
       }
     }
 
-    if (sawUpstreamFailure) {
+    const searchResultsResult = await fetchText(
+      buildRakutenSearchResultsURL(itemName || janCode)
+    );
+    if (searchResultsResult.response.ok) {
+      sawSearchResultsPageResponse = true;
+      const product = readSearchResultsPageResult(searchResultsResult.text, janCode);
+      if (product) {
+        return sendJSON(response, 200, product);
+      }
+    } else if (searchResultsResult.response.status !== 404) {
+      logUpstreamStatus("search_results_page", searchResultsResult);
+      if (shouldTreatAsUpstreamFailure(searchResultsResult.response.status)) {
+        sawUpstreamFailure = true;
+      }
+    }
+
+    if (!sawSearchResultsPageResponse && sawUpstreamFailure) {
       return sendJSON(response, 502, {
         error: "upstream_error"
       });
