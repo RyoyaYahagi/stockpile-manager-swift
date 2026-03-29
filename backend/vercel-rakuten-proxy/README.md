@@ -14,6 +14,8 @@ Stockpile iOS の「楽天市場で購入」ボタン用 Vercel バックエン�
 - `GET /health`
 - `GET /v1/rakuten/redirect?jan=4901777300445`
 - `GET /v1/rakuten/redirect?jan=4901777300445&name=%E6%B0%B4`
+- `GET /v1/rakuten/search?jan=4901777300445`
+- `GET /v1/rakuten/search?jan=4901777300445&name=%E6%B0%B4`
 
 `/v1/*` は `vercel.json` で `/api/v1/*` に rewrite しています。
 
@@ -49,7 +51,7 @@ npm run check
 
 ## iOS 側設定
 
-`BackendBaseURL` は公開してよい設定として iOS の `Info.plist` かビルド環境変数に設定します。アプリ bundle に秘密情報は同梱しません。
+`BackendBaseURL` は公開してよい設定として iOS の `Info.plist` かビルド環境変数に設定します。アプリ bundle に秘密情報は同梱しません。バーコード検索と「楽天市場で購入」はこの backend を経由して動作します。
 
 例:
 

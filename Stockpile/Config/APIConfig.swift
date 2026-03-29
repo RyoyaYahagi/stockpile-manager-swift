@@ -72,10 +72,22 @@ struct APIConfig {
     
     /// いずれかの商品検索APIが利用可能かどうか
     static var isProductSearchAvailable: Bool {
-        isRakutenConfigured || isYahooConfigured
+        isRakutenBackendConfigured || isRakutenConfigured || isYahooConfigured
+    }
+
+    static var isRakutenBackendConfigured: Bool {
+        backendBaseURL != nil
+    }
+
+    static func rakutenSearchURL(for janCode: String, itemName: String? = nil) -> URL? {
+        rakutenEndpointURL(pathComponent: "search", janCode: janCode, itemName: itemName)
     }
 
     static func rakutenPurchaseURL(for janCode: String, itemName: String? = nil) -> URL? {
+        rakutenEndpointURL(pathComponent: "redirect", janCode: janCode, itemName: itemName)
+    }
+
+    private static func rakutenEndpointURL(pathComponent: String, janCode: String, itemName: String?) -> URL? {
         guard let baseURL = backendBaseURL else { return nil }
 
         let trimmedJANCode = janCode.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -86,7 +98,7 @@ struct APIConfig {
         }
 
         let currentPath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        components.path = "/" + [currentPath, "v1", "rakuten", "redirect"]
+        components.path = "/" + [currentPath, "v1", "rakuten", pathComponent]
             .filter { !$0.isEmpty }
             .joined(separator: "/")
 

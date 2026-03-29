@@ -225,16 +225,21 @@ actor ProductSearchService {
             throw ProductSearchError.invalidJANCode
         }
 
-        let hasConfiguredCommercialAPI = APIConfig.isRakutenConfigured || APIConfig.isYahooConfigured
+        let hasConfiguredCommercialAPI =
+            APIConfig.isRakutenBackendConfigured ||
+            APIConfig.isRakutenConfigured ||
+            APIConfig.isYahooConfigured
         var technicalFailures: [SearchAttemptFailure] = []
-        var sawNotFound = false
+        var sawCommercialNotFound = false
 
-        func resolve(_ outcome: SearchAttemptOutcome) -> ProductInfo? {
+        func resolve(_ outcome: SearchAttemptOutcome, isCommercialSource: Bool) -> ProductInfo? {
             switch outcome {
             case .found(let product):
                 return product
             case .notFound:
-                sawNotFound = true
+                if isCommercialSource {
+                    sawCommercialNotFound = true
+                }
                 return nil
             case .technicalFailure(let failure):
                 technicalFailures.append(failure)
@@ -242,40 +247,51 @@ actor ProductSearchService {
             }
         }
 
-        // 1. 楽天APIを最優先
+        // 1. Backend経由の楽天検索を最優先
+        if APIConfig.isRakutenBackendConfigured {
+            if let product = resolve(await runSearchAttempt(source: .rakuten) {
+                try await searchRakutenViaBackend(janCode: cleanedCode)
+            }, isCommercialSource: true) {
+                return product
+            }
+        } else {
+            debugLog("[ProductSearch] 楽天Backendは未設定です")
+        }
+
+        // 2. ローカル設定の楽天APIにフォールバック
         if APIConfig.isRakutenConfigured {
             if let product = resolve(await runSearchAttempt(source: .rakuten) {
                 try await searchRakutenProduct(janCode: cleanedCode)
-            }) {
+            }, isCommercialSource: true) {
                 return product
             }
 
             if let product = resolve(await runSearchAttempt(source: .rakuten) {
                 try await searchRakuten(janCode: cleanedCode)
-            }) {
+            }, isCommercialSource: true) {
                 return product
             }
         } else {
             debugLog("[ProductSearch] 楽天APIは未設定です")
         }
 
-        // 2. Open Food Facts API（無料・登録不要）
+        // 3. Open Food Facts API（無料・登録不要）
         if let product = resolve(await runSearchAttempt(source: .openFoodFacts) {
             try await searchOpenFoodFacts(janCode: cleanedCode)
-        }) {
+        }, isCommercialSource: false) {
             return product
         }
 
-        // 3. Yahoo APIにフォールバック
+        // 4. Yahoo APIにフォールバック
         if APIConfig.isYahooConfigured {
             if let product = resolve(await runSearchAttempt(source: .yahoo) {
                 try await searchYahoo(janCode: cleanedCode)
-            }) {
+            }, isCommercialSource: true) {
                 return product
             }
         }
 
-        if let technicalFailure = technicalFailures.last, !sawNotFound {
+        if let technicalFailure = technicalFailures.last, !sawCommercialNotFound {
             throw technicalFailure.publicError
         }
 
@@ -385,6 +401,70 @@ actor ProductSearchService {
     }
     
     // MARK: - 楽天API
+
+    private func searchRakutenViaBackend(janCode: String) async throws -> ProductInfo? {
+        guard let url = APIConfig.rakutenSearchURL(for: janCode) else {
+            throw SearchAttemptFailure.invalidResponse(
+                source: .rakuten,
+                detail: L10n.string("楽天Backend検索URLを生成できませんでした")
+            )
+        }
+
+        debugLog("[ProductSearch] Requesting Rakuten backend: \(url.absoluteString)")
+
+        let (data, response) = try await session.data(from: url)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SearchAttemptFailure.invalidResponse(
+                source: .rakuten,
+                detail: L10n.string("楽天Backend検索のHTTPレスポンスを取得できませんでした")
+            )
+        }
+
+        if httpResponse.statusCode == 404 {
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               normalizedText(json["error"]) == "not_found" {
+                return nil
+            }
+
+            throw SearchAttemptFailure.httpStatus(
+                source: .rakuten,
+                statusCode: httpResponse.statusCode,
+                detail: responseSnippet(from: data)
+            )
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            throw SearchAttemptFailure.httpStatus(
+                source: .rakuten,
+                statusCode: httpResponse.statusCode,
+                detail: responseSnippet(from: data)
+            )
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw SearchAttemptFailure.parse(
+                source: .rakuten,
+                detail: L10n.string("楽天Backend検索のJSONを解析できませんでした")
+            )
+        }
+
+        guard let name = normalizedText(json["name"]) else {
+            throw SearchAttemptFailure.parse(
+                source: .rakuten,
+                detail: L10n.string("楽天Backend検索の name を取得できませんでした")
+            )
+        }
+
+        return ProductInfo(
+            name: name,
+            description: normalizedText(json["description"]),
+            category: normalizedText(json["category"]),
+            imageURL: normalizedText(json["imageURL"]).flatMap(URL.init(string:)),
+            janCode: normalizedText(json["janCode"]) ?? janCode,
+            source: .rakuten
+        )
+    }
 
     /// 楽天商品価格ナビ 製品検索API
     /// JANコード(productCode)で直接検索する

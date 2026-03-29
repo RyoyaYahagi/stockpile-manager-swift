@@ -538,7 +538,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Stockpile/Info.plist;
-				INFOPLIST_KEY_BackendBaseURL = "";
 				INFOPLIST_KEY_CKSharingSupported = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "賞味期限を読み取るためにカメラを使用します";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -574,7 +573,6 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Stockpile/Info.plist;
-				INFOPLIST_KEY_BackendBaseURL = "";
 				INFOPLIST_KEY_CKSharingSupported = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "賞味期限を読み取るためにカメラを使用します";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
