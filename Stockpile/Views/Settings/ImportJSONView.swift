@@ -378,6 +378,10 @@ struct ExportJSONView: View {
         return items.filter { $0.family == nil }
     }
 
+    private var scopedItemsCountText: String {
+        L10n.format("対象件数: %@件", String(scopedItems.count))
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
@@ -400,7 +404,7 @@ struct ExportJSONView: View {
                 }
 
                 VStack(spacing: 12) {
-                    Text("対象件数: \(scopedItems.count)件")
+                    Text(scopedItemsCountText)
                         .font(.subheadline.weight(.medium))
 
                     Button {

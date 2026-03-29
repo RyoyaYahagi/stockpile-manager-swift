@@ -18,7 +18,7 @@ struct ItemRow: View {
                         .fontWeight(.medium)
                         .lineLimit(1)
                     
-                    Text("×\(item.quantity)")
+                    Text(L10n.format("×%@", String(item.quantity)))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }

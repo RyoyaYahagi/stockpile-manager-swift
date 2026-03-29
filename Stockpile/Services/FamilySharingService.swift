@@ -319,7 +319,7 @@ final class CloudKitFamilySharingService {
         let familyName = (familyRecord["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let currentFamily = try fetchOrCreateFamily(
             id: familyID,
-            fallbackName: familyName?.isEmpty == false ? familyName! : "家族"
+            fallbackName: familyName?.isEmpty == false ? familyName! : L10n.string("家族")
         )
 
         currentFamily.name = familyName?.isEmpty == false ? familyName! : currentFamily.name

@@ -12,6 +12,13 @@ struct NotificationSettingsView: View {
     @State private var timingInputTexts: [Int: String] = [:]
     @State private var lastFocusedTimingIndex: Int?
     @FocusState private var focusedTimingIndex: Int?
+
+    private var notificationTimingSectionFooter: String {
+        L10n.format(
+            "通知タイミングは日・週・月単位で設定できます。最大%@件まで追加でき、0日は当日通知です。",
+            String(NotificationSettings.maximumTimingRules)
+        )
+    }
     
     var body: some View {
         Form {
@@ -98,9 +105,9 @@ struct NotificationSettingsView: View {
                     }
                     .disabled(!settings.isEnabled || settings.notificationTimingRules.count >= NotificationSettings.maximumTimingRules)
                 } header: {
-                    Text("通知タイミング（\(settings.notificationTimingRules.count)/\(NotificationSettings.maximumTimingRules)）")
+                    Text(notificationTimingSectionTitle(for: settings))
                 } footer: {
-                    Text("通知タイミングは日・週・月単位で設定できます。最大\(NotificationSettings.maximumTimingRules)件まで追加でき、0日は当日通知です。")
+                    Text(notificationTimingSectionFooter)
                 }
                 
                 // 通知時刻
@@ -256,6 +263,14 @@ struct NotificationSettingsView: View {
         try? modelContext.save()
         settings = newSettings
         syncTimingInputTexts(from: newSettings)
+    }
+
+    private func notificationTimingSectionTitle(for settings: NotificationSettings) -> String {
+        L10n.format(
+            "通知タイミング（%@/%@）",
+            String(settings.notificationTimingRules.count),
+            String(NotificationSettings.maximumTimingRules)
+        )
     }
     
     private func timeFromComponents(using settings: NotificationSettings) -> Date {

@@ -228,6 +228,14 @@ struct DashboardView: View {
         }
         return L10n.format("%@件の備蓄品を削除しました", String(deletedItemInfoList.count))
     }
+
+    private var bulkDeleteConfirmationTitle: String {
+        L10n.format("%@件のアイテムを削除しますか？", String(selectedItems.count))
+    }
+
+    private func filteredItemsSectionTitle(count: Int) -> String {
+        L10n.format("備蓄品（%@）", String(count))
+    }
     
     var body: some View {
         let data = dashboardData
@@ -369,7 +377,7 @@ struct DashboardView: View {
                 }
             } header: {
                 if !data.filteredItems.isEmpty {
-                    Text("備蓄品 (\(data.filteredItems.count))")
+                    Text(filteredItemsSectionTitle(count: data.filteredItems.count))
                 }
             }
         }
@@ -534,7 +542,7 @@ struct DashboardView: View {
             )
         }
         .alert(
-            "\(selectedItems.count)件のアイテムを削除しますか？",
+            bulkDeleteConfirmationTitle,
             isPresented: $showDeleteConfirmation
         ) {
             Button("削除", role: .destructive) {
@@ -797,6 +805,10 @@ struct BulkMoveSheet: View {
     let selectedItems: Set<UUID>
     let items: [Item]
     let onMove: (UUID?) -> Void
+
+    private var titleText: String {
+        L10n.format("%@件を移動", String(selectedItems.count))
+    }
     
     var body: some View {
         NavigationStack {
@@ -821,7 +833,7 @@ struct BulkMoveSheet: View {
                     }
                 }
             }
-            .navigationTitle("\(selectedItems.count)件を移動")
+            .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -841,6 +853,10 @@ struct BulkCopySheet: View {
     let selectedItems: Set<UUID>
     let items: [Item]
     let onCopy: (UUID?) -> Void
+
+    private var titleText: String {
+        L10n.format("%@件をコピー", String(selectedItems.count))
+    }
     
     var body: some View {
         NavigationStack {
@@ -865,7 +881,7 @@ struct BulkCopySheet: View {
                     }
                 }
             }
-            .navigationTitle("\(selectedItems.count)件をコピー")
+            .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

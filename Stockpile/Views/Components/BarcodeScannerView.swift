@@ -211,7 +211,7 @@ struct BarcodeScannerView: View {
                 .font(.headline)
             
             if let code = scannedCode ?? (manualCode.isEmpty ? nil : manualCode) {
-                Text("JANコード: \(code)")
+                Text(L10n.format("JANコード: %@", code))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

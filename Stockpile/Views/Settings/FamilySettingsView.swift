@@ -54,6 +54,16 @@ struct FamilySettingsView: View {
         return L10n.string("メンバー情報はこの端末のローカルデータです")
     }
 
+    private var invitationSectionFooter: String {
+        family.cloudKitShareURL == nil
+            ? L10n.string("先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。")
+            : L10n.string("作成済みの共有リンクを送信できます。参加者の管理や共有停止は「共有設定を管理」から行えます。")
+    }
+
+    private var memberSectionTitle: String {
+        L10n.format("メンバー（%@人）", String(displayedMemberCount))
+    }
+
     private var displayedLocalMembers: [User] {
         family.uniqueMembers
     }
@@ -136,11 +146,7 @@ struct FamilySettingsView: View {
                 } header: {
                     Text("招待")
                 } footer: {
-                    Text(
-                        family.cloudKitShareURL == nil
-                        ? "先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。"
-                        : "作成済みの共有リンクを送信できます。参加者の管理や共有停止は「共有設定を管理」から行えます。"
-                    )
+                    Text(invitationSectionFooter)
                 }
             }
 
@@ -233,7 +239,7 @@ struct FamilySettingsView: View {
                     }
                 }
             } header: {
-                Text("メンバー (\(displayedMemberCount)人)")
+                Text(memberSectionTitle)
             } footer: {
                 Text(memberSectionFooter)
             }
@@ -242,14 +248,14 @@ struct FamilySettingsView: View {
                 HStack {
                     Label("収納場所", systemImage: "bag")
                     Spacer()
-                    Text("\(scopedBagsCount)件")
+                    Text(L10n.format("%@件", String(scopedBagsCount)))
                         .foregroundStyle(.secondary)
                 }
 
                 HStack {
                     Label("アイテム", systemImage: "archivebox")
                     Spacer()
-                    Text("\(scopedItemsCount)件")
+                    Text(L10n.format("%@件", String(scopedItemsCount)))
                         .foregroundStyle(.secondary)
                 }
             } header: {

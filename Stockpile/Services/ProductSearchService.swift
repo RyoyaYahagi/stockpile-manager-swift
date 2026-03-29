@@ -309,7 +309,7 @@ actor ProductSearchService {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchAttemptFailure.invalidResponse(
                 source: .openFoodFacts,
-                detail: "HTTPレスポンスを取得できませんでした"
+                detail: L10n.string("HTTPレスポンスを取得できませんでした")
             )
         }
 
@@ -324,14 +324,14 @@ actor ProductSearchService {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw SearchAttemptFailure.parse(
                 source: .openFoodFacts,
-                detail: "JSONを解析できませんでした"
+                detail: L10n.string("JSONを解析できませんでした")
             )
         }
 
         guard let status = json["status"] as? Int else {
             throw SearchAttemptFailure.parse(
                 source: .openFoodFacts,
-                detail: "status が含まれていません"
+                detail: L10n.string("status が含まれていません")
             )
         }
 
@@ -342,7 +342,7 @@ actor ProductSearchService {
         guard let product = json["product"] as? [String: Any] else {
             throw SearchAttemptFailure.parse(
                 source: .openFoodFacts,
-                detail: "product が含まれていません"
+                detail: L10n.string("product が含まれていません")
             )
         }
         
@@ -404,7 +404,7 @@ actor ProductSearchService {
         guard let url = components.url else {
             throw SearchAttemptFailure.invalidResponse(
                 source: .rakuten,
-                detail: "商品価格ナビAPIのURLを生成できませんでした"
+                detail: L10n.string("商品価格ナビAPIのURLを生成できませんでした")
             )
         }
 
@@ -416,7 +416,7 @@ actor ProductSearchService {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchAttemptFailure.invalidResponse(
                 source: .rakuten,
-                detail: "商品価格ナビAPIのHTTPレスポンスを取得できませんでした"
+                detail: L10n.string("商品価格ナビAPIのHTTPレスポンスを取得できませんでした")
             )
         }
 
@@ -440,7 +440,7 @@ actor ProductSearchService {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw SearchAttemptFailure.parse(
                 source: .rakuten,
-                detail: "商品価格ナビAPIのJSONを解析できませんでした"
+                detail: L10n.string("商品価格ナビAPIのJSONを解析できませんでした")
             )
         }
 
@@ -454,7 +454,7 @@ actor ProductSearchService {
         } else {
             throw SearchAttemptFailure.parse(
                 source: .rakuten,
-                detail: "商品価格ナビAPIのレスポンスに Products が含まれていません"
+                detail: L10n.string("商品価格ナビAPIのレスポンスに Products が含まれていません")
             )
         }
 
@@ -462,7 +462,7 @@ actor ProductSearchService {
               let rawProductName = normalizedText(productPayload["productName"]) else {
             throw SearchAttemptFailure.parse(
                 source: .rakuten,
-                detail: "商品価格ナビAPIの productName を取得できませんでした"
+                detail: L10n.string("商品価格ナビAPIの productName を取得できませんでした")
             )
         }
 
@@ -505,7 +505,7 @@ actor ProductSearchService {
         guard let url = components.url else {
             throw SearchAttemptFailure.invalidResponse(
                 source: .rakuten,
-                detail: "楽天市場検索APIのURLを生成できませんでした"
+                detail: L10n.string("楽天市場検索APIのURLを生成できませんでした")
             )
         }
         
@@ -517,7 +517,7 @@ actor ProductSearchService {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchAttemptFailure.invalidResponse(
                 source: .rakuten,
-                detail: "楽天市場検索APIのHTTPレスポンスを取得できませんでした"
+                detail: L10n.string("楽天市場検索APIのHTTPレスポンスを取得できませんでした")
             )
         }
         
@@ -542,7 +542,7 @@ actor ProductSearchService {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw SearchAttemptFailure.parse(
                 source: .rakuten,
-                detail: "楽天市場検索APIのJSONを解析できませんでした"
+                detail: L10n.string("楽天市場検索APIのJSONを解析できませんでした")
             )
         }
         
@@ -555,7 +555,7 @@ actor ProductSearchService {
         guard let itemName = normalizedText(itemData["itemName"]) else {
             throw SearchAttemptFailure.parse(
                 source: .rakuten,
-                detail: "楽天市場検索APIの itemName を取得できませんでした"
+                detail: L10n.string("楽天市場検索APIの itemName を取得できませんでした")
             )
         }
         
@@ -595,7 +595,7 @@ actor ProductSearchService {
         guard let url = components.url else {
             throw SearchAttemptFailure.invalidResponse(
                 source: .yahoo,
-                detail: "Yahoo検索APIのURLを生成できませんでした"
+                detail: L10n.string("Yahoo検索APIのURLを生成できませんでした")
             )
         }
         
@@ -604,7 +604,7 @@ actor ProductSearchService {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchAttemptFailure.invalidResponse(
                 source: .yahoo,
-                detail: "Yahoo検索APIのHTTPレスポンスを取得できませんでした"
+                detail: L10n.string("Yahoo検索APIのHTTPレスポンスを取得できませんでした")
             )
         }
 
@@ -620,7 +620,7 @@ actor ProductSearchService {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw SearchAttemptFailure.parse(
                 source: .yahoo,
-                detail: "Yahoo検索APIのJSONを解析できませんでした"
+                detail: L10n.string("Yahoo検索APIのJSONを解析できませんでした")
             )
         }
 
@@ -632,7 +632,7 @@ actor ProductSearchService {
         guard let itemName = normalizedText(firstHit["name"]) else {
             throw SearchAttemptFailure.parse(
                 source: .yahoo,
-                detail: "Yahoo検索APIの name を取得できませんでした"
+                detail: L10n.string("Yahoo検索APIの name を取得できませんでした")
             )
         }
         
