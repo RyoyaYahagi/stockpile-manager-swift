@@ -156,7 +156,7 @@ function buildProductSearchURL(janCode, applicationId, accessKey) {
   url.searchParams.set("productCode", janCode);
   url.searchParams.set(
     "elements",
-    "productName,brandName,productCaption,genreName,mediumImageUrl,productCode"
+    "productName,productCode"
   );
   url.searchParams.set("hits", "1");
   return url;
@@ -172,7 +172,7 @@ function buildItemSearchURL(keyword, applicationId, accessKey) {
   url.searchParams.set("hits", "1");
   url.searchParams.set(
     "elements",
-    "itemName,itemCaption,genreName,mediumImageUrls,smallImageUrls,itemUrl"
+    "itemName,itemUrl"
   );
   return url;
 }
