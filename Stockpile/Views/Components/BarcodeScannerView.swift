@@ -122,7 +122,7 @@ struct BarcodeScannerView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showManualEntry) {
+            .navigationDestination(isPresented: $showManualEntry) {
                 ManualJANEntryView(code: $manualCode) { enteredCode in
                     Task {
                         await searchProduct(janCode: enteredCode)
@@ -242,11 +242,19 @@ struct BarcodeScannerView: View {
             Text(message)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
             
-            Button("再スキャン") {
-                resetState()
+            HStack(spacing: 12) {
+                Button("手動で入力") {
+                    showManualEntry = true
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button("再スキャン") {
+                    resetState()
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
         }
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -275,6 +283,7 @@ struct BarcodeScannerView: View {
     }
     
     private func searchProduct(janCode: String) async {
+        productInfo = nil
         searchState = .searching
         
         do {

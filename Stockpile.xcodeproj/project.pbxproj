@@ -38,8 +38,19 @@
 		035 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135 /* AppLocalization.swift */; };
 		036 /* LanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136 /* LanguageSettingsView.swift */; };
 		037 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 137 /* Localizable.strings */; };
+		A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000002 /* ProductSearchServiceTests.swift */; };
 		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A4B100000000000000000501 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 600 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 400;
+			remoteInfo = Stockpile;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		100 /* Stockpile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Stockpile.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -83,6 +94,8 @@
 		143 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/Localizable.strings; sourceTree = "<group>"; };
 		144 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
 		145 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
+		A4B100000000000000000001 /* StockpileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StockpileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A4B100000000000000000002 /* ProductSearchServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchServiceTests.swift; sourceTree = "<group>"; };
 		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockpileRelease.entitlements; sourceTree = "<group>"; };
 		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -96,6 +109,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A4B100000000000000000201 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -103,6 +123,7 @@
 			isa = PBXGroup;
 			children = (
 				301 /* Stockpile */,
+				A4B100000000000000000301 /* StockpileTests */,
 				302 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -131,8 +152,17 @@
 			isa = PBXGroup;
 			children = (
 				100 /* Stockpile.app */,
+				A4B100000000000000000001 /* StockpileTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A4B100000000000000000301 /* StockpileTests */ = {
+			isa = PBXGroup;
+			children = (
+				A4B100000000000000000002 /* ProductSearchServiceTests.swift */,
+			);
+			path = StockpileTests;
 			sourceTree = "<group>";
 		};
 		303 /* App */ = {
@@ -284,6 +314,26 @@
 			productReference = 100 /* Stockpile.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A4B100000000000000000401 /* StockpileTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A4B100000000000000000601 /* Build configuration list for PBXNativeTarget "StockpileTests" */;
+			buildPhases = (
+				A4B100000000000000000203 /* Sources */,
+				A4B100000000000000000201 /* Frameworks */,
+				A4B100000000000000000202 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A4B100000000000000000502 /* PBXTargetDependency */,
+			);
+			name = StockpileTests;
+			packageProductDependencies = (
+			);
+			productName = StockpileTests;
+			productReference = A4B100000000000000000001 /* StockpileTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -296,6 +346,10 @@
 				TargetAttributes = {
 					400 = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					A4B100000000000000000401 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = 400;
 					};
 				};
 			};
@@ -322,6 +376,7 @@
 			projectRoot = "";
 			targets = (
 				400 /* Stockpile */,
+				A4B100000000000000000401 /* StockpileTests */,
 			);
 		};
 /* End PBXProject section */
@@ -334,6 +389,13 @@
 				019 /* Assets.xcassets in Resources */,
 				037 /* Localizable.strings in Resources */,
 				A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A4B100000000000000000202 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -376,7 +438,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A4B100000000000000000203 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A4B100000000000000000502 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 400 /* Stockpile */;
+			targetProxy = A4B100000000000000000501 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		137 /* Localizable.strings */ = {
@@ -594,6 +672,64 @@
 			};
 			name = Release;
 		};
+		A4B100000000000000000701 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2L6CD9CNHL;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					"XCTest",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.stockpile-manager.appTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stockpile.app/Stockpile";
+			};
+			name = Debug;
+		};
+		A4B100000000000000000702 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2L6CD9CNHL;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					"XCTest",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.stockpile-manager.appTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stockpile.app/Stockpile";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -611,6 +747,15 @@
 			buildConfigurations = (
 				700 /* Debug */,
 				701 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A4B100000000000000000601 /* Build configuration list for PBXNativeTarget "StockpileTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A4B100000000000000000701 /* Debug */,
+				A4B100000000000000000702 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -119,6 +119,7 @@
 "通知時刻" = "Benachrichtigungszeit";
 "通知権限" = "Benachrichtigungsberechtigung";
 "通信エラー: %@" = "Netzwerkfehler: %@";
+"%@検索がタイムアウトしました" = "Die Suche nach %@ hat das Zeitlimit überschritten";
 "週" = "Woche";
 "離脱すると、この家族の共有データにアクセスできなくなります" = "Wenn Sie austreten, haben Sie keinen Zugriff mehr auf die geteilten Daten dieser Familie.";
 "離脱すると、この家族の共有データにアクセスできなくなります。" = "Wenn Sie austreten, haben Sie keinen Zugriff mehr auf die geteilten Daten dieser Familie.";

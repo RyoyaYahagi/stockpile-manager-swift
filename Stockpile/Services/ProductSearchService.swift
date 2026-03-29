@@ -37,6 +37,7 @@ struct ProductInfo: Sendable {
 enum ProductSearchError: Error, LocalizedError {
     case noAPIConfigured
     case invalidJANCode
+    case timeout(ProductInfo.Source)
     case networkError(Error)
     case parseError
     case notFound
@@ -47,6 +48,8 @@ enum ProductSearchError: Error, LocalizedError {
             return L10n.string("APIキーが設定されていません")
         case .invalidJANCode:
             return L10n.string("無効なJANコードです")
+        case .timeout(let source):
+            return L10n.format("%@検索がタイムアウトしました", source.localizedDisplayName)
         case .networkError(let error):
             return L10n.format("通信エラー: %@", error.localizedDescription)
         case .parseError:
@@ -60,7 +63,26 @@ enum ProductSearchError: Error, LocalizedError {
 /// 商品検索サービス
 /// 楽天・Yahoo APIを使用してJANコードから商品情報を取得
 actor ProductSearchService {
+    typealias SearchOperation = @Sendable (String) async throws -> ProductInfo?
+
+    struct SearchAttemptDeadlines: Sendable {
+        let rakutenBackend: TimeInterval
+        let rakutenProduct: TimeInterval
+        let rakutenKeyword: TimeInterval
+        let openFoodFacts: TimeInterval
+        let yahoo: TimeInterval
+
+        static let `default` = SearchAttemptDeadlines(
+            rakutenBackend: 10,
+            rakutenProduct: 4,
+            rakutenKeyword: 3,
+            openFoodFacts: 3,
+            yahoo: 3
+        )
+    }
+
     private enum SearchAttemptFailure: Error {
+        case timeout(source: ProductInfo.Source, deadline: TimeInterval)
         case httpStatus(source: ProductInfo.Source, statusCode: Int, detail: String?)
         case invalidResponse(source: ProductInfo.Source, detail: String)
         case parse(source: ProductInfo.Source, detail: String)
@@ -68,6 +90,8 @@ actor ProductSearchService {
 
         var logMessage: String {
             switch self {
+            case .timeout(let source, let deadline):
+                return "[ProductSearch] \(source.localizedDisplayName): Timed out after \(deadline)s"
             case .httpStatus(let source, let statusCode, let detail):
                 let suffix = detail.map { " detail=\($0)" } ?? ""
                 return "[ProductSearch] \(source.localizedDisplayName): HTTP \(statusCode)\(suffix)"
@@ -82,6 +106,8 @@ actor ProductSearchService {
 
         var publicError: ProductSearchError {
             switch self {
+            case .timeout(let source, _):
+                return .timeout(source)
             case .httpStatus(_, _, let detail):
                 return .networkError(NSError(domain: "ProductSearch", code: 1, userInfo: [
                     NSLocalizedDescriptionKey: detail ?? L10n.string("APIリクエストに失敗しました")
@@ -90,7 +116,10 @@ actor ProductSearchService {
                 return .networkError(NSError(domain: "ProductSearch", code: 2, userInfo: [
                     NSLocalizedDescriptionKey: detail
                 ]))
-            case .network(_, let underlying):
+            case .network(let source, let underlying):
+                if ProductSearchService.isTimeoutError(underlying) {
+                    return .timeout(source)
+                }
                 return .networkError(underlying)
             }
         }
@@ -105,12 +134,36 @@ actor ProductSearchService {
     static let shared = ProductSearchService()
     
     private let session: URLSession
-    
-    init() {
+    private let deadlines: SearchAttemptDeadlines
+    private let rakutenBackendOperation: SearchOperation?
+    private let rakutenProductOperation: SearchOperation?
+    private let rakutenKeywordOperation: SearchOperation?
+    private let openFoodFactsOperation: SearchOperation?
+    private let yahooOperation: SearchOperation?
+
+    init(
+        session: URLSession? = nil,
+        deadlines: SearchAttemptDeadlines = .default,
+        rakutenBackendOperation: SearchOperation? = nil,
+        rakutenProductOperation: SearchOperation? = nil,
+        rakutenKeywordOperation: SearchOperation? = nil,
+        openFoodFactsOperation: SearchOperation? = nil,
+        yahooOperation: SearchOperation? = nil
+    ) {
+        self.session = session ?? ProductSearchService.makeSession()
+        self.deadlines = deadlines
+        self.rakutenBackendOperation = rakutenBackendOperation
+        self.rakutenProductOperation = rakutenProductOperation
+        self.rakutenKeywordOperation = rakutenKeywordOperation
+        self.openFoodFactsOperation = openFoodFactsOperation
+        self.yahooOperation = yahooOperation
+    }
+
+    private static func makeSession() -> URLSession {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 30
-        self.session = URLSession(configuration: config)
+        return URLSession(configuration: config)
     }
 
     private func debugLog(_ message: @autoclosure () -> String) {
@@ -149,6 +202,33 @@ actor ProductSearchService {
         return String(responseString.prefix(limit))
     }
 
+    private static func isTimeoutError(_ error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            return urlError.code == .timedOut
+        }
+
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorTimedOut
+    }
+
+    private func requestData(
+        from url: URL,
+        source: ProductInfo.Source,
+        timeout: TimeInterval
+    ) async throws -> (Data, URLResponse) {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = timeout
+
+        do {
+            return try await session.data(for: request)
+        } catch {
+            if Self.isTimeoutError(error) {
+                throw SearchAttemptFailure.timeout(source: source, deadline: timeout)
+            }
+            throw SearchAttemptFailure.network(source: source, underlying: error)
+        }
+    }
+
     private func runSearchAttempt(
         source: ProductInfo.Source,
         operation: () async throws -> ProductInfo?
@@ -164,7 +244,12 @@ actor ProductSearchService {
             debugLog(failure.logMessage)
             return .technicalFailure(failure)
         } catch {
-            let failure = SearchAttemptFailure.network(source: source, underlying: error)
+            let failure: SearchAttemptFailure
+            if Self.isTimeoutError(error) {
+                failure = .timeout(source: source, deadline: 0)
+            } else {
+                failure = .network(source: source, underlying: error)
+            }
             debugLog(failure.logMessage)
             return .technicalFailure(failure)
         }
@@ -212,6 +297,41 @@ actor ProductSearchService {
         }
         return "\(brand) \(name)"
     }
+
+    private func performRakutenBackendSearch(janCode: String) async throws -> ProductInfo? {
+        if let rakutenBackendOperation {
+            return try await rakutenBackendOperation(janCode)
+        }
+        return try await searchRakutenViaBackend(janCode: janCode, timeout: deadlines.rakutenBackend)
+    }
+
+    private func performRakutenProductSearch(janCode: String) async throws -> ProductInfo? {
+        if let rakutenProductOperation {
+            return try await rakutenProductOperation(janCode)
+        }
+        return try await searchRakutenProduct(janCode: janCode, timeout: deadlines.rakutenProduct)
+    }
+
+    private func performRakutenKeywordSearch(janCode: String) async throws -> ProductInfo? {
+        if let rakutenKeywordOperation {
+            return try await rakutenKeywordOperation(janCode)
+        }
+        return try await searchRakuten(janCode: janCode, timeout: deadlines.rakutenKeyword)
+    }
+
+    private func performOpenFoodFactsSearch(janCode: String) async throws -> ProductInfo? {
+        if let openFoodFactsOperation {
+            return try await openFoodFactsOperation(janCode)
+        }
+        return try await searchOpenFoodFacts(janCode: janCode, timeout: deadlines.openFoodFacts)
+    }
+
+    private func performYahooSearch(janCode: String) async throws -> ProductInfo? {
+        if let yahooOperation {
+            return try await yahooOperation(janCode)
+        }
+        return try await searchYahoo(janCode: janCode, timeout: deadlines.yahoo)
+    }
     
     // MARK: - Public API
     
@@ -231,12 +351,14 @@ actor ProductSearchService {
             APIConfig.isYahooConfigured
         var technicalFailures: [SearchAttemptFailure] = []
         var sawCommercialNotFound = false
+        var sawAnyNotFound = false
 
         func resolve(_ outcome: SearchAttemptOutcome, isCommercialSource: Bool) -> ProductInfo? {
             switch outcome {
             case .found(let product):
                 return product
             case .notFound:
+                sawAnyNotFound = true
                 if isCommercialSource {
                     sawCommercialNotFound = true
                 }
@@ -250,7 +372,7 @@ actor ProductSearchService {
         // 1. Backend経由の楽天検索を最優先
         if APIConfig.isRakutenBackendConfigured {
             if let product = resolve(await runSearchAttempt(source: .rakuten) {
-                try await searchRakutenViaBackend(janCode: cleanedCode)
+                try await performRakutenBackendSearch(janCode: cleanedCode)
             }, isCommercialSource: true) {
                 return product
             }
@@ -261,13 +383,13 @@ actor ProductSearchService {
         // 2. ローカル設定の楽天APIにフォールバック
         if APIConfig.isRakutenConfigured {
             if let product = resolve(await runSearchAttempt(source: .rakuten) {
-                try await searchRakutenProduct(janCode: cleanedCode)
+                try await performRakutenProductSearch(janCode: cleanedCode)
             }, isCommercialSource: true) {
                 return product
             }
 
             if let product = resolve(await runSearchAttempt(source: .rakuten) {
-                try await searchRakuten(janCode: cleanedCode)
+                try await performRakutenKeywordSearch(janCode: cleanedCode)
             }, isCommercialSource: true) {
                 return product
             }
@@ -277,7 +399,7 @@ actor ProductSearchService {
 
         // 3. Open Food Facts API（無料・登録不要）
         if let product = resolve(await runSearchAttempt(source: .openFoodFacts) {
-            try await searchOpenFoodFacts(janCode: cleanedCode)
+            try await performOpenFoodFactsSearch(janCode: cleanedCode)
         }, isCommercialSource: false) {
             return product
         }
@@ -285,18 +407,22 @@ actor ProductSearchService {
         // 4. Yahoo APIにフォールバック
         if APIConfig.isYahooConfigured {
             if let product = resolve(await runSearchAttempt(source: .yahoo) {
-                try await searchYahoo(janCode: cleanedCode)
+                try await performYahooSearch(janCode: cleanedCode)
             }, isCommercialSource: true) {
                 return product
             }
         }
 
-        if let technicalFailure = technicalFailures.last, !sawCommercialNotFound {
+        if let technicalFailure = technicalFailures.last, !sawAnyNotFound {
             throw technicalFailure.publicError
         }
 
         if !hasConfiguredCommercialAPI {
             throw ProductSearchError.noAPIConfigured
+        }
+
+        if sawCommercialNotFound || sawAnyNotFound {
+            throw ProductSearchError.notFound
         }
 
         throw ProductSearchError.notFound
@@ -315,7 +441,7 @@ actor ProductSearchService {
     
     /// Open Food Facts API（無料・登録不要）
     /// https://world.openfoodfacts.org/data
-    private func searchOpenFoodFacts(janCode: String) async throws -> ProductInfo? {
+    private func searchOpenFoodFacts(janCode: String, timeout: TimeInterval) async throws -> ProductInfo? {
         let languageCode = appLanguageCode()
         var components = URLComponents(string: "https://world.openfoodfacts.org/api/v0/product/\(janCode).json")!
         components.queryItems = [
@@ -325,7 +451,7 @@ actor ProductSearchService {
         
         debugLog("[ProductSearch] Open Food Facts: \(url.absoluteString)")
         
-        let (data, response) = try await session.data(from: url)
+        let (data, response) = try await requestData(from: url, source: .openFoodFacts, timeout: timeout)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchAttemptFailure.invalidResponse(
@@ -402,7 +528,7 @@ actor ProductSearchService {
     
     // MARK: - 楽天API
 
-    private func searchRakutenViaBackend(janCode: String) async throws -> ProductInfo? {
+    private func searchRakutenViaBackend(janCode: String, timeout: TimeInterval) async throws -> ProductInfo? {
         guard let url = APIConfig.rakutenSearchURL(for: janCode) else {
             throw SearchAttemptFailure.invalidResponse(
                 source: .rakuten,
@@ -412,7 +538,7 @@ actor ProductSearchService {
 
         debugLog("[ProductSearch] Requesting Rakuten backend: \(url.absoluteString)")
 
-        let (data, response) = try await session.data(from: url)
+        let (data, response) = try await requestData(from: url, source: .rakuten, timeout: timeout)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchAttemptFailure.invalidResponse(
@@ -468,7 +594,7 @@ actor ProductSearchService {
 
     /// 楽天商品価格ナビ 製品検索API
     /// JANコード(productCode)で直接検索する
-    private func searchRakutenProduct(janCode: String) async throws -> ProductInfo? {
+    private func searchRakutenProduct(janCode: String, timeout: TimeInterval) async throws -> ProductInfo? {
         let appId = APIConfig.rakutenAppId
         let accessKey = APIConfig.rakutenAccessKey
 
@@ -496,7 +622,7 @@ actor ProductSearchService {
         let maskedURL = maskedURLString(from: url, sensitiveQueryNames: ["applicationid", "accesskey"])
         debugLog("[ProductSearch] Requesting Rakuten product API: \(maskedURL)")
 
-        let (data, response) = try await session.data(from: url)
+        let (data, response) = try await requestData(from: url, source: .rakuten, timeout: timeout)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchAttemptFailure.invalidResponse(
@@ -573,7 +699,7 @@ actor ProductSearchService {
     
     /// 楽天市場商品検索API
     /// https://webservice.rakuten.co.jp/documentation/ichiba-item-search
-    private func searchRakuten(janCode: String) async throws -> ProductInfo? {
+    private func searchRakuten(janCode: String, timeout: TimeInterval) async throws -> ProductInfo? {
         let appId = APIConfig.rakutenAppId
         let accessKey = APIConfig.rakutenAccessKey
         
@@ -597,7 +723,7 @@ actor ProductSearchService {
         let maskedURL = maskedURLString(from: url, sensitiveQueryNames: ["applicationid", "accesskey"])
         debugLog("[ProductSearch] Requesting: \(maskedURL)")
         
-        let (data, response) = try await session.data(from: url)
+        let (data, response) = try await requestData(from: url, source: .rakuten, timeout: timeout)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchAttemptFailure.invalidResponse(
@@ -666,7 +792,7 @@ actor ProductSearchService {
     
     /// Yahoo ショッピング商品検索API V3
     /// https://developer.yahoo.co.jp/webapi/shopping/shopping/v3/itemsearch.html
-    private func searchYahoo(janCode: String) async throws -> ProductInfo? {
+    private func searchYahoo(janCode: String, timeout: TimeInterval) async throws -> ProductInfo? {
         let clientId = APIConfig.yahooClientId
         
         // URL構築
@@ -684,7 +810,7 @@ actor ProductSearchService {
             )
         }
         
-        let (data, response) = try await session.data(from: url)
+        let (data, response) = try await requestData(from: url, source: .yahoo, timeout: timeout)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SearchAttemptFailure.invalidResponse(

@@ -119,6 +119,7 @@
 "通知時刻" = "Heure de notification";
 "通知権限" = "Autorisation de notification";
 "通信エラー: %@" = "Erreur réseau : %@";
+"%@検索がタイムアウトしました" = "La recherche %@ a expiré";
 "週" = "Semaine";
 "離脱すると、この家族の共有データにアクセスできなくなります" = "Si vous quittez, vous ne pourrez plus accéder aux données partagées de cette famille.";
 "離脱すると、この家族の共有データにアクセスできなくなります。" = "Si vous quittez, vous ne pourrez plus accéder aux données partagées de cette famille.";

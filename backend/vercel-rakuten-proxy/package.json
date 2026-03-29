@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check api/v1/rakuten/redirect.js && node --check api/v1/rakuten/search.js && node --check api/health.js"
+    "check": "node --check api/v1/rakuten/redirect.js && node --check api/v1/rakuten/search.js && node --check api/health.js",
+    "test": "node --test api/v1/rakuten/search.test.js"
   }
 }

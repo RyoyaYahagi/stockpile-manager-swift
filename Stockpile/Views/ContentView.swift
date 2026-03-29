@@ -60,6 +60,9 @@ private enum TutorialIllustrationKind {
 private let firstLaunchTutorialStepCount = 7
 
 struct ContentView: View {
+    private static let isRunningUnderXCTest =
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
     @State private var router = Router()
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -439,6 +442,8 @@ struct ContentView: View {
     }
 
     private func refreshCloudKitSharedFamilies() async {
+        guard !Self.isRunningUnderXCTest else { return }
+
         let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
 
         if let metadata = CloudKitShareRelay.consumePending() {

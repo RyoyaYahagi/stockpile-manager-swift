@@ -119,6 +119,7 @@
 "通知時刻" = "Notification Time";
 "通知権限" = "Notification Permission";
 "通信エラー: %@" = "Network error: %@";
+"%@検索がタイムアウトしました" = "%@ search timed out";
 "週" = "Week";
 "離脱すると、この家族の共有データにアクセスできなくなります" = "Leaving will remove access to this family's shared data.";
 "離脱すると、この家族の共有データにアクセスできなくなります。" = "Leaving will remove access to this family's shared data.";
