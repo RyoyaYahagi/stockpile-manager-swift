@@ -4,6 +4,15 @@ const ITEM_SEARCH_URL =
   "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601";
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 30;
+const DEFAULT_REQUEST_HEADERS = {
+  "User-Agent": "stockpile-rakuten-proxy/1.0"
+};
+const SEARCH_PAGE_HEADERS = {
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
+  "User-Agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+};
 const rateLimitBuckets = globalThis.__stockpileRateLimitBuckets || new Map();
 
 if (!globalThis.__stockpileRateLimitBuckets) {
@@ -185,9 +194,7 @@ function buildRakutenSearchResultsURL(keyword) {
 
 async function fetchJSON(url) {
   const response = await fetch(url, {
-    headers: {
-      "User-Agent": "stockpile-rakuten-proxy/1.0"
-    }
+    headers: DEFAULT_REQUEST_HEADERS
   });
 
   const text = await response.text();
@@ -205,9 +212,7 @@ async function fetchJSON(url) {
 
 async function fetchText(url) {
   const response = await fetch(url, {
-    headers: {
-      "User-Agent": "stockpile-rakuten-proxy/1.0"
-    }
+    headers: SEARCH_PAGE_HEADERS
   });
 
   const text = await response.text();
