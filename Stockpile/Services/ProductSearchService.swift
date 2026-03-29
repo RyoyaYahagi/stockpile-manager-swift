@@ -225,6 +225,7 @@ actor ProductSearchService {
             throw ProductSearchError.invalidJANCode
         }
 
+        let hasConfiguredCommercialAPI = APIConfig.isRakutenConfigured || APIConfig.isYahooConfigured
         var technicalFailures: [SearchAttemptFailure] = []
         var sawNotFound = false
 
@@ -276,6 +277,10 @@ actor ProductSearchService {
 
         if let technicalFailure = technicalFailures.last, !sawNotFound {
             throw technicalFailure.publicError
+        }
+
+        if !hasConfiguredCommercialAPI {
+            throw ProductSearchError.noAPIConfigured
         }
 
         throw ProductSearchError.notFound
