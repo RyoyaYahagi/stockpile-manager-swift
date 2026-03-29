@@ -197,6 +197,10 @@ async function fetchJSON(url) {
   return { response, json, text };
 }
 
+function shouldTreatAsUpstreamFailure(statusCode) {
+  return statusCode === 401 || statusCode === 403 || statusCode === 429 || statusCode >= 500;
+}
+
 function firstObject(value) {
   if (Array.isArray(value) && value.length > 0) {
     return value[0];
@@ -332,7 +336,7 @@ export default async function handler(request, response) {
       if (product) {
         return sendJSON(response, 200, product);
       }
-    } else if (productResult.response.status !== 404) {
+    } else if (shouldTreatAsUpstreamFailure(productResult.response.status)) {
       sawUpstreamFailure = true;
     }
 
@@ -344,7 +348,7 @@ export default async function handler(request, response) {
       if (product) {
         return sendJSON(response, 200, product);
       }
-    } else if (itemResult.response.status !== 404) {
+    } else if (shouldTreatAsUpstreamFailure(itemResult.response.status)) {
       sawUpstreamFailure = true;
     }
 
@@ -357,7 +361,7 @@ export default async function handler(request, response) {
         if (product) {
           return sendJSON(response, 200, product);
         }
-      } else if (keywordResult.response.status !== 404) {
+      } else if (shouldTreatAsUpstreamFailure(keywordResult.response.status)) {
         sawUpstreamFailure = true;
       }
     }
