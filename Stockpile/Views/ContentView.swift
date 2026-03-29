@@ -63,6 +63,7 @@ struct ContentView: View {
     @State private var router = Router()
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(LocalizationController.self) private var localizationController
     @Query private var items: [Item]
     @Query(sort: \NotificationSettings.createdAt, order: .forward)
     private var notificationSettingsList: [NotificationSettings]
@@ -126,6 +127,8 @@ struct ContentView: View {
     }
     
     var body: some View {
+        let refreshToken = localizationController.uiRefreshToken
+
         NavigationStack(path: $router.path) {
             DashboardView()
                 .navigationDestination(for: Destination.self) { destination in
@@ -145,11 +148,13 @@ struct ContentView: View {
                     }
                 }
         }
+        .id(refreshToken)
         .localizedRefresh()
         .environment(router)
         .sheet(item: $router.presentedSheet) { sheet in
             sheetContent(for: sheet)
                 .environment(router)
+                .id(refreshToken)
         }
         .task {
             LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
@@ -224,6 +229,7 @@ struct ContentView: View {
             InitialLanguageSelectionView(
                 onContinue: handleInitialLanguageSelectionContinue
             )
+            .id(refreshToken)
             .interactiveDismissDisabled()
         }
         .fullScreenCover(isPresented: $showFirstLaunchTutorial) {
@@ -236,6 +242,7 @@ struct ContentView: View {
                 onFinish: handleFirstLaunchTutorialFinish,
                 onClose: handleFirstLaunchTutorialClose
             )
+            .id(refreshToken)
         }
     }
     

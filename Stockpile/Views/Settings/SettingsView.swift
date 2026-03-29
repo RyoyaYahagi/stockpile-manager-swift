@@ -40,6 +40,8 @@ struct SettingsView: View {
     }
     
     var body: some View {
+        let refreshToken = localizationController.uiRefreshToken
+
         List {
             // 家族セクション
             Section {
@@ -150,6 +152,7 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("設定")
+        .id(refreshToken)
         .localizedRefresh()
         .task(id: memberCountRefreshKey) {
             await refreshCloudKitMemberCount()

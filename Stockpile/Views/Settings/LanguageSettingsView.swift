@@ -3,16 +3,16 @@ import SwiftUI
 struct LanguageSettingsView: View {
     @Environment(LocalizationController.self) private var localizationController
 
-    private var selectedLanguage: AppLanguage {
-        localizationController.selectedLanguage
-    }
-
     var body: some View {
+        let selectedLanguage = localizationController.selectedLanguage
+
         List {
             Section {
                 ForEach(AppLanguage.allCases) { language in
                     Button {
-                        localizationController.selectLanguage(language)
+                        withAnimation(.snappy(duration: 0.18)) {
+                            localizationController.selectLanguage(language)
+                        }
                     } label: {
                         HStack {
                             Text(language.displayName)
@@ -24,6 +24,8 @@ struct LanguageSettingsView: View {
                                     .fontWeight(.semibold)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
