@@ -288,3 +288,16 @@
 "Yahoo検索APIのJSONを解析できませんでした" = "No se pudo analizar el JSON de la API de búsqueda de Yahoo";
 "Yahoo検索APIの name を取得できませんでした" = "No se pudo obtener name de la API de búsqueda de Yahoo";
 "編集" = "Editar";
+"Stockpileへようこそ" = "Bienvenido a Stockpile";
+"最初に表示する言語" = "Idioma inicial";
+"システムの言語のままでも進められます" = "También puedes continuar con el idioma del sistema.";
+"ここを押す" = "Toca aquí";
+"名前を入れて保存" = "Introduce un nombre y guarda";
+"あとで追加できます" = "Puedes añadirlo más tarde";
+"通知時刻を決める" = "Elegir la hora de notificación";
+"共有リンクを送る" = "Enviar el enlace compartido";
+"ここから見直せます" = "Puedes revisarlo desde aquí";
+"品名" = "Nombre del artículo";
+"飲料水" = "Agua potable";
+"乾電池" = "Pilas";
+"缶詰" = "Conserva";

@@ -140,6 +140,7 @@ struct NotificationSettingsView: View {
             }
         }
         .navigationTitle("通知設定")
+        .localizedRefresh()
         .task {
             ensureSettingsLoaded()
         }

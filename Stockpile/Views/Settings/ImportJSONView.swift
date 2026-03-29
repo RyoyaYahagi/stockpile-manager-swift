@@ -69,6 +69,7 @@ struct ImportJSONView: View {
             .padding(.top, 40)
             .navigationTitle("バックアップから復元")
             .navigationBarTitleDisplayMode(.inline)
+            .localizedRefresh()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") {
@@ -437,6 +438,7 @@ struct ExportJSONView: View {
             .padding(.top, 40)
             .navigationTitle("バックアップ")
             .navigationBarTitleDisplayMode(.inline)
+            .localizedRefresh()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") {

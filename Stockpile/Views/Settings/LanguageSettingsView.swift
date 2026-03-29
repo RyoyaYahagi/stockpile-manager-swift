@@ -1,12 +1,10 @@
 import SwiftUI
 
 struct LanguageSettingsView: View {
-    @AppStorage(AppLanguage.storageKey)
-    private var selectedLanguageRawValue = AppLanguage.system.rawValue
+    @Environment(LocalizationController.self) private var localizationController
 
     private var selectedLanguage: AppLanguage {
-        get { AppLanguage(rawValue: selectedLanguageRawValue) ?? .system }
-        nonmutating set { selectedLanguageRawValue = newValue.rawValue }
+        localizationController.selectedLanguage
     }
 
     var body: some View {
@@ -14,7 +12,7 @@ struct LanguageSettingsView: View {
             Section {
                 ForEach(AppLanguage.allCases) { language in
                     Button {
-                        selectedLanguage = language
+                        localizationController.selectLanguage(language)
                     } label: {
                         HStack {
                             Text(language.displayName)
@@ -37,6 +35,7 @@ struct LanguageSettingsView: View {
         }
         .navigationTitle("言語")
         .navigationBarTitleDisplayMode(.inline)
+        .localizedRefresh()
     }
 }
 

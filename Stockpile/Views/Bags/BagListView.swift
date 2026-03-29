@@ -56,6 +56,7 @@ struct BagListView: View {
             }
         }
         .navigationTitle("収納場所")
+        .localizedRefresh()
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -202,6 +203,7 @@ struct BagFormSheet: View {
             }
             .navigationTitle("収納場所を追加")
             .navigationBarTitleDisplayMode(.inline)
+            .localizedRefresh()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") {

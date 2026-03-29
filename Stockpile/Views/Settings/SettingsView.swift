@@ -5,10 +5,9 @@ import SwiftData
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
+    @Environment(LocalizationController.self) private var localizationController
     
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
-    @AppStorage(AppLanguage.storageKey)
-    private var appLanguageRawValue = AppLanguage.system.rawValue
     @AppStorage("app.tutorial.replayRequestToken")
     private var tutorialReplayRequestToken = 0
     @State private var cloudKitMemberCount: Int?
@@ -37,7 +36,7 @@ struct SettingsView: View {
     }
 
     private var selectedAppLanguage: AppLanguage {
-        AppLanguage(rawValue: appLanguageRawValue) ?? .system
+        localizationController.selectedLanguage
     }
     
     var body: some View {
@@ -151,6 +150,7 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("設定")
+        .localizedRefresh()
         .task(id: memberCountRefreshKey) {
             await refreshCloudKitMemberCount()
         }

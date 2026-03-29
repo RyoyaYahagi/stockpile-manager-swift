@@ -275,6 +275,7 @@ struct FamilySettingsView: View {
             }
         }
         .navigationTitle("家族設定")
+        .localizedRefresh()
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(isEditing ? LocalizedStringKey("完了") : LocalizedStringKey("編集")) {
@@ -317,6 +318,7 @@ struct FamilySettingsView: View {
                 }
                 .navigationTitle("家族名を設定")
                 .navigationBarTitleDisplayMode(.inline)
+                .localizedRefresh()
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button("キャンセル") {

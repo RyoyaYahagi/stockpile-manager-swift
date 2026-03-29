@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
 @main
 struct StockpileApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @AppStorage(AppLanguage.storageKey) private var appLanguageRawValue = AppLanguage.system.rawValue
+    @State private var localizationController = LocalizationController()
     
     private let sharedModelContainer: ModelContainer = {
         // 初回起動時のStore作成前にApplication Supportを保証して、
@@ -80,15 +80,11 @@ struct StockpileApp: App {
             fatalError("Failed to create ModelContainer: \(error)")
         }
     }()
-
-    private var selectedAppLanguage: AppLanguage {
-        AppLanguage(rawValue: appLanguageRawValue) ?? .system
-    }
-    
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environment(\.locale, selectedAppLanguage.locale)
+                .environment(localizationController)
+                .environment(\.locale, localizationController.locale)
         }
         .modelContainer(sharedModelContainer)
     }

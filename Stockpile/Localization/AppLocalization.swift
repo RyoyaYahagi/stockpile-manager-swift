@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum AppLanguage: String, CaseIterable, Identifiable {
     case system
@@ -48,7 +49,15 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }
 
     static var current: AppLanguage {
+        storedLanguage
+    }
+
+    static var storedLanguage: AppLanguage {
         AppLanguage(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .system
+    }
+
+    static func persist(_ language: AppLanguage) {
+        UserDefaults.standard.set(language.rawValue, forKey: storageKey)
     }
 
     static var currentLocale: Locale {
@@ -81,6 +90,29 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 
         var seen = Set<String>()
         return candidates.filter { seen.insert($0).inserted }
+    }
+}
+
+@MainActor
+@Observable
+final class LocalizationController {
+    private(set) var selectedLanguage: AppLanguage
+    private(set) var locale: Locale
+    private(set) var uiRefreshToken = UUID()
+
+    init(initialLanguage: AppLanguage = .storedLanguage) {
+        selectedLanguage = initialLanguage
+        locale = initialLanguage.locale
+    }
+
+    func selectLanguage(_ language: AppLanguage) {
+        let shouldRefresh = selectedLanguage != language || language == .system
+        AppLanguage.persist(language)
+        selectedLanguage = language
+        locale = language.locale
+        if shouldRefresh {
+            uiRefreshToken = UUID()
+        }
     }
 }
 
@@ -133,5 +165,20 @@ enum L10n {
     static func format(_ key: String, _ arguments: [CVarArg], table: String? = nil) -> String {
         let template = string(key, table: table)
         return String(format: template, locale: AppLanguage.currentLocale, arguments: arguments)
+    }
+}
+
+private struct LocalizationRefreshModifier: ViewModifier {
+    @Environment(LocalizationController.self) private var localizationController
+
+    func body(content: Content) -> some View {
+        _ = localizationController.uiRefreshToken
+        return content
+    }
+}
+
+extension View {
+    func localizedRefresh() -> some View {
+        modifier(LocalizationRefreshModifier())
     }
 }

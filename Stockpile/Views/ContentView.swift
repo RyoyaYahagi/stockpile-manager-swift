@@ -47,6 +47,16 @@ private enum FirstLaunchAction {
     case notificationSettings
 }
 
+private enum TutorialIllustrationKind {
+    case welcome
+    case addButton
+    case addForm
+    case expiryOptional
+    case notifications
+    case familySharing
+    case settingsGuide
+}
+
 private let firstLaunchTutorialStepCount = 7
 
 struct ContentView: View {
@@ -57,10 +67,13 @@ struct ContentView: View {
     @Query(sort: \NotificationSettings.createdAt, order: .forward)
     private var notificationSettingsList: [NotificationSettings]
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
+    @AppStorage("app.hasCompletedInitialLanguageSelection")
+    private var hasCompletedInitialLanguageSelection = false
     @AppStorage("app.hasCompletedFirstLaunchTutorial")
     private var hasCompletedFirstLaunchTutorial = false
     @AppStorage("app.tutorial.replayRequestToken")
     private var tutorialReplayRequestToken = 0
+    @State private var showInitialLanguageSelection = false
     @State private var showFirstLaunchTutorial = false
     @State private var hasPresentedFirstLaunchTutorialInSession = false
     @State private var tutorialStepIndex = 0
@@ -132,6 +145,7 @@ struct ContentView: View {
                     }
                 }
         }
+        .localizedRefresh()
         .environment(router)
         .sheet(item: $router.presentedSheet) { sheet in
             sheetContent(for: sheet)
@@ -151,12 +165,8 @@ struct ContentView: View {
             }
 
             await refreshCloudKitSharedFamilies()
-            
-            if !hasCompletedFirstLaunchTutorial,
-               !hasPresentedFirstLaunchTutorialInSession {
-                hasPresentedFirstLaunchTutorialInSession = true
-                startTutorial(at: 0)
-            }
+
+            presentPendingFirstLaunchFlowIfNeeded()
         }
         .onChange(of: tutorialReplayRequestToken) { _, _ in
             hasPresentedFirstLaunchTutorialInSession = true
@@ -176,6 +186,7 @@ struct ContentView: View {
             Task {
                 await refreshCloudKitSharedFamilies()
             }
+            presentPendingFirstLaunchFlowIfNeeded()
         }
         .onChange(of: router.path.count) { _, _ in
             resumeTutorialIfNeeded()
@@ -208,6 +219,12 @@ struct ContentView: View {
             guard cloudKitShareSuccessMessage != nil else { return }
             try? await Task.sleep(for: .seconds(3))
             dismissCloudKitShareSuccessBanner()
+        }
+        .fullScreenCover(isPresented: $showInitialLanguageSelection) {
+            InitialLanguageSelectionView(
+                onContinue: handleInitialLanguageSelectionContinue
+            )
+            .interactiveDismissDisabled()
         }
         .fullScreenCover(isPresented: $showFirstLaunchTutorial) {
             FirstLaunchTutorialView(
@@ -274,6 +291,33 @@ struct ContentView: View {
         showFirstLaunchTutorial = true
     }
 
+    private func presentPendingFirstLaunchFlowIfNeeded() {
+        guard !showInitialLanguageSelection else { return }
+        guard !showFirstLaunchTutorial else { return }
+
+        if !hasCompletedFirstLaunchTutorial && !hasCompletedInitialLanguageSelection {
+            showInitialLanguageSelection = true
+            return
+        }
+
+        if !hasCompletedFirstLaunchTutorial,
+           !hasPresentedFirstLaunchTutorialInSession {
+            hasPresentedFirstLaunchTutorialInSession = true
+            startTutorial(at: 0)
+        }
+    }
+
+    private func handleInitialLanguageSelectionContinue() {
+        hasCompletedInitialLanguageSelection = true
+        showInitialLanguageSelection = false
+
+        guard !hasCompletedFirstLaunchTutorial else { return }
+        hasPresentedFirstLaunchTutorialInSession = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            startTutorial(at: 0)
+        }
+    }
+
     private func handleFirstLaunchTutorialTryStep(_ action: FirstLaunchAction) {
         let nextStep = min(tutorialStepIndex + 1, firstLaunchTutorialStepCount - 1)
         tutorialStepIndex = nextStep
@@ -331,6 +375,7 @@ struct ContentView: View {
 
     private func resumeTutorialIfNeeded() {
         guard shouldResumeTutorialAfterAction else { return }
+        guard !showInitialLanguageSelection else { return }
         guard !showFirstLaunchTutorial else { return }
         guard router.path.isEmpty else { return }
         guard router.presentedSheet == nil else { return }
@@ -471,6 +516,122 @@ private struct CloudKitShareSuccessBanner: View {
     }
 }
 
+private struct TutorialStep {
+    let title: LocalizedStringKey
+    let message: LocalizedStringKey
+    let primaryTitle: LocalizedStringKey
+    let action: FirstLaunchAction?
+    let secondaryTitle: LocalizedStringKey?
+    let illustration: TutorialIllustrationKind
+}
+
+private struct InitialLanguageSelectionView: View {
+    @Environment(LocalizationController.self) private var localizationController
+
+    let onContinue: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                VStack(spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.blue.opacity(0.2),
+                                        Color.cyan.opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 92, height: 92)
+
+                        Image(systemName: "globe")
+                            .font(.system(size: 38, weight: .semibold))
+                            .foregroundStyle(.blue)
+                    }
+
+                    Text("Stockpileへようこそ")
+                        .font(.title2.bold())
+
+                    Text("最初に表示する言語")
+                        .font(.title3.weight(.semibold))
+
+                    Text("システムの言語のままでも進められます")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 28)
+
+                VStack(spacing: 12) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Button {
+                            localizationController.selectLanguage(language)
+                        } label: {
+                            LanguageOptionCard(
+                                title: language.displayName,
+                                isSelected: localizationController.selectedLanguage == language
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 120)
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 10) {
+                Button("続ける") {
+                    onContinue()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 20)
+            .background(.ultraThinMaterial)
+        }
+        .background(Color(.systemGroupedBackground))
+        .localizedRefresh()
+    }
+}
+
+private struct LanguageOptionCard: View {
+    let title: String
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(isSelected ? .blue : .secondary.opacity(0.5))
+
+            Text(title)
+                .font(.body.weight(.medium))
+                .foregroundStyle(.primary)
+
+            Spacer()
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.background)
+                .shadow(color: .black.opacity(isSelected ? 0.08 : 0.03), radius: 10, x: 0, y: 4)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(isSelected ? Color.blue.opacity(0.35) : Color.gray.opacity(0.12), lineWidth: 1)
+        }
+    }
+}
+
 private struct FirstLaunchTutorialView: View {
     @Binding var stepIndex: Int
     let didAddItem: Bool
@@ -480,68 +641,67 @@ private struct FirstLaunchTutorialView: View {
     let onFinish: () -> Void
     let onClose: () -> Void
     
-    private struct Step {
-        let title: LocalizedStringKey
-        let message: LocalizedStringKey
-        let primaryTitle: LocalizedStringKey
-        let action: FirstLaunchAction?
-        let secondaryTitle: LocalizedStringKey?
-    }
-
-    private var steps: [Step] {
+    private var steps: [TutorialStep] {
         [
-            Step(
+            TutorialStep(
                 title: "このアプリで最初にやること",
                 message: "家にある食べ物や日用品を、ひとつずつメモしていくアプリです。",
                 primaryTitle: "使い方を見る",
                 action: nil,
-                secondaryTitle: nil
+                secondaryTitle: nil,
+                illustration: .welcome
             ),
-            Step(
+            TutorialStep(
                 title: "まずは右下の + を押します",
                 message: "右下の + を押すと、登録画面が開きます。",
                 primaryTitle: "+ボタンを開く",
                 action: .addItem,
-                secondaryTitle: "今は説明だけ見る"
+                secondaryTitle: "今は説明だけ見る",
+                illustration: .addButton
             ),
-            Step(
+            TutorialStep(
                 title: didAddItem ? "登録できました" : "名前だけでも保存できます",
                 message: didAddItem
                     ? "一覧に1件増えていれば、最初の登録は完了です。"
                     : "登録画面では、名前を入れて保存すれば使い始められます。",
                 primaryTitle: "次へ進む",
                 action: nil,
-                secondaryTitle: nil
+                secondaryTitle: nil,
+                illustration: .addForm
             ),
-            Step(
+            TutorialStep(
                 title: "期限は分かるときだけで大丈夫です",
                 message: "賞味期限が分からない物は、あとで追加できます。",
                 primaryTitle: "次へ進む",
                 action: nil,
-                secondaryTitle: nil
+                secondaryTitle: nil,
+                illustration: .expiryOptional
             ),
-            Step(
+            TutorialStep(
                 title: "通知は必要になってから設定できます",
                 message: "通知を開くと、いつお知らせするかを決められます。",
                 primaryTitle: "通知を開く",
                 action: .notificationSettings,
-                secondaryTitle: "今は設定しない"
+                secondaryTitle: "今は設定しない",
+                illustration: .notifications
             ),
-            Step(
+            TutorialStep(
                 title: didSetUpFamily ? "家族共有の準備もできます" : "家族と使うときは共有を設定できます",
                 message: didSetUpFamily
                     ? "家族設定から、家族に共有リンクを送れる状態です。"
                     : "家族共有を開くと、家族で同じ一覧を見るための設定画面が開きます。",
                 primaryTitle: "家族共有を開く",
                 action: .familySharing,
-                secondaryTitle: "今は設定しない"
+                secondaryTitle: "今は設定しない",
+                illustration: .familySharing
             ),
-            Step(
+            TutorialStep(
                 title: "これで使い始められます",
                 message: "分からなくなっても、設定から「はじめての使い方」を見直せます。",
                 primaryTitle: "使い始める",
                 action: nil,
-                secondaryTitle: nil
+                secondaryTitle: nil,
+                illustration: .settingsGuide
             )
         ]
     }
@@ -551,30 +711,33 @@ private struct FirstLaunchTutorialView: View {
         let step = steps[safeStepIndex]
         
         NavigationStack {
-            VStack(spacing: 28) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 42, weight: .semibold))
-                    .foregroundStyle(.blue)
-                
-                VStack(spacing: 10) {
-                    Text("はじめての使い方")
-                        .font(.title2.bold())
-                    Text(step.title)
-                        .font(.title3.weight(.semibold))
-                    Text(step.message)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                
-                HStack(spacing: 8) {
-                    ForEach(Array(steps.indices), id: \.self) { index in
-                        Capsule()
-                            .fill(index == safeStepIndex ? Color.blue : Color.gray.opacity(0.25))
-                            .frame(width: index == safeStepIndex ? 28 : 8, height: 8)
+            ScrollView {
+                VStack(spacing: 28) {
+                    TutorialIllustrationCard(kind: step.illustration)
+
+                    VStack(spacing: 10) {
+                        Text("はじめての使い方")
+                            .font(.title2.bold())
+                        Text(step.title)
+                            .font(.title3.weight(.semibold))
+                        Text(step.message)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+
+                    HStack(spacing: 8) {
+                        ForEach(Array(steps.indices), id: \.self) { index in
+                            Capsule()
+                                .fill(index == safeStepIndex ? Color.blue : Color.gray.opacity(0.25))
+                                .frame(width: index == safeStepIndex ? 28 : 8, height: 8)
+                        }
                     }
                 }
-                
+                .padding(24)
+                .padding(.bottom, 140)
+            }
+            .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 12) {
                     if let action = step.action {
                         Button(step.primaryTitle) {
@@ -611,13 +774,397 @@ private struct FirstLaunchTutorialView: View {
                     .controlSize(.large)
                     .frame(maxWidth: .infinity)
                 }
-                
-                Spacer()
+                .padding(.horizontal, 24)
+                .padding(.top, 14)
+                .padding(.bottom, 20)
+                .background(.ultraThinMaterial)
             }
-            .padding(24)
             .navigationTitle("はじめての使い方")
             .navigationBarTitleDisplayMode(.inline)
+            .localizedRefresh()
         }
+    }
+}
+
+private struct TutorialIllustrationCard: View {
+    let kind: TutorialIllustrationKind
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.blue.opacity(0.16),
+                            Color.cyan.opacity(0.08),
+                            Color.white
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.white.opacity(0.95))
+                .padding(18)
+
+            illustrationBody
+                .padding(.horizontal, 28)
+                .padding(.vertical, 30)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 260)
+        .shadow(color: .black.opacity(0.06), radius: 16, x: 0, y: 10)
+    }
+
+    @ViewBuilder
+    private var illustrationBody: some View {
+        switch kind {
+        case .welcome:
+            VStack(spacing: 16) {
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.blue.opacity(0.14))
+                        .frame(width: 64, height: 64)
+                        .overlay {
+                            Image(systemName: "shippingbox.fill")
+                                .font(.system(size: 28, weight: .semibold))
+                                .foregroundStyle(.blue)
+                        }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.primary.opacity(0.12))
+                            .frame(height: 14)
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.primary.opacity(0.08))
+                            .frame(width: 150, height: 12)
+                    }
+                }
+
+                HStack(spacing: 12) {
+                    featureTile(symbol: "archivebox.fill", tint: .blue)
+                    featureTile(symbol: "bell.badge.fill", tint: .orange)
+                    featureTile(symbol: "person.3.fill", tint: .green)
+                }
+
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.blue.opacity(0.1))
+                    .frame(height: 44)
+                    .overlay(alignment: .leading) {
+                        HStack(spacing: 10) {
+                            Circle()
+                                .fill(Color.blue.opacity(0.18))
+                                .frame(width: 26, height: 26)
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .fill(Color.blue.opacity(0.18))
+                                .frame(width: 120, height: 10)
+                        }
+                        .padding(.horizontal, 14)
+                    }
+            }
+
+        case .addButton:
+            ZStack(alignment: .bottomTrailing) {
+                VStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(height: 18)
+
+                    ForEach(0..<3, id: \.self) { index in
+                        TutorialMockRow(
+                            title: index == 0 ? "飲料水" : index == 1 ? "乾電池" : "缶詰",
+                            systemImage: "archivebox",
+                            highlighted: false
+                        )
+                    }
+
+                    Spacer(minLength: 0)
+                }
+
+                VStack(alignment: .trailing, spacing: 8) {
+                    TutorialCalloutBadge(
+                        text: "ここを押す",
+                        symbol: "hand.tap.fill",
+                        tint: .blue
+                    )
+                    Image(systemName: "arrow.down.right")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.blue)
+                        .padding(.trailing, 22)
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 66, height: 66)
+                        .overlay {
+                            Image(systemName: "plus")
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                }
+            }
+
+        case .addForm:
+            VStack(spacing: 12) {
+                HStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.primary.opacity(0.12))
+                        .frame(width: 100, height: 14)
+                    Spacer()
+                    TutorialCalloutBadge(
+                        text: "名前を入れて保存",
+                        symbol: "square.and.arrow.down.fill",
+                        tint: .green
+                    )
+                }
+
+                TutorialMockRow(
+                    title: "品名",
+                    systemImage: "text.cursor",
+                    highlighted: true,
+                    accent: .green
+                )
+                TutorialMockRow(
+                    title: "数量",
+                    systemImage: "number",
+                    highlighted: false
+                )
+                TutorialMockRow(
+                    title: "収納場所",
+                    systemImage: "bag",
+                    highlighted: false
+                )
+
+                HStack {
+                    Spacer()
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.green)
+                        .frame(width: 92, height: 38)
+                        .overlay {
+                            Text("保存")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                        }
+                }
+            }
+
+        case .expiryOptional:
+            VStack(spacing: 12) {
+                TutorialMockRow(
+                    title: "賞味期限を設定",
+                    systemImage: "calendar",
+                    highlighted: false
+                )
+
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                    .foregroundStyle(Color.orange.opacity(0.45))
+                    .frame(height: 56)
+                    .overlay {
+                        HStack {
+                            Image(systemName: "calendar.badge.clock")
+                                .foregroundStyle(.orange)
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.primary.opacity(0.08))
+                                .frame(width: 120, height: 12)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
+                Spacer(minLength: 0)
+
+                HStack {
+                    TutorialCalloutBadge(
+                        text: "あとで追加できます",
+                        symbol: "clock.badge.plus",
+                        tint: .orange
+                    )
+                    Spacer()
+                }
+            }
+
+        case .notifications:
+            VStack(spacing: 12) {
+                TutorialMockRow(
+                    title: "通知を有効にする",
+                    systemImage: "bell",
+                    highlighted: false
+                )
+                TutorialMockRow(
+                    title: "通知タイミング",
+                    systemImage: "calendar.badge.clock",
+                    highlighted: false
+                )
+                TutorialMockRow(
+                    title: "通知時刻",
+                    systemImage: "clock",
+                    trailingText: "9:00",
+                    highlighted: true,
+                    accent: .orange
+                )
+
+                HStack {
+                    Spacer()
+                    TutorialCalloutBadge(
+                        text: "通知時刻を決める",
+                        symbol: "bell.badge.fill",
+                        tint: .orange
+                    )
+                }
+            }
+
+        case .familySharing:
+            VStack(spacing: 12) {
+                TutorialMockRow(
+                    title: "共有リンクを送信",
+                    systemImage: "link",
+                    highlighted: true,
+                    accent: .green
+                )
+                TutorialMockRow(
+                    title: "共有設定を管理",
+                    systemImage: "person.crop.circle.badge.checkmark",
+                    highlighted: false
+                )
+                TutorialMockRow(
+                    title: "メンバー",
+                    systemImage: "person.2",
+                    trailingText: L10n.format("%@人", String(3)),
+                    highlighted: false
+                )
+
+                HStack {
+                    Spacer()
+                    TutorialCalloutBadge(
+                        text: "共有リンクを送る",
+                        symbol: "paperplane.fill",
+                        tint: .green
+                    )
+                }
+            }
+
+        case .settingsGuide:
+            VStack(spacing: 12) {
+                TutorialMockRow(
+                    title: "通知",
+                    systemImage: "bell",
+                    highlighted: false
+                )
+                TutorialMockRow(
+                    title: "言語",
+                    systemImage: "globe",
+                    highlighted: false
+                )
+                TutorialMockRow(
+                    title: "はじめての使い方を見る",
+                    systemImage: "questionmark.circle",
+                    highlighted: true,
+                    accent: .blue
+                )
+
+                HStack {
+                    TutorialCalloutBadge(
+                        text: "ここから見直せます",
+                        symbol: "arrow.uturn.backward.circle.fill",
+                        tint: .blue
+                    )
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private func featureTile(symbol: String, tint: Color) -> some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(tint.opacity(0.12))
+            .frame(maxWidth: .infinity)
+            .frame(height: 72)
+            .overlay {
+                Image(systemName: symbol)
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+    }
+}
+
+private struct TutorialMockRow: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    let trailingText: String?
+    let highlighted: Bool
+    let accent: Color
+
+    init(
+        title: LocalizedStringKey,
+        systemImage: String,
+        trailingText: String? = nil,
+        highlighted: Bool,
+        accent: Color = .blue
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.trailingText = trailingText
+        self.highlighted = highlighted
+        self.accent = accent
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(highlighted ? accent : .secondary)
+                .frame(width: 24)
+
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            if let trailingText {
+                Text(trailingText)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(.secondary.opacity(0.5))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(highlighted ? accent.opacity(0.12) : Color(.systemGray6))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(highlighted ? accent.opacity(0.35) : Color.clear, lineWidth: 1.5)
+        }
+    }
+}
+
+private struct TutorialCalloutBadge: View {
+    let text: LocalizedStringKey
+    let symbol: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .font(.footnote.weight(.bold))
+            Text(text)
+                .font(.caption.weight(.semibold))
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(.white, in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(tint.opacity(0.2), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
     }
 }
 

@@ -388,6 +388,7 @@ struct DashboardView: View {
         }
         .navigationTitle("備蓄品管理")
         .navigationBarTitleDisplayMode(.inline)
+        .localizedRefresh()
         .searchable(text: $searchText, prompt: "品名で検索")
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -835,6 +836,7 @@ struct BulkMoveSheet: View {
             }
             .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
+            .localizedRefresh()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") {
@@ -883,6 +885,7 @@ struct BulkCopySheet: View {
             }
             .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
+            .localizedRefresh()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") {

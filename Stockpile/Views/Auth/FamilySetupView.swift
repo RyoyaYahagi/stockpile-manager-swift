@@ -58,6 +58,7 @@ struct FamilySetupView: View {
         }
         .navigationTitle("家族セットアップ")
         .navigationBarTitleDisplayMode(.inline)
+        .localizedRefresh()
     }
     
     private var createFamilySection: some View {

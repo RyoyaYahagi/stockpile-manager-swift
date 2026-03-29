@@ -168,6 +168,7 @@ struct ItemFormSheet: View {
             }
             .navigationTitle(mode.title)
             .navigationBarTitleDisplayMode(.inline)
+            .localizedRefresh()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") {
