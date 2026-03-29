@@ -499,7 +499,13 @@ struct FamilySettingsView: View {
         let allBagsCount = bags.count
         let familyBagsCount = bags.filter { $0.family?.id == family.id }.count
         let orphanBagsCount = bags.filter { $0.family == nil }.count
-        print("[CloudKit] iCloudに保存: familyID=\(family.id.uuidString) zone=\(zoneName) scope=\(databaseScope) items(all=\(allItemsCount), family=\(familyItemsCount), orphan=\(orphanItemsCount)) bags(all=\(allBagsCount), family=\(familyBagsCount), orphan=\(orphanBagsCount))")
+        debugLog(
+            """
+            [CloudKit] iCloudに保存: zone=\(zoneName) scope=\(databaseScope) \
+            items(all=\(allItemsCount), family=\(familyItemsCount), orphan=\(orphanItemsCount)) \
+            bags(all=\(allBagsCount), family=\(familyBagsCount), orphan=\(orphanBagsCount))
+            """
+        )
 
         Task {
             defer { isSavingFamilyDataToCloud = false }
@@ -508,7 +514,12 @@ struct FamilySettingsView: View {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 try await sharingService.syncFamilyDataToCloudKit(for: family)
                 let remoteCounts = try await sharingService.fetchRemoteRecordCounts(for: family)
-                print("[CloudKit] iCloud保存後: familyID=\(family.id.uuidString) remote(family=\(remoteCounts.familyCount), bags=\(remoteCounts.bagCount), items=\(remoteCounts.itemCount))")
+                debugLog(
+                    """
+                    [CloudKit] iCloud保存後: remote(family=\(remoteCounts.familyCount), \
+                    bags=\(remoteCounts.bagCount), items=\(remoteCounts.itemCount))
+                    """
+                )
                 try await sharingService.syncFamilyStateFromCloudKit(for: family)
             } catch {
                 shareError = L10n.format("iCloud保存に失敗しました: %@", error.localizedDescription)
@@ -546,6 +557,12 @@ struct FamilySettingsView: View {
         } catch {
             participantDisplays = []
         }
+    }
+
+    private func debugLog(_ message: @autoclosure () -> String) {
+        #if DEBUG
+        print(message())
+        #endif
     }
 }
 

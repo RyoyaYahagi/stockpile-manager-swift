@@ -50,20 +50,7 @@ struct StockpileApp: App {
     @State private var localizationController = LocalizationController()
     
     private let sharedModelContainer: ModelContainer = {
-        // 初回起動時のStore作成前にApplication Supportを保証して、
-        // CoreDataの一時的な「path not found」ログを抑制する。
-        if let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            do {
-                try FileManager.default.createDirectory(
-                    at: appSupportURL,
-                    withIntermediateDirectories: true
-                )
-            } catch {
-                #if DEBUG
-                print("⚠️ Application Support directory creation failed: \(error)")
-                #endif
-            }
-        }
+        prepareProtectedApplicationSupportDirectory()
         
         let configuration = ModelConfiguration()
         
@@ -87,5 +74,29 @@ struct StockpileApp: App {
                 .environment(\.locale, localizationController.locale)
         }
         .modelContainer(sharedModelContainer)
+    }
+
+    private static func prepareProtectedApplicationSupportDirectory() {
+        guard let appSupportURL = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            return
+        }
+
+        do {
+            try FileManager.default.createDirectory(
+                at: appSupportURL,
+                withIntermediateDirectories: true
+            )
+            try FileManager.default.setAttributes(
+                [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                ofItemAtPath: appSupportURL.path
+            )
+        } catch {
+            #if DEBUG
+            print("⚠️ Application Support directory preparation failed: \(error)")
+            #endif
+        }
     }
 }

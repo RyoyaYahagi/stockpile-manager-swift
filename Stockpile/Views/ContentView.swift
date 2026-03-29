@@ -462,7 +462,7 @@ struct ContentView: View {
             } catch {
                 logCloudKitShareError(
                     error,
-                    context: "共有家族同期 familyID=\(family.id.uuidString)"
+                    context: "共有家族同期"
                 )
             }
         }

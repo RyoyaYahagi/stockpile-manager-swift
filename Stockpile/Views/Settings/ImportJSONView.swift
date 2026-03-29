@@ -61,6 +61,11 @@ struct ImportJSONView: View {
                         .font(.caption2.monospaced())
                         .padding()
                         .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 8))
+
+                    warningCard(
+                        title: "信頼できるバックアップだけを復元してください",
+                        message: "JSON の内容はそのまま端末内データとして保存されます。受け取り元が不明なファイルは取り込まないでください。"
+                    )
                 }
                 .padding(.horizontal, 32)
                 
@@ -319,6 +324,22 @@ struct ImportJSONView: View {
         
         return uniqueItems
     }
+
+    @ViewBuilder
+    private func warningCard(title: String, message: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: "lock.trianglebadge.exclamationmark")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+    }
 }
 
 #Preview {
@@ -429,6 +450,11 @@ struct ExportJSONView: View {
                             .font(.caption2.monospaced())
                             .padding()
                             .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 8))
+
+                        warningCard(
+                            title: "バックアップは暗号化されません",
+                            message: "書き出しファイルは平文 JSON です。アイテム名、収納場所、位置メモ、JAN、期限情報が含まれる場合があるため、安全な保存先を選んで管理してください。"
+                        )
                     }
                 }
                 .padding(.horizontal, 32)
@@ -550,6 +576,22 @@ struct ExportJSONView: View {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         return try encoder.encode(payload)
+    }
+
+    @ViewBuilder
+    private func warningCard(title: String, message: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: "lock.trianglebadge.exclamationmark")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
     }
 }
 

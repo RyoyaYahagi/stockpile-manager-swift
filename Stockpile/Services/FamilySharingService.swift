@@ -168,14 +168,10 @@ final class CloudKitFamilySharingService {
         }
 
         let acceptedZoneID = acceptedShare.recordID.zoneID
-        logger.notice(
-            "CloudKit share accepted zone=\(acceptedZoneID.zoneName, privacy: .public) owner=\(acceptedZoneID.ownerName, privacy: .public)"
-        )
+        logger.notice("CloudKit share accepted")
         do {
             let family = try await syncAcceptedShareToLocal(zoneID: acceptedZoneID)
-            logger.notice(
-                "CloudKit share local sync succeeded zone=\(acceptedZoneID.zoneName, privacy: .public) owner=\(acceptedZoneID.ownerName, privacy: .public)"
-            )
+            logger.notice("CloudKit share local sync succeeded")
             return family
         } catch {
             logShareError(error, phase: "acceptShare.sync")
@@ -421,7 +417,7 @@ final class CloudKitFamilySharingService {
             } catch {
                 lastError = error
                 logger.error(
-                    "CloudKit shared sync failed phase=acceptShare.sync[\(index)] zone=\(zoneID.zoneName, privacy: .public) owner=\(zoneID.ownerName, privacy: .public) message=\(error.localizedDescription, privacy: .public)"
+                    "CloudKit shared sync failed phase=acceptShare.sync[\(index)] code=\(self.publicErrorCode(for: error), privacy: .public)"
                 )
 
                 guard shouldRetryAcceptedShareSync(after: error),
@@ -575,7 +571,7 @@ final class CloudKitFamilySharingService {
         for interval in fallbackIntervalsInNanoseconds {
             try await Task.sleep(nanoseconds: interval)
             if let existingShare = try await fetchExistingShare(for: family, in: container.privateCloudDatabase) {
-                logger.notice("Recovered existing CKShare after transient failure for family=\(family.id.uuidString, privacy: .public)")
+                logger.notice("Recovered existing CKShare after transient failure")
                 return existingShare
             }
         }
@@ -595,22 +591,22 @@ final class CloudKitFamilySharingService {
     private func logShareError(_ error: Error, phase: String) {
         if let ckError = error as? CKError {
             logger.error(
-                "CloudKit share failed phase=\(phase, privacy: .public) code=\(ckError.code.rawValue, privacy: .public) message=\(ckError.localizedDescription, privacy: .public)"
+                "CloudKit share failed phase=\(phase, privacy: .public) code=\(ckError.code.rawValue, privacy: .public)"
             )
 
-            if let partialErrors = ckError.partialErrorsByItemID {
-                for (itemID, partialError) in partialErrors {
-                    logger.error(
-                        "CloudKit partial failure item=\(String(describing: itemID), privacy: .public) message=\(partialError.localizedDescription, privacy: .public)"
-                    )
-                }
+            if let partialErrors = ckError.partialErrorsByItemID, !partialErrors.isEmpty {
+                logger.error(
+                    "CloudKit partial failure phase=\(phase, privacy: .public) count=\(partialErrors.count, privacy: .public)"
+                )
             }
+            debugLogShareError(error, phase: phase)
             return
         }
 
         logger.error(
-            "CloudKit share failed phase=\(phase, privacy: .public) message=\(error.localizedDescription, privacy: .public)"
+            "CloudKit share failed phase=\(phase, privacy: .public) code=\(self.publicErrorCode(for: error), privacy: .public)"
         )
+        debugLogShareError(error, phase: phase)
     }
 
     /// ゾーンに Family レコードが存在することを保証する
@@ -626,6 +622,21 @@ final class CloudKitFamilySharingService {
     private func ensureZoneExists(for family: Family) async throws {
         let zone = CKRecordZone(zoneID: zoneID(for: family))
         _ = try await save(zone: zone, in: container.privateCloudDatabase)
+    }
+
+    private func publicErrorCode(for error: Error) -> String {
+        if let ckError = error as? CKError {
+            return "ck_\(ckError.code.rawValue)"
+        }
+        return String(describing: type(of: error))
+    }
+
+    private func debugLogShareError(_ error: Error, phase: String) {
+        #if DEBUG
+        logger.debug(
+            "CloudKit share debug phase=\(phase, privacy: .public) detail=\(error.localizedDescription, privacy: .private)"
+        )
+        #endif
     }
 
     private func attachOrphanLocalDataIfNeeded(to family: Family) throws {

@@ -2,6 +2,14 @@ const PRODUCT_SEARCH_URL =
   "https://openapi.rakuten.co.jp/ichibaproduct/api/Product/Search/20250801";
 const ITEM_SEARCH_URL =
   "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601";
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 30;
+const ALLOWED_REDIRECT_HOST_SUFFIXES = ["rakuten.co.jp"];
+const rateLimitBuckets = globalThis.__stockpileRateLimitBuckets || new Map();
+
+if (!globalThis.__stockpileRateLimitBuckets) {
+  globalThis.__stockpileRateLimitBuckets = rateLimitBuckets;
+}
 
 function readEnv(name) {
   const value = process.env[name];
@@ -28,6 +36,111 @@ function normalizeKeyword(input) {
   }
 
   return rawValue.replace(/\s+/g, " ").trim().slice(0, 80);
+}
+
+function rateLimitMaxRequests() {
+  const configuredValue = Number.parseInt(
+    readEnv("RATE_LIMIT_MAX_REQUESTS_PER_MINUTE"),
+    10
+  );
+  return Number.isFinite(configuredValue) && configuredValue > 0
+    ? configuredValue
+    : DEFAULT_RATE_LIMIT_MAX_REQUESTS;
+}
+
+function clientAddress(request) {
+  const forwardedFor = request.headers["x-forwarded-for"];
+  const forwardedValue = Array.isArray(forwardedFor)
+    ? forwardedFor[0]
+    : forwardedFor;
+  if (typeof forwardedValue === "string" && forwardedValue.trim()) {
+    return forwardedValue.split(",")[0].trim();
+  }
+
+  const realIp = request.headers["x-real-ip"];
+  if (typeof realIp === "string" && realIp.trim()) {
+    return realIp.trim();
+  }
+
+  return "unknown";
+}
+
+function pruneRateLimitBuckets(now) {
+  for (const [key, bucket] of rateLimitBuckets.entries()) {
+    bucket.timestamps = bucket.timestamps.filter(
+      (timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS
+    );
+
+    if (bucket.timestamps.length === 0) {
+      rateLimitBuckets.delete(key);
+    }
+  }
+}
+
+function consumeRateLimit(request) {
+  const now = Date.now();
+  pruneRateLimitBuckets(now);
+
+  const limit = rateLimitMaxRequests();
+  const bucketKey = clientAddress(request);
+  const bucket = rateLimitBuckets.get(bucketKey) || { timestamps: [] };
+  bucket.timestamps = bucket.timestamps.filter(
+    (timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS
+  );
+
+  if (bucket.timestamps.length >= limit) {
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((RATE_LIMIT_WINDOW_MS - (now - bucket.timestamps[0])) / 1000)
+    );
+    rateLimitBuckets.set(bucketKey, bucket);
+    return {
+      allowed: false,
+      limit,
+      remaining: 0,
+      retryAfterSeconds
+    };
+  }
+
+  bucket.timestamps.push(now);
+  rateLimitBuckets.set(bucketKey, bucket);
+  return {
+    allowed: true,
+    limit,
+    remaining: Math.max(0, limit - bucket.timestamps.length),
+    retryAfterSeconds: 0
+  };
+}
+
+function setRateLimitHeaders(response, rateLimit) {
+  response.setHeader("X-RateLimit-Limit", String(rateLimit.limit));
+  response.setHeader("X-RateLimit-Remaining", String(rateLimit.remaining));
+
+  if (!rateLimit.allowed) {
+    response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+  }
+}
+
+function sanitizeRedirectURL(target) {
+  if (typeof target !== "string" || !target.trim()) {
+    return null;
+  }
+
+  try {
+    const url = new URL(target.trim());
+    const hostname = url.hostname.toLowerCase();
+    const isAllowedHost = ALLOWED_REDIRECT_HOST_SUFFIXES.some((suffix) => {
+      return hostname === suffix || hostname.endsWith(`.${suffix}`);
+    });
+
+    if (url.protocol !== "https:" || !isAllowedHost) {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function buildProductSearchURL(janCode, applicationId, accessKey, affiliateId) {
@@ -121,7 +234,7 @@ function readProductAffiliateURL(json) {
     productPayload?.productUrlPC ||
     null;
 
-  return typeof target === "string" && target.trim() ? target.trim() : null;
+  return sanitizeRedirectURL(target);
 }
 
 function readItemAffiliateURL(json) {
@@ -140,11 +253,12 @@ function readItemAffiliateURL(json) {
     itemPayload?.itemUrl ||
     null;
 
-  return typeof target === "string" && target.trim() ? target.trim() : null;
+  return sanitizeRedirectURL(target);
 }
 
 function sendJSON(response, statusCode, body) {
   response.status(statusCode).setHeader("Cache-Control", "no-store");
+  response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.send(JSON.stringify(body));
 }
@@ -160,6 +274,14 @@ export default async function handler(request, response) {
     response.setHeader("Allow", "GET");
     return sendJSON(response, 405, {
       error: "method_not_allowed"
+    });
+  }
+
+  const rateLimit = consumeRateLimit(request);
+  setRateLimitHeaders(response, rateLimit);
+  if (!rateLimit.allowed) {
+    return sendJSON(response, 429, {
+      error: "rate_limited"
     });
   }
 
@@ -189,6 +311,7 @@ export default async function handler(request, response) {
     const productTarget = readProductAffiliateURL(productResult.json);
     if (productResult.response.ok && productTarget) {
       response.setHeader("Cache-Control", "no-store");
+      response.setHeader("Referrer-Policy", "no-referrer");
       return response.redirect(307, productTarget);
     }
 
@@ -198,6 +321,7 @@ export default async function handler(request, response) {
     const itemTarget = readItemAffiliateURL(itemResult.json);
     if (itemResult.response.ok && itemTarget) {
       response.setHeader("Cache-Control", "no-store");
+      response.setHeader("Referrer-Policy", "no-referrer");
       return response.redirect(307, itemTarget);
     }
 
@@ -208,17 +332,17 @@ export default async function handler(request, response) {
       const keywordTarget = readItemAffiliateURL(keywordResult.json);
       if (keywordResult.response.ok && keywordTarget) {
         response.setHeader("Cache-Control", "no-store");
+        response.setHeader("Referrer-Policy", "no-referrer");
         return response.redirect(307, keywordTarget);
       }
     }
 
     response.setHeader("Cache-Control", "no-store");
+    response.setHeader("Referrer-Policy", "no-referrer");
     return response.redirect(307, buildRakutenSearchResultsURL(itemName || janCode));
   } catch (error) {
     console.error("Rakuten redirect failed", {
-      message: error instanceof Error ? error.message : String(error),
-      janCode,
-      itemName
+      message: error instanceof Error ? error.message : String(error)
     });
 
     return sendJSON(response, 502, {

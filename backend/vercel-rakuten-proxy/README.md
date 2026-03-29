@@ -23,6 +23,14 @@ Stockpile iOS の「楽天市場で購入」ボタン用 Vercel バックエン�
 - `RAKUTEN_ACCESS_KEY`
 - `RAKUTEN_AFFILIATE_ID` 任意
   設定するとアフィリエイトURLへ誘導します。未設定時は通常の楽天URLへフォールバックします。
+- `RATE_LIMIT_MAX_REQUESTS_PER_MINUTE` 任意
+  1 IP あたりの 1 分間の上限回数です。未設定時は `30` を使用します。
+
+## セキュリティ前提
+
+- この endpoint は code 側で 1 IP あたりの簡易レート制限を行います
+- redirect 先は `https://*.rakuten.co.jp` に限定します
+- 商用公開時は、上記に加えて Vercel Firewall / WAF / 監視の有効化を推奨します
 
 ## デプロイ手順
 
@@ -41,7 +49,7 @@ npm run check
 
 ## iOS 側設定
 
-`Secrets.plist` か環境変数に `BackendBaseURL` を設定します。
+`BackendBaseURL` は公開してよい設定として iOS の `Info.plist` かビルド環境変数に設定します。アプリ bundle に秘密情報は同梱しません。
 
 例:
 
