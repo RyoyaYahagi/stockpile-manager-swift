@@ -293,8 +293,34 @@ struct BarcodeScannerView: View {
         } catch ProductSearchError.notFound {
             searchState = .notFound
         } catch {
-            searchState = .error(error.localizedDescription)
+            searchState = .error(userFacingMessage(for: error))
         }
+    }
+
+    private func userFacingMessage(for error: Error) -> String {
+        if let productSearchError = error as? ProductSearchError,
+           let message = productSearchError.errorDescription {
+            return message
+        }
+
+        let description = (error as NSError).localizedDescription
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if looksLikeHTML(description) || description.contains("{\"error\"") {
+            return L10n.string("商品検索を一時的に利用できません。しばらくして再試行してください。")
+        }
+
+        return description.isEmpty
+            ? L10n.string("商品検索を一時的に利用できません。しばらくして再試行してください。")
+            : description
+    }
+
+    private func looksLikeHTML(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        return lowered.contains("<html")
+            || lowered.contains("<body")
+            || lowered.contains("<head")
+            || lowered.contains("<!doctype html")
     }
     
     private func resetState() {

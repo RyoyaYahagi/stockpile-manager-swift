@@ -5,7 +5,7 @@
 	<key>CFBundleDisplayName</key>
 	<string>Stockpile</string>
 	<key>BackendBaseURL</key>
-	<string>https://stockpile-rakuten-proxy.vercel.app</string>
+	<string>YOUR_BACKEND_BASE_URL_HERE</string>
 	<key>CKSharingSupported</key>
 	<true/>
 	<key>UIBackgroundModes</key>

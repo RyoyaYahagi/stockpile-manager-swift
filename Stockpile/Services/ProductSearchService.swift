@@ -38,6 +38,8 @@ enum ProductSearchError: Error, LocalizedError {
     case noAPIConfigured
     case invalidJANCode
     case timeout(ProductInfo.Source)
+    case rateLimited(ProductInfo.Source, retryAfterSeconds: Int?)
+    case serviceUnavailable(ProductInfo.Source)
     case networkError(Error)
     case parseError
     case notFound
@@ -50,6 +52,10 @@ enum ProductSearchError: Error, LocalizedError {
             return L10n.string("無効なJANコードです")
         case .timeout(let source):
             return L10n.format("%@検索がタイムアウトしました", source.localizedDisplayName)
+        case .rateLimited(let source, _):
+            return L10n.format("%@検索が混み合っています。しばらくして再試行してください。", source.localizedDisplayName)
+        case .serviceUnavailable(let source):
+            return L10n.format("%@検索を一時的に利用できません。しばらくして再試行してください。", source.localizedDisplayName)
         case .networkError(let error):
             return L10n.format("通信エラー: %@", error.localizedDescription)
         case .parseError:
@@ -83,6 +89,8 @@ actor ProductSearchService {
 
     private enum SearchAttemptFailure: Error {
         case timeout(source: ProductInfo.Source, deadline: TimeInterval)
+        case rateLimited(source: ProductInfo.Source, retryAfterSeconds: Int?)
+        case serviceUnavailable(source: ProductInfo.Source)
         case httpStatus(source: ProductInfo.Source, statusCode: Int, detail: String?)
         case invalidResponse(source: ProductInfo.Source, detail: String)
         case parse(source: ProductInfo.Source, detail: String)
@@ -92,6 +100,11 @@ actor ProductSearchService {
             switch self {
             case .timeout(let source, let deadline):
                 return "[ProductSearch] \(source.localizedDisplayName): Timed out after \(deadline)s"
+            case .rateLimited(let source, let retryAfterSeconds):
+                let suffix = retryAfterSeconds.map { " retryAfter=\($0)s" } ?? ""
+                return "[ProductSearch] \(source.localizedDisplayName): Rate limited\(suffix)"
+            case .serviceUnavailable(let source):
+                return "[ProductSearch] \(source.localizedDisplayName): Temporarily unavailable"
             case .httpStatus(let source, let statusCode, let detail):
                 let suffix = detail.map { " detail=\($0)" } ?? ""
                 return "[ProductSearch] \(source.localizedDisplayName): HTTP \(statusCode)\(suffix)"
@@ -108,6 +121,10 @@ actor ProductSearchService {
             switch self {
             case .timeout(let source, _):
                 return .timeout(source)
+            case .rateLimited(let source, let retryAfterSeconds):
+                return .rateLimited(source, retryAfterSeconds: retryAfterSeconds)
+            case .serviceUnavailable(let source):
+                return .serviceUnavailable(source)
             case .httpStatus(_, _, let detail):
                 return .networkError(NSError(domain: "ProductSearch", code: 1, userInfo: [
                     NSLocalizedDescriptionKey: detail ?? L10n.string("APIリクエストに失敗しました")
@@ -129,6 +146,12 @@ actor ProductSearchService {
         case found(ProductInfo)
         case notFound
         case technicalFailure(SearchAttemptFailure)
+    }
+
+    private struct BackendErrorPayload {
+        let error: String?
+        let message: String?
+        let retryAfterSeconds: Int?
     }
     
     static let shared = ProductSearchService()
@@ -193,6 +216,17 @@ actor ProductSearchService {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    private func normalizedInt(_ value: Any?) -> Int? {
+        switch value {
+        case let intValue as Int:
+            return intValue
+        case let stringValue as String:
+            return Int(stringValue.trimmingCharacters(in: .whitespacesAndNewlines))
+        default:
+            return nil
+        }
+    }
+
     private func responseSnippet(from data: Data, limit: Int = 300) -> String? {
         guard let responseString = String(data: data, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
@@ -200,6 +234,51 @@ actor ProductSearchService {
             return nil
         }
         return String(responseString.prefix(limit))
+    }
+
+    private func looksLikeHTML(_ text: String) -> Bool {
+        let lowered = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return lowered.hasPrefix("<!doctype html")
+            || lowered.hasPrefix("<html")
+            || lowered.contains("<body")
+            || lowered.contains("<head")
+    }
+
+    private func sanitizedResponseDetail(
+        from data: Data,
+        fallback: String = L10n.string("APIリクエストに失敗しました")
+    ) -> String? {
+        guard let snippet = responseSnippet(from: data) else {
+            return nil
+        }
+        return looksLikeHTML(snippet) ? fallback : snippet
+    }
+
+    private func backendErrorPayload(from data: Data) -> BackendErrorPayload? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        return BackendErrorPayload(
+            error: normalizedText(json["error"]),
+            message: normalizedText(json["message"]),
+            retryAfterSeconds: normalizedInt(json["retryAfterSeconds"])
+        )
+    }
+
+    private func retryAfterSeconds(
+        from response: HTTPURLResponse,
+        payload: BackendErrorPayload? = nil
+    ) -> Int? {
+        if let retryAfter = payload?.retryAfterSeconds {
+            return retryAfter
+        }
+
+        guard let headerValue = response.value(forHTTPHeaderField: "Retry-After") else {
+            return nil
+        }
+
+        return Int(headerValue.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     private static func isTimeoutError(_ error: Error) -> Bool {
@@ -241,6 +320,20 @@ actor ProductSearchService {
             debugLog("[ProductSearch] \(source.localizedDisplayName): Not found")
             return .notFound
         } catch let failure as SearchAttemptFailure {
+            debugLog(failure.logMessage)
+            return .technicalFailure(failure)
+        } catch let error as ProductSearchError {
+            let failure: SearchAttemptFailure
+            switch error {
+            case .timeout(let errorSource):
+                failure = .timeout(source: errorSource, deadline: 0)
+            case .rateLimited(let errorSource, let retryAfterSeconds):
+                failure = .rateLimited(source: errorSource, retryAfterSeconds: retryAfterSeconds)
+            case .serviceUnavailable(let errorSource):
+                failure = .serviceUnavailable(source: errorSource)
+            default:
+                failure = .network(source: source, underlying: error)
+            }
             debugLog(failure.logMessage)
             return .technicalFailure(failure)
         } catch {
@@ -381,7 +474,7 @@ actor ProductSearchService {
         }
 
         // 2. ローカル設定の楽天APIにフォールバック
-        if APIConfig.isRakutenConfigured {
+        if !APIConfig.isRakutenBackendConfigured && APIConfig.isRakutenConfigured {
             if let product = resolve(await runSearchAttempt(source: .rakuten) {
                 try await performRakutenProductSearch(janCode: cleanedCode)
             }, isCommercialSource: true) {
@@ -393,6 +486,8 @@ actor ProductSearchService {
             }, isCommercialSource: true) {
                 return product
             }
+        } else if APIConfig.isRakutenBackendConfigured {
+            debugLog("[ProductSearch] Backend設定があるため direct Rakuten API はスキップします")
         } else {
             debugLog("[ProductSearch] 楽天APIは未設定です")
         }
@@ -413,7 +508,7 @@ actor ProductSearchService {
             }
         }
 
-        if let technicalFailure = technicalFailures.last, !sawAnyNotFound {
+        if let technicalFailure = technicalFailures.last, !sawCommercialNotFound {
             throw technicalFailure.publicError
         }
 
@@ -464,7 +559,7 @@ actor ProductSearchService {
             throw SearchAttemptFailure.httpStatus(
                 source: .openFoodFacts,
                 statusCode: httpResponse.statusCode,
-                detail: responseSnippet(from: data)
+                detail: sanitizedResponseDetail(from: data)
             )
         }
 
@@ -547,24 +642,43 @@ actor ProductSearchService {
             )
         }
 
+        let payload = backendErrorPayload(from: data)
+
         if httpResponse.statusCode == 404 {
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               normalizedText(json["error"]) == "not_found" {
+            if payload?.error == "not_found" {
                 return nil
             }
 
             throw SearchAttemptFailure.httpStatus(
                 source: .rakuten,
                 statusCode: httpResponse.statusCode,
-                detail: responseSnippet(from: data)
+                detail: payload?.message ?? sanitizedResponseDetail(from: data)
             )
+        }
+
+        if httpResponse.statusCode == 429 || payload?.error == "rate_limited" {
+            throw SearchAttemptFailure.rateLimited(
+                source: .rakuten,
+                retryAfterSeconds: retryAfterSeconds(from: httpResponse, payload: payload)
+            )
+        }
+
+        if httpResponse.statusCode == 503 {
+            if payload?.error == "upstream_rate_limited" {
+                throw SearchAttemptFailure.rateLimited(
+                    source: .rakuten,
+                    retryAfterSeconds: retryAfterSeconds(from: httpResponse, payload: payload)
+                )
+            }
+
+            throw SearchAttemptFailure.serviceUnavailable(source: .rakuten)
         }
 
         guard httpResponse.statusCode == 200 else {
             throw SearchAttemptFailure.httpStatus(
                 source: .rakuten,
                 statusCode: httpResponse.statusCode,
-                detail: responseSnippet(from: data)
+                detail: payload?.message ?? sanitizedResponseDetail(from: data)
             )
         }
 
@@ -637,14 +751,25 @@ actor ProductSearchService {
             return nil
         }
 
+        if httpResponse.statusCode == 429 {
+            throw SearchAttemptFailure.rateLimited(
+                source: .rakuten,
+                retryAfterSeconds: retryAfterSeconds(from: httpResponse)
+            )
+        }
+
+        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 || httpResponse.statusCode >= 500 {
+            throw SearchAttemptFailure.serviceUnavailable(source: .rakuten)
+        }
+
         guard httpResponse.statusCode == 200 else {
-            if let responseString = responseSnippet(from: data) {
+            if let responseString = sanitizedResponseDetail(from: data) {
                 debugLog("[ProductSearch] Rakuten product API error response: \(responseString)")
             }
             throw SearchAttemptFailure.httpStatus(
                 source: .rakuten,
                 statusCode: httpResponse.statusCode,
-                detail: responseSnippet(from: data)
+                detail: sanitizedResponseDetail(from: data)
             )
         }
 
@@ -738,14 +863,25 @@ actor ProductSearchService {
             return nil
         }
 
+        if httpResponse.statusCode == 429 {
+            throw SearchAttemptFailure.rateLimited(
+                source: .rakuten,
+                retryAfterSeconds: retryAfterSeconds(from: httpResponse)
+            )
+        }
+
+        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 || httpResponse.statusCode >= 500 {
+            throw SearchAttemptFailure.serviceUnavailable(source: .rakuten)
+        }
+
         guard httpResponse.statusCode == 200 else {
-            if let responseString = responseSnippet(from: data) {
+            if let responseString = sanitizedResponseDetail(from: data) {
                 debugLog("[ProductSearch] Error response: \(responseString)")
             }
             throw SearchAttemptFailure.httpStatus(
                 source: .rakuten,
                 statusCode: httpResponse.statusCode,
-                detail: responseSnippet(from: data)
+                detail: sanitizedResponseDetail(from: data)
             )
         }
         
@@ -819,11 +955,22 @@ actor ProductSearchService {
             )
         }
 
+        if httpResponse.statusCode == 429 {
+            throw SearchAttemptFailure.rateLimited(
+                source: .yahoo,
+                retryAfterSeconds: retryAfterSeconds(from: httpResponse)
+            )
+        }
+
+        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 || httpResponse.statusCode >= 500 {
+            throw SearchAttemptFailure.serviceUnavailable(source: .yahoo)
+        }
+
         guard httpResponse.statusCode == 200 else {
             throw SearchAttemptFailure.httpStatus(
                 source: .yahoo,
                 statusCode: httpResponse.statusCode,
-                detail: responseSnippet(from: data)
+                detail: sanitizedResponseDetail(from: data)
             )
         }
         

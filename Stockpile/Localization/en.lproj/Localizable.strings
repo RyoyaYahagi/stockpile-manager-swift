@@ -120,6 +120,9 @@
 "通知権限" = "Notification Permission";
 "通信エラー: %@" = "Network error: %@";
 "%@検索がタイムアウトしました" = "%@ search timed out";
+"商品検索を一時的に利用できません。しばらくして再試行してください。" = "Product search is temporarily unavailable. Please try again shortly.";
+"%@検索が混み合っています。しばらくして再試行してください。" = "%@ search is busy right now. Please try again shortly.";
+"%@検索を一時的に利用できません。しばらくして再試行してください。" = "%@ search is temporarily unavailable. Please try again shortly.";
 "週" = "Week";
 "離脱すると、この家族の共有データにアクセスできなくなります" = "Leaving will remove access to this family's shared data.";
 "離脱すると、この家族の共有データにアクセスできなくなります。" = "Leaving will remove access to this family's shared data.";

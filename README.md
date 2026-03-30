@@ -3,8 +3,8 @@
 ## Configuration
 
 - iOS app に秘密情報を bundle しない運用へ変更しています
-- `BackendBaseURL` は公開設定として app bundle に含めてもよい値で、既定では `https://stockpile-rakuten-proxy.vercel.app` を使用します
-- 必要に応じて `Info.plist` かビルド環境変数 `BACKEND_BASE_URL` で上書きできます
+- `BackendBaseURL` は公開設定として app bundle に含めてもよい値ですが、共有 URL は使わず専用の Vercel URL を設定してください
+- `Info.plist` の `YOUR_BACKEND_BASE_URL_HERE` を専用 backend URL に置き換えるか、ビルド環境変数 `BACKEND_BASE_URL` で上書きできます
 - `RAKUTEN_APP_ID` / `RAKUTEN_ACCESS_KEY` / `YAHOO_CLIENT_ID` はローカル検証用の環境変数のみを想定し、配布物には含めません
 
 ## Security Notes

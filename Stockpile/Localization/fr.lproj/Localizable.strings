@@ -120,6 +120,9 @@
 "通知権限" = "Autorisation de notification";
 "通信エラー: %@" = "Erreur réseau : %@";
 "%@検索がタイムアウトしました" = "La recherche %@ a expiré";
+"商品検索を一時的に利用できません。しばらくして再試行してください。" = "La recherche de produits est temporairement indisponible. Veuillez réessayer dans un instant.";
+"%@検索が混み合っています。しばらくして再試行してください。" = "La recherche %@ est actuellement saturée. Veuillez réessayer dans un instant.";
+"%@検索を一時的に利用できません。しばらくして再試行してください。" = "La recherche %@ est temporairement indisponible. Veuillez réessayer dans un instant.";
 "週" = "Semaine";
 "離脱すると、この家族の共有データにアクセスできなくなります" = "Si vous quittez, vous ne pourrez plus accéder aux données partagées de cette famille.";
 "離脱すると、この家族の共有データにアクセスできなくなります。" = "Si vous quittez, vous ne pourrez plus accéder aux données partagées de cette famille.";

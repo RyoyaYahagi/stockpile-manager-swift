@@ -10,7 +10,7 @@ final class ProductSearchServiceTests: XCTestCase {
         unsetenv("YAHOO_CLIENT_ID")
     }
 
-    func testBackendTimeoutThenOpenFoodFactsNotFoundReturnsNotFound() async throws {
+    func testBackendTimeoutThenOpenFoodFactsNotFoundReturnsTimeout() async throws {
         try await withEnvironment([
             "BACKEND_BASE_URL": "https://example.com"
         ]) {
@@ -26,9 +26,10 @@ final class ProductSearchServiceTests: XCTestCase {
             await assertThrowsAsync(
                 try await service.search(janCode: "4901777300445")
             ) { error in
-                guard case ProductSearchError.notFound = error else {
-                    return XCTFail("Expected notFound, got \(error)")
+                guard case .timeout(let source) = error as? ProductSearchError else {
+                    return XCTFail("Expected timeout, got \(error)")
                 }
+                XCTAssertEqual(source, .rakuten)
             }
         }
     }
@@ -58,6 +59,69 @@ final class ProductSearchServiceTests: XCTestCase {
             let product = try await service.search(janCode: "4901777300445")
             XCTAssertEqual(product.name, fallbackProduct.name)
             XCTAssertEqual(product.source, .openFoodFacts)
+        }
+    }
+
+    func testBackendRateLimitedThenOpenFoodFactsHitReturnsFallbackProductWithoutDirectRakutenFallback() async throws {
+        let fallbackProduct = ProductInfo(
+            name: "テストウォーター",
+            description: nil,
+            category: "飲料",
+            imageURL: nil,
+            janCode: "4901777300445",
+            source: .openFoodFacts
+        )
+
+        try await withEnvironment([
+            "BACKEND_BASE_URL": "https://example.com",
+            "RAKUTEN_APP_ID": "local-app-id",
+            "RAKUTEN_ACCESS_KEY": "local-access-key"
+        ]) {
+            let service = ProductSearchService(
+                rakutenBackendOperation: { _ in
+                    throw ProductSearchError.rateLimited(.rakuten, retryAfterSeconds: 30)
+                },
+                rakutenProductOperation: { _ in
+                    XCTFail("Direct Rakuten product search should be skipped when backend is configured")
+                    return nil
+                },
+                rakutenKeywordOperation: { _ in
+                    XCTFail("Direct Rakuten keyword search should be skipped when backend is configured")
+                    return nil
+                },
+                openFoodFactsOperation: { _ in
+                    fallbackProduct
+                }
+            )
+
+            let product = try await service.search(janCode: "4901777300445")
+            XCTAssertEqual(product.name, fallbackProduct.name)
+            XCTAssertEqual(product.source, .openFoodFacts)
+        }
+    }
+
+    func testBackendRateLimitedWithoutFallbackSurfacesFriendlyRateLimitError() async throws {
+        try await withEnvironment([
+            "BACKEND_BASE_URL": "https://example.com"
+        ]) {
+            let service = ProductSearchService(
+                rakutenBackendOperation: { _ in
+                    throw ProductSearchError.rateLimited(.rakuten, retryAfterSeconds: 30)
+                },
+                openFoodFactsOperation: { _ in
+                    nil
+                }
+            )
+
+            await assertThrowsAsync(
+                try await service.search(janCode: "4901777300445")
+            ) { error in
+                guard case .rateLimited(let source, let retryAfterSeconds) = error as? ProductSearchError else {
+                    return XCTFail("Expected rateLimited, got \(error)")
+                }
+                XCTAssertEqual(source, .rakuten)
+                XCTAssertEqual(retryAfterSeconds, 30)
+            }
         }
     }
 

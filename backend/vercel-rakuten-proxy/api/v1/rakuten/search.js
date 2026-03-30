@@ -4,25 +4,24 @@ const ITEM_SEARCH_URL =
   "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601";
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 30;
+const SEARCH_CACHE_CONTROL =
+  "public, max-age=0, s-maxage=86400, stale-while-revalidate=3600";
 const DEFAULT_REQUEST_HEADERS = {
   "User-Agent": "stockpile-rakuten-proxy/1.0"
-};
-const SEARCH_PAGE_HEADERS = {
-  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
-  "User-Agent":
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 };
 export const DEFAULT_UPSTREAM_TIMEOUTS_MS = Object.freeze({
   product: 4_000,
   item: 3_000,
-  keyword: 3_000,
-  searchResultsPage: 2_000
+  keyword: 3_000
 });
 const rateLimitBuckets = globalThis.__stockpileRateLimitBuckets || new Map();
 
 if (!globalThis.__stockpileRateLimitBuckets) {
   globalThis.__stockpileRateLimitBuckets = rateLimitBuckets;
+}
+
+export function resetRateLimitBuckets() {
+  rateLimitBuckets.clear();
 }
 
 function readEnv(name, env = process.env) {
@@ -79,9 +78,9 @@ function mergeProductName(brandName, productName) {
   return `${normalizedBrand} ${normalizedProductName}`;
 }
 
-function rateLimitMaxRequests() {
+function rateLimitMaxRequests(env = process.env) {
   const configuredValue = Number.parseInt(
-    readEnv("RATE_LIMIT_MAX_REQUESTS_PER_MINUTE"),
+    readEnv("RATE_LIMIT_MAX_REQUESTS_PER_MINUTE", env),
     10
   );
   return Number.isFinite(configuredValue) && configuredValue > 0
@@ -118,11 +117,11 @@ function pruneRateLimitBuckets(now) {
   }
 }
 
-function consumeRateLimit(request) {
+function consumeRateLimit(request, env = process.env) {
   const now = Date.now();
   pruneRateLimitBuckets(now);
 
-  const limit = rateLimitMaxRequests();
+  const limit = rateLimitMaxRequests(env);
   const bucketKey = clientAddress(request);
   const bucket = rateLimitBuckets.get(bucketKey) || { timestamps: [] };
   bucket.timestamps = bucket.timestamps.filter(
@@ -171,7 +170,7 @@ function buildProductSearchURL(janCode, applicationId, accessKey) {
   url.searchParams.set("productCode", janCode);
   url.searchParams.set(
     "elements",
-    "productName,productCode"
+    "productName,brandName,productCaption,genreName,mediumImageUrl,productCode"
   );
   url.searchParams.set("hits", "1");
   return url;
@@ -187,15 +186,9 @@ function buildItemSearchURL(keyword, applicationId, accessKey) {
   url.searchParams.set("hits", "1");
   url.searchParams.set(
     "elements",
-    "itemName,itemUrl"
+    "itemName,itemCaption,genreName,mediumImageUrls,smallImageUrls,itemUrl"
   );
   return url;
-}
-
-function buildRakutenSearchResultsURL(keyword) {
-  const normalizedKeyword = normalizeKeyword(keyword);
-  const searchKeyword = normalizedKeyword || "備蓄";
-  return `https://search.rakuten.co.jp/search/mall/${encodeURIComponent(searchKeyword)}/`;
 }
 
 function safeParseJSON(text) {
@@ -232,7 +225,7 @@ function mergeTimeouts(overrides = {}) {
 
 export async function fetchUpstream(
   url,
-  { apiName, headers, timeoutMs, fetchImpl = fetch, parseJSON = true }
+  { apiName, headers, timeoutMs, fetchImpl = fetch }
 ) {
   const controller = new AbortController();
   const startedAt = Date.now();
@@ -249,7 +242,7 @@ export async function fetchUpstream(
       api: apiName,
       response,
       text,
-      json: parseJSON ? safeParseJSON(text) : null,
+      json: safeParseJSON(text),
       timedOut: false,
       elapsedMs: Date.now() - startedAt
     };
@@ -271,20 +264,27 @@ export async function fetchUpstream(
   }
 }
 
-function shouldTreatAsUpstreamFailure(statusCode) {
-  return statusCode === 401 || statusCode === 403 || statusCode === 429 || statusCode >= 500;
+function isUpstreamRateLimited(statusCode) {
+  return statusCode === 429;
+}
+
+function isUpstreamUnavailable(statusCode) {
+  return statusCode === 401 || statusCode === 403 || statusCode >= 500;
 }
 
 function logUpstreamResult(result) {
   const detail =
     typeof result?.text === "string" ? result.text.trim().slice(0, 200) : "";
+  const statusCode = result?.response?.status;
   const shouldError =
-    result?.timedOut || shouldTreatAsUpstreamFailure(result?.response?.status);
+    result?.timedOut ||
+    isUpstreamRateLimited(statusCode) ||
+    isUpstreamUnavailable(statusCode);
   const log = shouldError ? console.error : console.info;
 
   log("Rakuten search upstream response", {
     api: result?.api,
-    status: result?.response?.status,
+    status: statusCode,
     timedOut: Boolean(result?.timedOut),
     elapsedMs: result?.elapsedMs,
     detail: detail || undefined
@@ -313,7 +313,10 @@ function readProductResult(json, janCode) {
     return null;
   }
 
-  const name = mergeProductName(productPayload.brandName, productPayload.productName);
+  const name = mergeProductName(
+    productPayload.brandName,
+    productPayload.productName
+  );
   if (!name) {
     return null;
   }
@@ -375,48 +378,28 @@ function readItemResult(json, janCode) {
   };
 }
 
-function readSearchResultsPageResult(html, janCode) {
-  if (typeof html !== "string" || !html.trim()) {
-    return null;
-  }
-
-  const carouselMatch = html.match(/"structuredDataCarousel":"((?:\\.|[^"])*)"/s);
-  if (!carouselMatch) {
-    return null;
-  }
-
-  try {
-    const decodedCarousel = JSON.parse(`"${carouselMatch[1]}"`);
-    const carousel = JSON.parse(decodedCarousel);
-    const listItem = firstObject(carousel?.itemListElement);
-    const item = listItem?.item;
-    const name = trimText(item?.name);
-    if (!name) {
-      return null;
-    }
-
-    const imageURL = Array.isArray(item?.image)
-      ? trimText(item.image[0])
-      : trimText(item?.image);
-
-    return {
-      name,
-      description: null,
-      category: null,
-      imageURL,
-      janCode,
-      source: "rakuten"
-    };
-  } catch {
-    return null;
-  }
-}
-
-function sendJSON(response, statusCode, body) {
-  response.status(statusCode).setHeader("Cache-Control", "no-store");
+function sendJSON(response, statusCode, body, { cacheControl = "no-store" } = {}) {
+  response.status(statusCode).setHeader("Cache-Control", cacheControl);
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.send(JSON.stringify(body));
+}
+
+function classifyUpstreamResult(result) {
+  if (result.timedOut) {
+    return "unavailable";
+  }
+
+  const statusCode = result.response?.status;
+  if (statusCode === 429) {
+    return "rate_limited";
+  }
+
+  if (isUpstreamUnavailable(statusCode)) {
+    return "unavailable";
+  }
+
+  return "none";
 }
 
 export async function handleRakutenSearch(request, response, dependencies = {}) {
@@ -431,11 +414,12 @@ export async function handleRakutenSearch(request, response, dependencies = {}) 
     });
   }
 
-  const rateLimit = consumeRateLimit(request);
+  const rateLimit = consumeRateLimit(request, env);
   setRateLimitHeaders(response, rateLimit);
   if (!rateLimit.allowed) {
     return sendJSON(response, 429, {
-      error: "rate_limited"
+      error: "rate_limited",
+      retryAfterSeconds: rateLimit.retryAfterSeconds
     });
   }
 
@@ -456,126 +440,92 @@ export async function handleRakutenSearch(request, response, dependencies = {}) 
   }
 
   const itemName = normalizeKeyword(request.query?.name);
-  let sawUpstreamFailure = false;
-  let sawSearchResultsPageResponse = false;
+  const upstreamAttempts = [
+    {
+      apiName: "product",
+      url: buildProductSearchURL(janCode, applicationId, accessKey),
+      timeoutMs: timeouts.product,
+      readProduct: (json) => readProductResult(json, janCode)
+    },
+    {
+      apiName: "item",
+      url: buildItemSearchURL(janCode, applicationId, accessKey),
+      timeoutMs: timeouts.item,
+      readProduct: (json) => readItemResult(json, janCode)
+    }
+  ];
+
+  if (itemName) {
+    upstreamAttempts.push({
+      apiName: "keyword",
+      url: buildItemSearchURL(itemName, applicationId, accessKey),
+      timeoutMs: timeouts.keyword,
+      readProduct: (json) => readItemResult(json, janCode)
+    });
+  }
+
+  let sawUpstreamRateLimited = false;
+  let sawUpstreamUnavailable = false;
 
   try {
-    const productResult = await fetchUpstream(
-      buildProductSearchURL(janCode, applicationId, accessKey),
-      {
-        apiName: "product",
+    for (const attempt of upstreamAttempts) {
+      const result = await fetchUpstream(attempt.url, {
+        apiName: attempt.apiName,
         headers: DEFAULT_REQUEST_HEADERS,
-        timeoutMs: timeouts.product,
+        timeoutMs: attempt.timeoutMs,
         fetchImpl
-      }
-    );
-    logUpstreamResult(productResult);
+      });
+      logUpstreamResult(result);
 
-    if (productResult.timedOut) {
-      sawUpstreamFailure = true;
-    } else if (productResult.response.ok) {
-      const product = readProductResult(productResult.json, janCode);
-      if (product) {
-        return sendJSON(response, 200, product);
+      const failureType = classifyUpstreamResult(result);
+      if (failureType === "rate_limited") {
+        sawUpstreamRateLimited = true;
+        continue;
       }
-    } else if (productResult.response.status !== 404) {
-      if (shouldTreatAsUpstreamFailure(productResult.response.status)) {
-        sawUpstreamFailure = true;
+      if (failureType === "unavailable") {
+        sawUpstreamUnavailable = true;
+        continue;
       }
-    }
 
-    const itemResult = await fetchUpstream(
-      buildItemSearchURL(janCode, applicationId, accessKey),
-      {
-        apiName: "item",
-        headers: DEFAULT_REQUEST_HEADERS,
-        timeoutMs: timeouts.item,
-        fetchImpl
-      }
-    );
-    logUpstreamResult(itemResult);
-
-    if (itemResult.timedOut) {
-      sawUpstreamFailure = true;
-    } else if (itemResult.response.ok) {
-      const product = readItemResult(itemResult.json, janCode);
-      if (product) {
-        return sendJSON(response, 200, product);
-      }
-    } else if (itemResult.response.status !== 404) {
-      if (shouldTreatAsUpstreamFailure(itemResult.response.status)) {
-        sawUpstreamFailure = true;
-      }
-    }
-
-    if (itemName) {
-      const keywordResult = await fetchUpstream(
-        buildItemSearchURL(itemName, applicationId, accessKey),
-        {
-          apiName: "keyword",
-          headers: DEFAULT_REQUEST_HEADERS,
-          timeoutMs: timeouts.keyword,
-          fetchImpl
-        }
-      );
-      logUpstreamResult(keywordResult);
-
-      if (keywordResult.timedOut) {
-        sawUpstreamFailure = true;
-      } else if (keywordResult.response.ok) {
-        const product = readItemResult(keywordResult.json, janCode);
+      if (result.response?.ok) {
+        const product = attempt.readProduct(result.json);
         if (product) {
-          return sendJSON(response, 200, product);
-        }
-      } else if (keywordResult.response.status !== 404) {
-        if (shouldTreatAsUpstreamFailure(keywordResult.response.status)) {
-          sawUpstreamFailure = true;
+          return sendJSON(response, 200, product, {
+            cacheControl: SEARCH_CACHE_CONTROL
+          });
         }
       }
     }
 
-    const searchResultsResult = await fetchUpstream(
-      buildRakutenSearchResultsURL(itemName || janCode),
-      {
-        apiName: "search_results_page",
-        headers: SEARCH_PAGE_HEADERS,
-        timeoutMs: timeouts.searchResultsPage,
-        fetchImpl,
-        parseJSON: false
-      }
-    );
-    logUpstreamResult(searchResultsResult);
-
-    if (searchResultsResult.timedOut) {
-      sawUpstreamFailure = true;
-    } else if (searchResultsResult.response.ok) {
-      sawSearchResultsPageResponse = true;
-      const product = readSearchResultsPageResult(searchResultsResult.text, janCode);
-      if (product) {
-        return sendJSON(response, 200, product);
-      }
-    } else if (searchResultsResult.response.status !== 404) {
-      if (shouldTreatAsUpstreamFailure(searchResultsResult.response.status)) {
-        sawUpstreamFailure = true;
-      }
-    }
-
-    if (!sawSearchResultsPageResponse && sawUpstreamFailure) {
-      return sendJSON(response, 502, {
-        error: "upstream_error"
+    if (sawUpstreamRateLimited) {
+      return sendJSON(response, 503, {
+        error: "upstream_rate_limited"
       });
     }
 
-    return sendJSON(response, 404, {
-      error: "not_found"
-    });
+    if (sawUpstreamUnavailable) {
+      return sendJSON(response, 503, {
+        error: "upstream_unavailable"
+      });
+    }
+
+    return sendJSON(
+      response,
+      404,
+      {
+        error: "not_found"
+      },
+      {
+        cacheControl: SEARCH_CACHE_CONTROL
+      }
+    );
   } catch (error) {
     console.error("Rakuten search failed", {
       message: error instanceof Error ? error.message : String(error)
     });
 
-    return sendJSON(response, 502, {
-      error: "upstream_error"
+    return sendJSON(response, 503, {
+      error: "upstream_unavailable"
     });
   }
 }
