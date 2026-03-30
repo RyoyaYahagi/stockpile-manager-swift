@@ -508,12 +508,12 @@ actor ProductSearchService {
             }
         }
 
-        if let technicalFailure = technicalFailures.last, !sawCommercialNotFound {
-            throw technicalFailure.publicError
-        }
-
         if !hasConfiguredCommercialAPI {
             throw ProductSearchError.noAPIConfigured
+        }
+
+        if let technicalFailure = technicalFailures.last, !sawCommercialNotFound {
+            throw technicalFailure.publicError
         }
 
         if sawCommercialNotFound || sawAnyNotFound {

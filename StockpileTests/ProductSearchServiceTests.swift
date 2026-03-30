@@ -125,6 +125,26 @@ final class ProductSearchServiceTests: XCTestCase {
         }
     }
 
+    func testNoCommercialAPIConfiguredReturnsNoAPIConfiguredBeforeOpenFoodFactsTimeout() async throws {
+        try await withEnvironment([
+            "BACKEND_BASE_URL": "YOUR_BACKEND_BASE_URL_HERE"
+        ]) {
+            let service = ProductSearchService(
+                openFoodFactsOperation: { _ in
+                    throw URLError(.timedOut)
+                }
+            )
+
+            await assertThrowsAsync(
+                try await service.search(janCode: "4901777300445")
+            ) { error in
+                guard case .noAPIConfigured = error as? ProductSearchError else {
+                    return XCTFail("Expected noAPIConfigured, got \(error)")
+                }
+            }
+        }
+    }
+
     func testAllTechnicalFailuresSurfaceLastTechnicalError() async throws {
         try await withEnvironment([
             "BACKEND_BASE_URL": "https://example.com"

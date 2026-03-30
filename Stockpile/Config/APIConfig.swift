@@ -31,9 +31,10 @@ struct APIConfig {
 
     /// バックエンドのベースURL
     static var backendBaseURL: URL? {
-        let environmentValue = normalizedSecretValue(ProcessInfo.processInfo.environment["BACKEND_BASE_URL"])
-        if let url = normalizedURL(environmentValue) {
-            return url
+        let environment = ProcessInfo.processInfo.environment
+        if environment.keys.contains("BACKEND_BASE_URL") {
+            let environmentValue = normalizedSecretValue(environment["BACKEND_BASE_URL"])
+            return normalizedURL(environmentValue)
         }
 
         let infoValue = normalizedSecretValue(Bundle.main.infoDictionary?["BackendBaseURL"] as? String)
