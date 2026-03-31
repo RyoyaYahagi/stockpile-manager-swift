@@ -68,7 +68,7 @@ test("fetchUpstream marks timed out requests", async () => {
 });
 
 test("handleRakutenSearch returns 429 with retryAfter when backend rate limit is exceeded", async () => {
-  const headers = { "x-forwarded-for": "203.0.113.10" };
+  const headers = { "x-forwarded-for": "2001:db8::10" };
   const limitedEnv = {
     ...env,
     RATE_LIMIT_MAX_REQUESTS_PER_MINUTE: "1"
