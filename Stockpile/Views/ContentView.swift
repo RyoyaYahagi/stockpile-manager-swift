@@ -725,7 +725,10 @@ private struct FirstLaunchTutorialView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 28) {
-                    TutorialIllustrationCard(kind: step.illustration)
+                    TutorialIllustrationCard(
+                        kind: step.illustration,
+                        didSetUpFamily: didSetUpFamily
+                    )
 
                     VStack(spacing: 10) {
                         Text("はじめての使い方")
@@ -800,6 +803,7 @@ private struct FirstLaunchTutorialView: View {
 
 private struct TutorialIllustrationCard: View {
     let kind: TutorialIllustrationKind
+    let didSetUpFamily: Bool
 
     var body: some View {
         ZStack {
@@ -816,84 +820,42 @@ private struct TutorialIllustrationCard: View {
                     )
                 )
 
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.white.opacity(0.95))
-                .padding(18)
-
-            illustrationBody
-                .padding(.horizontal, 28)
-                .padding(.vertical, 30)
+            TutorialLiveIllustrationPreview(
+                kind: kind,
+                didSetUpFamily: didSetUpFamily
+            )
+            .padding(18)
         }
         .frame(maxWidth: .infinity)
         .frame(height: 260)
         .shadow(color: .black.opacity(0.06), radius: 16, x: 0, y: 10)
     }
+}
 
-    @ViewBuilder
-    private var illustrationBody: some View {
+@MainActor
+private struct TutorialLiveIllustrationPreview: View {
+    let kind: TutorialIllustrationKind
+    let didSetUpFamily: Bool
+
+    var body: some View {
         switch kind {
         case .welcome:
-            VStack(spacing: 16) {
-                HStack(spacing: 12) {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.blue.opacity(0.14))
-                        .frame(width: 64, height: 64)
-                        .overlay {
-                            Image(systemName: "shippingbox.fill")
-                                .font(.system(size: 28, weight: .semibold))
-                                .foregroundStyle(.blue)
-                        }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.primary.opacity(0.12))
-                            .frame(height: 14)
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.primary.opacity(0.08))
-                            .frame(width: 150, height: 12)
+            preview(offsetY: -12) {
+                hostedPreview(container: TutorialPreviewFixtures.dashboardContainer) {
+                    NavigationStack {
+                        DashboardView()
                     }
                 }
-
-                HStack(spacing: 12) {
-                    featureTile(symbol: "archivebox.fill", tint: .blue)
-                    featureTile(symbol: "bell.badge.fill", tint: .orange)
-                    featureTile(symbol: "person.3.fill", tint: .green)
-                }
-
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.blue.opacity(0.1))
-                    .frame(height: 44)
-                    .overlay(alignment: .leading) {
-                        HStack(spacing: 10) {
-                            Circle()
-                                .fill(Color.blue.opacity(0.18))
-                                .frame(width: 26, height: 26)
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(Color.blue.opacity(0.18))
-                                .frame(width: 120, height: 10)
-                        }
-                        .padding(.horizontal, 14)
-                    }
             }
 
         case .addButton:
-            ZStack(alignment: .bottomTrailing) {
-                VStack(spacing: 12) {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.primary.opacity(0.08))
-                        .frame(height: 18)
-
-                    ForEach(0..<3, id: \.self) { index in
-                        TutorialMockRow(
-                            title: index == 0 ? "飲料水" : index == 1 ? "乾電池" : "缶詰",
-                            systemImage: "archivebox",
-                            highlighted: false
-                        )
+            preview(offsetY: -430) {
+                hostedPreview(container: TutorialPreviewFixtures.dashboardContainer) {
+                    NavigationStack {
+                        DashboardView()
                     }
-
-                    Spacer(minLength: 0)
                 }
-
+            } overlay: {
                 VStack(alignment: .trailing, spacing: 8) {
                     TutorialCalloutBadge(
                         text: "ここを押す",
@@ -903,257 +865,343 @@ private struct TutorialIllustrationCard: View {
                     Image(systemName: "arrow.down.right")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(.blue)
-                        .padding(.trailing, 22)
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 66, height: 66)
-                        .overlay {
-                            Image(systemName: "plus")
-                                .font(.system(size: 28, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
+                        .padding(.trailing, 18)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
 
         case .addForm:
-            VStack(spacing: 12) {
-                HStack {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.primary.opacity(0.12))
-                        .frame(width: 100, height: 14)
-                    Spacer()
-                    TutorialCalloutBadge(
-                        text: "名前を入れて保存",
-                        symbol: "square.and.arrow.down.fill",
-                        tint: .green
-                    )
+            preview(offsetY: -18) {
+                hostedPreview(container: TutorialPreviewFixtures.itemFormFixture.container) {
+                    ItemFormSheet(mode: .add)
                 }
-
-                TutorialMockRow(
-                    title: "品名",
-                    systemImage: "text.cursor",
-                    highlighted: true,
-                    accent: .green
+            } overlay: {
+                TutorialCalloutBadge(
+                    text: "名前を入れて保存",
+                    symbol: "square.and.arrow.down.fill",
+                    tint: .green
                 )
-                TutorialMockRow(
-                    title: "数量",
-                    systemImage: "number",
-                    highlighted: false
-                )
-                TutorialMockRow(
-                    title: "収納場所",
-                    systemImage: "bag",
-                    highlighted: false
-                )
-
-                HStack {
-                    Spacer()
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.green)
-                        .frame(width: 92, height: 38)
-                        .overlay {
-                            Text("保存")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.white)
-                        }
-                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
 
         case .expiryOptional:
-            VStack(spacing: 12) {
-                TutorialMockRow(
-                    title: "賞味期限を設定",
-                    systemImage: "calendar",
-                    highlighted: false
-                )
-
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
-                    .foregroundStyle(Color.orange.opacity(0.45))
-                    .frame(height: 56)
-                    .overlay {
-                        HStack {
-                            Image(systemName: "calendar.badge.clock")
-                                .foregroundStyle(.orange)
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(Color.primary.opacity(0.08))
-                                .frame(width: 120, height: 12)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
-                    }
-
-                Spacer(minLength: 0)
-
-                HStack {
-                    TutorialCalloutBadge(
-                        text: "あとで追加できます",
-                        symbol: "clock.badge.plus",
-                        tint: .orange
-                    )
-                    Spacer()
+            preview(offsetY: -128) {
+                hostedPreview(container: TutorialPreviewFixtures.itemFormFixture.container) {
+                    ItemFormSheet(mode: .edit(TutorialPreviewFixtures.itemFormFixture.expiryOptionalItem))
                 }
+            } overlay: {
+                TutorialCalloutBadge(
+                    text: "あとで追加できます",
+                    symbol: "clock.badge.plus",
+                    tint: .orange
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             }
 
         case .notifications:
-            VStack(spacing: 12) {
-                TutorialMockRow(
-                    title: "通知を有効にする",
-                    systemImage: "bell",
-                    highlighted: false
-                )
-                TutorialMockRow(
-                    title: "通知タイミング",
-                    systemImage: "calendar.badge.clock",
-                    highlighted: false
-                )
-                TutorialMockRow(
-                    title: "通知時刻",
-                    systemImage: "clock",
-                    trailingText: "9:00",
-                    highlighted: true,
-                    accent: .orange
-                )
-
-                HStack {
-                    Spacer()
-                    TutorialCalloutBadge(
-                        text: "通知時刻を決める",
-                        symbol: "bell.badge.fill",
-                        tint: .orange
-                    )
+            preview(offsetY: -118) {
+                hostedPreview(container: TutorialPreviewFixtures.notificationContainer) {
+                    NavigationStack {
+                        NotificationSettingsView()
+                    }
                 }
+            } overlay: {
+                TutorialCalloutBadge(
+                    text: "通知時刻を決める",
+                    symbol: "bell.badge.fill",
+                    tint: .orange
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
 
         case .familySharing:
-            VStack(spacing: 12) {
-                TutorialMockRow(
-                    title: "共有リンクを送信",
-                    systemImage: "link",
-                    highlighted: true,
-                    accent: .green
-                )
-                TutorialMockRow(
-                    title: "共有設定を管理",
-                    systemImage: "person.crop.circle.badge.checkmark",
-                    highlighted: false
-                )
-                TutorialMockRow(
-                    title: "メンバー",
-                    systemImage: "person.2",
-                    trailingText: L10n.format("%@人", String(3)),
-                    highlighted: false
-                )
-
-                HStack {
-                    Spacer()
+            if didSetUpFamily {
+                preview(offsetY: -96) {
+                    hostedPreview(container: TutorialPreviewFixtures.familyFixture.container) {
+                        NavigationStack {
+                            FamilySettingsView(family: TutorialPreviewFixtures.familyFixture.family)
+                        }
+                    }
+                } overlay: {
                     TutorialCalloutBadge(
-                        text: "共有リンクを送る",
+                        text: "共有リンクを送れます",
                         symbol: "paperplane.fill",
                         tint: .green
                     )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                }
+            } else {
+                preview(offsetY: -20) {
+                    hostedPreview(container: TutorialPreviewFixtures.familySetupContainer) {
+                        NavigationStack {
+                            FamilySetupView()
+                        }
+                    }
+                } overlay: {
+                    TutorialCalloutBadge(
+                        text: "ここで共有を始めます",
+                        symbol: "person.3.fill",
+                        tint: .green
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 }
             }
 
         case .settingsGuide:
-            VStack(spacing: 12) {
-                TutorialMockRow(
-                    title: "通知",
-                    systemImage: "bell",
-                    highlighted: false
-                )
-                TutorialMockRow(
-                    title: "言語",
-                    systemImage: "globe",
-                    highlighted: false
-                )
-                TutorialMockRow(
-                    title: "はじめての使い方を見る",
-                    systemImage: "questionmark.circle",
-                    highlighted: true,
-                    accent: .blue
-                )
-
-                HStack {
-                    TutorialCalloutBadge(
-                        text: "ここから見直せます",
-                        symbol: "arrow.uturn.backward.circle.fill",
-                        tint: .blue
-                    )
-                    Spacer()
+            preview(offsetY: -230) {
+                hostedPreview(container: TutorialPreviewFixtures.settingsContainer) {
+                    NavigationStack {
+                        SettingsView()
+                    }
                 }
+            } overlay: {
+                TutorialCalloutBadge(
+                    text: "ここから見直せます",
+                    symbol: "arrow.uturn.backward.circle.fill",
+                    tint: .blue
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             }
         }
     }
 
-    private func featureTile(symbol: String, tint: Color) -> some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(tint.opacity(0.12))
-            .frame(maxWidth: .infinity)
-            .frame(height: 72)
-            .overlay {
-                Image(systemName: symbol)
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(tint)
-            }
+    private func preview<Content: View>(
+        offsetY: CGFloat,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        TutorialScreenPreview(offsetY: offsetY, content: content)
+    }
+
+    private func preview<Content: View, Overlay: View>(
+        offsetY: CGFloat,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder overlay: () -> Overlay
+    ) -> some View {
+        TutorialScreenPreview(
+            offsetY: offsetY,
+            content: content,
+            overlay: overlay
+        )
+    }
+
+    private func hostedPreview<Content: View>(
+        container: ModelContainer,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let localizationController = LocalizationController(initialLanguage: .japanese)
+
+        return content()
+            .environment(Router())
+            .environment(localizationController)
+            .environment(\.locale, localizationController.locale)
+            .modelContainer(container)
+            .scrollDisabled(true)
+            .preferredColorScheme(.light)
+            .allowsHitTesting(false)
     }
 }
 
-private struct TutorialMockRow: View {
-    let title: LocalizedStringKey
-    let systemImage: String
-    let trailingText: String?
-    let highlighted: Bool
-    let accent: Color
+private struct TutorialScreenPreview<Content: View, Overlay: View>: View {
+    private let content: Content
+    private let overlay: Overlay
+    private let offsetY: CGFloat
+
+    private let previewSize = CGSize(width: 390, height: 844)
+    private let previewScale: CGFloat = 0.76
 
     init(
-        title: LocalizedStringKey,
-        systemImage: String,
-        trailingText: String? = nil,
-        highlighted: Bool,
-        accent: Color = .blue
+        offsetY: CGFloat,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder overlay: () -> Overlay = { EmptyView() }
     ) {
-        self.title = title
-        self.systemImage = systemImage
-        self.trailingText = trailingText
-        self.highlighted = highlighted
-        self.accent = accent
+        self.offsetY = offsetY
+        self.content = content()
+        self.overlay = overlay()
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(highlighted ? accent : .secondary)
-                .frame(width: 24)
+        ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.white.opacity(0.96))
 
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
+            content
+                .frame(width: previewSize.width, height: previewSize.height)
+                .scaleEffect(previewScale, anchor: .top)
+                .frame(
+                    width: previewSize.width * previewScale,
+                    height: previewSize.height * previewScale,
+                    alignment: .top
+                )
+                .offset(y: offsetY)
+                .clipped()
 
-            Spacer()
-
-            if let trailingText {
-                Text(trailingText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            Image(systemName: "chevron.right")
-                .font(.footnote.weight(.bold))
-                .foregroundStyle(.secondary.opacity(0.5))
+            overlay
+                .padding(16)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(highlighted ? accent.opacity(0.12) : Color(.systemGray6))
-        )
+        .frame(maxWidth: .infinity)
+        .frame(height: 204)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(highlighted ? accent.opacity(0.35) : Color.clear, lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.black.opacity(0.06), lineWidth: 1)
         }
     }
+}
+
+@MainActor
+private enum TutorialPreviewFixtures {
+    static let dashboardContainer = makeDashboardContainer()
+    static let itemFormFixture = makeItemFormFixture()
+    static let notificationContainer = makeNotificationContainer()
+    static let familySetupContainer = makeFamilySetupContainer()
+    static let familyFixture = makeFamilyFixture()
+    static let settingsContainer = makeSettingsContainer()
+
+    private static func makeDashboardContainer() -> ModelContainer {
+        let container = makeContainer()
+        let context = container.mainContext
+        let pantry = Bag(name: "キッチン棚")
+        let emergency = Bag(name: "非常袋")
+        let trunk = Bag(name: "車載ボックス")
+
+        let items = [
+            makeItem(name: "飲料水", quantity: 6, daysUntilExpiry: 21, bag: pantry),
+            makeItem(name: "缶詰", quantity: 8, daysUntilExpiry: 120, bag: pantry),
+            makeItem(name: "乾電池", quantity: 12, daysUntilExpiry: nil, bag: emergency),
+            makeItem(name: "アルファ米", quantity: 4, daysUntilExpiry: 8, bag: trunk)
+        ]
+
+        [pantry, emergency, trunk].forEach { context.insert($0) }
+        items.forEach { context.insert($0) }
+        try? context.save()
+        return container
+    }
+
+    private static func makeItemFormFixture() -> TutorialItemFormFixture {
+        let container = makeContainer()
+        let context = container.mainContext
+        let pantry = Bag(name: "キッチン棚")
+        let shelf = Bag(name: "玄関収納")
+        let expiryOptionalItem = Item(
+            name: "ラップ",
+            quantity: 2,
+            expiryDate: nil,
+            locationNote: "予備棚"
+        )
+        expiryOptionalItem.bag = shelf
+
+        context.insert(pantry)
+        context.insert(shelf)
+        context.insert(expiryOptionalItem)
+        try? context.save()
+        return TutorialItemFormFixture(
+            container: container,
+            expiryOptionalItem: expiryOptionalItem
+        )
+    }
+
+    private static func makeNotificationContainer() -> ModelContainer {
+        let container = makeContainer()
+        let context = container.mainContext
+        let settings = NotificationSettings.createDefault()
+        settings.notificationHour = 9
+        settings.notificationMinute = 0
+        context.insert(settings)
+        context.insert(makeItem(name: "カセットボンベ", quantity: 3, daysUntilExpiry: 14, bag: nil))
+        try? context.save()
+        return container
+    }
+
+    private static func makeFamilySetupContainer() -> ModelContainer {
+        makeContainer()
+    }
+
+    private static func makeFamilyFixture() -> TutorialFamilyFixture {
+        let container = makeContainer()
+        let context = container.mainContext
+        let family = Family(name: "わが家")
+        let pantry = Bag(name: "パントリー")
+        pantry.family = family
+
+        let users = [
+            User(displayName: "自分", email: "me@example.com"),
+            User(displayName: "家族A", email: "family-a@example.com"),
+            User(displayName: "家族B", email: "family-b@example.com")
+        ]
+        users.forEach { $0.family = family }
+
+        let items = [
+            makeItem(name: "レトルトご飯", quantity: 5, daysUntilExpiry: 45, bag: pantry, family: family),
+            makeItem(name: "保存水", quantity: 6, daysUntilExpiry: 90, bag: pantry, family: family)
+        ]
+
+        context.insert(family)
+        context.insert(pantry)
+        users.forEach { context.insert($0) }
+        items.forEach { context.insert($0) }
+        try? context.save()
+
+        return TutorialFamilyFixture(container: container, family: family)
+    }
+
+    private static func makeSettingsContainer() -> ModelContainer {
+        let container = makeContainer()
+        let context = container.mainContext
+        let family = Family(name: "わが家")
+        let users = [
+            User(displayName: "自分", email: "me@example.com"),
+            User(displayName: "家族A", email: "family-a@example.com")
+        ]
+        users.forEach { $0.family = family }
+
+        context.insert(family)
+        users.forEach { context.insert($0) }
+        try? context.save()
+        return container
+    }
+
+    private static func makeContainer() -> ModelContainer {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        return try! ModelContainer(
+            for: Family.self,
+            User.self,
+            Bag.self,
+            Item.self,
+            NotificationSettings.self,
+            configurations: configuration
+        )
+    }
+
+    private static func makeItem(
+        name: String,
+        quantity: Int,
+        daysUntilExpiry: Int?,
+        bag: Bag?,
+        family: Family? = nil
+    ) -> Item {
+        let item = Item(
+            name: name,
+            quantity: quantity,
+            expiryDate: daysUntilExpiry.map {
+                Calendar.current.date(byAdding: .day, value: $0, to: Date()) ?? Date()
+            }
+        )
+        item.bag = bag
+        item.family = family
+        return item
+    }
+}
+
+@MainActor
+private struct TutorialItemFormFixture {
+    let container: ModelContainer
+    let expiryOptionalItem: Item
+}
+
+@MainActor
+private struct TutorialFamilyFixture {
+    let container: ModelContainer
+    let family: Family
 }
 
 private struct TutorialCalloutBadge: View {
