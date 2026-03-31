@@ -3,6 +3,7 @@ import http from "node:http";
 import healthHandler from "./api/health.js";
 import rakutenRedirectHandler from "./api/v1/rakuten/redirect.js";
 import rakutenSearchHandler from "./api/v1/rakuten/search.js";
+import yahooSearchHandler from "./api/v1/yahoo/search.js";
 
 const PORT = Number.parseInt(process.env.PORT ?? "3000", 10) || 3000;
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -80,6 +81,10 @@ const server = http.createServer(async (request, response) => {
 
     if (url.pathname === "/v1/rakuten/redirect") {
       return await rakutenRedirectHandler(adaptedRequest, adaptedResponse);
+    }
+
+    if (url.pathname === "/v1/yahoo/search") {
+      return await yahooSearchHandler(adaptedRequest, adaptedResponse);
     }
 
     return notFound(response);

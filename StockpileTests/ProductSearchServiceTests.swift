@@ -17,10 +17,14 @@ final class ProductSearchServiceTests: XCTestCase {
         ]) {
             let service = ProductSearchService(
                 rakutenBackendOperation: { _ in
-                    throw URLError(.timedOut)
+                    XCTFail("Rakuten backend should be skipped when Yahoo backend is available")
+                    return nil
                 },
                 openFoodFactsOperation: { _ in
                     nil
+                },
+                yahooOperation: { _ in
+                    throw URLError(.timedOut)
                 }
             )
 
@@ -30,7 +34,7 @@ final class ProductSearchServiceTests: XCTestCase {
                 guard case .timeout(let source) = error as? ProductSearchError else {
                     return XCTFail("Expected timeout, got \(error)")
                 }
-                XCTAssertEqual(source, .rakuten)
+                XCTAssertEqual(source, .yahoo)
             }
         }
     }
@@ -50,10 +54,14 @@ final class ProductSearchServiceTests: XCTestCase {
         ]) {
             let service = ProductSearchService(
                 rakutenBackendOperation: { _ in
-                    throw URLError(.timedOut)
+                    XCTFail("Rakuten backend should be skipped when Yahoo backend is available")
+                    return nil
                 },
                 openFoodFactsOperation: { _ in
                     fallbackProduct
+                },
+                yahooOperation: { _ in
+                    throw URLError(.timedOut)
                 }
             )
 
@@ -80,7 +88,8 @@ final class ProductSearchServiceTests: XCTestCase {
         ]) {
             let service = ProductSearchService(
                 rakutenBackendOperation: { _ in
-                    throw ProductSearchError.rateLimited(.rakuten, retryAfterSeconds: 30)
+                    XCTFail("Rakuten backend should be skipped when Yahoo backend is available")
+                    return nil
                 },
                 rakutenProductOperation: { _ in
                     XCTFail("Direct Rakuten product search should be skipped when backend is configured")
@@ -92,6 +101,9 @@ final class ProductSearchServiceTests: XCTestCase {
                 },
                 openFoodFactsOperation: { _ in
                     fallbackProduct
+                },
+                yahooOperation: { _ in
+                    throw ProductSearchError.rateLimited(.yahoo, retryAfterSeconds: 30)
                 }
             )
 
@@ -128,6 +140,46 @@ final class ProductSearchServiceTests: XCTestCase {
                 },
                 rakutenKeywordOperation: { _ in
                     XCTFail("Direct Rakuten keyword search should be skipped when Yahoo is configured")
+                    return nil
+                },
+                yahooOperation: { _ in
+                    yahooProduct
+                }
+            )
+
+            let product = try await service.search(janCode: "4901777300445")
+            XCTAssertEqual(product.name, yahooProduct.name)
+            XCTAssertEqual(product.source, .yahoo)
+        }
+    }
+
+    func testBackendConfiguredUsesYahooBeforeRakutenWithoutLocalYahooClientId() async throws {
+        let yahooProduct = ProductInfo(
+            name: "バックエンドの水",
+            description: nil,
+            category: "飲料",
+            imageURL: nil,
+            janCode: "4901777300445",
+            source: .yahoo
+        )
+
+        try await withEnvironment([
+            "YAHOO_CLIENT_ID": nil,
+            "BACKEND_BASE_URL": "https://example.com",
+            "RAKUTEN_APP_ID": "local-app-id",
+            "RAKUTEN_ACCESS_KEY": "local-access-key"
+        ]) {
+            let service = ProductSearchService(
+                rakutenBackendOperation: { _ in
+                    XCTFail("Rakuten backend should be skipped when Yahoo backend is available")
+                    return nil
+                },
+                rakutenProductOperation: { _ in
+                    XCTFail("Direct Rakuten product search should be skipped when Yahoo backend is available")
+                    return nil
+                },
+                rakutenKeywordOperation: { _ in
+                    XCTFail("Direct Rakuten keyword search should be skipped when Yahoo backend is available")
                     return nil
                 },
                 yahooOperation: { _ in
@@ -221,10 +273,14 @@ final class ProductSearchServiceTests: XCTestCase {
         ]) {
             let service = ProductSearchService(
                 rakutenBackendOperation: { _ in
-                    throw ProductSearchError.rateLimited(.rakuten, retryAfterSeconds: 30)
+                    XCTFail("Rakuten backend should be skipped when Yahoo backend is available")
+                    return nil
                 },
                 openFoodFactsOperation: { _ in
                     nil
+                },
+                yahooOperation: { _ in
+                    throw ProductSearchError.rateLimited(.yahoo, retryAfterSeconds: 30)
                 }
             )
 
@@ -234,7 +290,7 @@ final class ProductSearchServiceTests: XCTestCase {
                 guard case .rateLimited(let source, let retryAfterSeconds) = error as? ProductSearchError else {
                     return XCTFail("Expected rateLimited, got \(error)")
                 }
-                XCTAssertEqual(source, .rakuten)
+                XCTAssertEqual(source, .yahoo)
                 XCTAssertEqual(retryAfterSeconds, 30)
             }
         }
@@ -266,9 +322,13 @@ final class ProductSearchServiceTests: XCTestCase {
         ]) {
             let service = ProductSearchService(
                 rakutenBackendOperation: { _ in
-                    throw URLError(.timedOut)
+                    XCTFail("Rakuten backend should be skipped when Yahoo backend is available")
+                    return nil
                 },
                 openFoodFactsOperation: { _ in
+                    throw URLError(.timedOut)
+                },
+                yahooOperation: { _ in
                     throw URLError(.timedOut)
                 }
             )

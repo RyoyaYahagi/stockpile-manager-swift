@@ -1,11 +1,12 @@
-# Stockpile Rakuten Proxy
+# Stockpile Shopping Proxy
 
-Stockpile iOS のバーコード検索と「楽天市場で購入」ボタン用 Vercel バックエンドです。
+Stockpile iOS のバーコード検索用 Vercel バックエンドです。
 
 ## 役割
 
-- iOS アプリから受け取った `jan` と任意の `name` を元に楽天 API を検索する
-- 楽天キーと `affiliateId` はサーバー側の環境変数で管理する
+- iOS アプリから受け取った `jan` と任意の `name` を元に Yahoo API / 楽天 API を検索する
+- Yahoo / 楽天の認証情報と `affiliateId` はサーバー側の環境変数で管理する
+- `/v1/yahoo/search` は Yahoo ショッピング商品検索 API V3 を利用する
 - `/v1/rakuten/search` は楽天 API の JSON だけを使い、HTML 検索結果ページは読まない
 - 見つかった商品ページへ `307` リダイレクトする
 - 該当商品が見つからない場合は楽天市場の検索結果ページへフォールバックする
@@ -13,6 +14,7 @@ Stockpile iOS のバーコード検索と「楽天市場で購入」ボタン用
 ## エンドポイント
 
 - `GET /health`
+- `GET /v1/yahoo/search?jan=4901777300445`
 - `GET /v1/rakuten/redirect?jan=4901777300445`
 - `GET /v1/rakuten/redirect?jan=4901777300445&name=%E6%B0%B4`
 - `GET /v1/rakuten/search?jan=4901777300445`
@@ -20,7 +22,7 @@ Stockpile iOS のバーコード検索と「楽天市場で購入」ボタン用
 
 `/v1/*` は `vercel.json` で `/api/v1/*` に rewrite しています。
 
-### `/v1/rakuten/search` の失敗レスポンス
+### `/v1/yahoo/search` と `/v1/rakuten/search` の失敗レスポンス
 
 - `404 { "error": "not_found" }`
 - `429 { "error": "rate_limited", "retryAfterSeconds": number }`
@@ -31,6 +33,7 @@ Stockpile iOS のバーコード検索と「楽天市場で購入」ボタン用
 
 ## 必要な環境変数
 
+- `YAHOO_CLIENT_ID`
 - `RAKUTEN_APP_ID`
 - `RAKUTEN_ACCESS_KEY`
 - `RAKUTEN_AFFILIATE_ID` 任意
@@ -48,7 +51,7 @@ Stockpile iOS のバーコード検索と「楽天市場で購入」ボタン用
 
 1. Vercel で新規 Project を作成する
 2. Root Directory を `backend/vercel-rakuten-proxy` に設定する
-3. 上記 3 つの環境変数を登録する
+3. `YAHOO_CLIENT_ID` / `RAKUTEN_APP_ID` / `RAKUTEN_ACCESS_KEY` を登録する
 4. 必要なら `RATE_LIMIT_MAX_REQUESTS_PER_MINUTE` を追加する
 5. Deploy する
 6. 発行された専用 URL を iOS 側の `BackendBaseURL` に設定する
@@ -65,6 +68,7 @@ npm run start
 ```
 
 - `GET /health`
+- `GET /v1/yahoo/search?jan=...`
 - `GET /v1/rakuten/search?jan=...`
 - `GET /v1/rakuten/redirect?jan=...`
 
@@ -80,7 +84,7 @@ npm test
 
 ## iOS 側設定
 
-`BackendBaseURL` は公開してよい設定として iOS の `Info.plist` かビルド環境変数に設定します。アプリ bundle に秘密情報は同梱しません。バーコード検索と「楽天市場で購入」はこの backend を経由して動作します。共有 URL 前提ではなく、アプリごとの専用 backend URL を設定してください。
+`BackendBaseURL` は公開してよい設定として iOS の `Info.plist` かビルド環境変数に設定します。アプリ bundle に秘密情報は同梱しません。バーコード検索はこの backend を経由して動作します。共有 URL 前提ではなく、アプリごとの専用 backend URL を設定してください。
 
 例:
 

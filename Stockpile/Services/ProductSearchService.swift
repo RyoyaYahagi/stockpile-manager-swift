@@ -423,6 +423,9 @@ actor ProductSearchService {
         if let yahooOperation {
             return try await yahooOperation(janCode)
         }
+        if APIConfig.isRakutenBackendConfigured {
+            return try await searchYahooViaBackend(janCode: janCode, timeout: deadlines.yahoo)
+        }
         return try await searchYahoo(janCode: janCode, timeout: deadlines.yahoo)
     }
     
@@ -462,9 +465,13 @@ actor ProductSearchService {
             }
         }
 
-        // 1. Yahooが設定されている場合はYahoo検索を優先
-        if APIConfig.isYahooConfigured {
-            debugLog("[ProductSearch] Yahoo検索を優先します")
+        // 1. Yahoo が backend または direct で利用できる場合は Yahoo を優先
+        if APIConfig.isYahooSearchAvailable {
+            if APIConfig.isRakutenBackendConfigured {
+                debugLog("[ProductSearch] Yahoo backend検索を優先します")
+            } else {
+                debugLog("[ProductSearch] Yahoo検索を優先します")
+            }
             if let product = resolve(await runSearchAttempt(source: .yahoo) {
                 try await performYahooSearch(janCode: cleanedCode)
             }, isCommercialSource: true) {
@@ -478,7 +485,7 @@ actor ProductSearchService {
                 return product
             }
         } else {
-            debugLog("[ProductSearch] Yahoo APIは未設定です")
+            debugLog("[ProductSearch] Yahoo検索は未設定です")
 
             // 2. 従来どおり楽天検索を優先
             if APIConfig.isRakutenBackendConfigured {
@@ -712,6 +719,95 @@ actor ProductSearchService {
             imageURL: normalizedText(json["imageURL"]).flatMap(URL.init(string:)),
             janCode: normalizedText(json["janCode"]) ?? janCode,
             source: .rakuten
+        )
+    }
+
+    // MARK: - Yahoo backend
+
+    private func searchYahooViaBackend(janCode: String, timeout: TimeInterval) async throws -> ProductInfo? {
+        guard let url = APIConfig.yahooSearchURL(for: janCode) else {
+            throw SearchAttemptFailure.invalidResponse(
+                source: .yahoo,
+                detail: L10n.string("Yahoo Backend検索URLを生成できませんでした")
+            )
+        }
+
+        debugLog("[ProductSearch] Requesting Yahoo backend: \(url.absoluteString)")
+
+        let (data, response) = try await requestData(from: url, source: .yahoo, timeout: timeout)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SearchAttemptFailure.invalidResponse(
+                source: .yahoo,
+                detail: L10n.string("Yahoo Backend検索のHTTPレスポンスを取得できませんでした")
+            )
+        }
+
+        let payload = backendErrorPayload(from: data)
+
+        if httpResponse.statusCode == 404 {
+            if payload?.error == "not_found" {
+                return nil
+            }
+
+            throw SearchAttemptFailure.httpStatus(
+                source: .yahoo,
+                statusCode: httpResponse.statusCode,
+                detail: payload?.message ?? sanitizedResponseDetail(from: data)
+            )
+        }
+
+        if httpResponse.statusCode == 429 || payload?.error == "rate_limited" {
+            throw SearchAttemptFailure.rateLimited(
+                source: .yahoo,
+                retryAfterSeconds: retryAfterSeconds(from: httpResponse, payload: payload)
+            )
+        }
+
+        if httpResponse.statusCode == 503 {
+            if payload?.error == "upstream_rate_limited" {
+                throw SearchAttemptFailure.rateLimited(
+                    source: .yahoo,
+                    retryAfterSeconds: retryAfterSeconds(from: httpResponse, payload: payload)
+                )
+            }
+
+            throw SearchAttemptFailure.serviceUnavailable(source: .yahoo)
+        }
+
+        if httpResponse.statusCode == 500, payload?.error == "server_not_configured" {
+            throw SearchAttemptFailure.serviceUnavailable(source: .yahoo)
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            throw SearchAttemptFailure.httpStatus(
+                source: .yahoo,
+                statusCode: httpResponse.statusCode,
+                detail: payload?.message ?? sanitizedResponseDetail(from: data)
+            )
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw SearchAttemptFailure.parse(
+                source: .yahoo,
+                detail: L10n.string("Yahoo Backend検索のJSONを解析できませんでした")
+            )
+        }
+
+        guard let name = normalizedText(json["name"]) else {
+            throw SearchAttemptFailure.parse(
+                source: .yahoo,
+                detail: L10n.string("Yahoo Backend検索の name を取得できませんでした")
+            )
+        }
+
+        return ProductInfo(
+            name: name,
+            description: normalizedText(json["description"]),
+            category: normalizedText(json["category"]),
+            imageURL: normalizedText(json["imageURL"]).flatMap(URL.init(string:)),
+            janCode: normalizedText(json["janCode"]) ?? janCode,
+            source: .yahoo
         )
     }
 

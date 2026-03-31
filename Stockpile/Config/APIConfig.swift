@@ -70,6 +70,11 @@ struct APIConfig {
     static var isYahooConfigured: Bool {
         !yahooClientId.isEmpty
     }
+
+    /// Backend 経由を含めて Yahoo 検索が利用可能かどうか
+    static var isYahooSearchAvailable: Bool {
+        isRakutenBackendConfigured || isYahooConfigured
+    }
     
     /// いずれかの商品検索APIが利用可能かどうか
     static var isProductSearchAvailable: Bool {
@@ -88,7 +93,19 @@ struct APIConfig {
         rakutenEndpointURL(pathComponent: "redirect", janCode: janCode, itemName: itemName)
     }
 
+    static func yahooSearchURL(for janCode: String) -> URL? {
+        backendEndpointURL(pathComponents: ["v1", "yahoo", "search"], janCode: janCode, itemName: nil)
+    }
+
     private static func rakutenEndpointURL(pathComponent: String, janCode: String, itemName: String?) -> URL? {
+        backendEndpointURL(pathComponents: ["v1", "rakuten", pathComponent], janCode: janCode, itemName: itemName)
+    }
+
+    private static func backendEndpointURL(
+        pathComponents: [String],
+        janCode: String,
+        itemName: String?
+    ) -> URL? {
         guard let baseURL = backendBaseURL else { return nil }
 
         let trimmedJANCode = janCode.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -99,7 +116,7 @@ struct APIConfig {
         }
 
         let currentPath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        components.path = "/" + [currentPath, "v1", "rakuten", pathComponent]
+        components.path = "/" + ([currentPath] + pathComponents)
             .filter { !$0.isEmpty }
             .joined(separator: "/")
 
