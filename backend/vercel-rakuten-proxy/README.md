@@ -53,11 +53,29 @@ Stockpile iOS のバーコード検索と「楽天市場で購入」ボタン用
 5. Deploy する
 6. 発行された専用 URL を iOS 側の `BackendBaseURL` に設定する
 
+### 固定IPが必要な場合
+
+楽天 Web Service 側で `Allowed IP addresses` を必須にする場合、通常の Vercel serverless では outbound IP を固定しづらいため `CLIENT_IP_NOT_ALLOWED` になりやすいです。
+
+その場合はこのディレクトリを standalone Node サーバーとして動かし、固定グローバル IP を持つ環境へ配置してください。
+
+```bash
+cd backend/vercel-rakuten-proxy
+npm run start
+```
+
+- `GET /health`
+- `GET /v1/rakuten/search?jan=...`
+- `GET /v1/rakuten/redirect?jan=...`
+
+`Dockerfile` も同梱しているので、VPS / EC2 / Cloud Run + Cloud NAT など固定 IP を用意できる環境へそのまま載せられます。楽天側の `Allowed IP addresses` には、その環境の固定 outbound IP を登録してください。
+
 ## ローカル確認
 
 ```bash
 cd backend/vercel-rakuten-proxy
 npm run check
+npm test
 ```
 
 ## iOS 側設定
