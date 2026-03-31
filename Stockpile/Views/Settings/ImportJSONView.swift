@@ -395,7 +395,7 @@ struct ExportJSONView: View {
             return items.filter { $0.family == nil }
         }
         let familyItems = items.filter { $0.family?.id == family.id }
-        if !familyItems.isEmpty {
+        if !familyItems.isEmpty || family.prefersStrictCloudKitScoping {
             return familyItems
         }
         return items.filter { $0.family == nil }

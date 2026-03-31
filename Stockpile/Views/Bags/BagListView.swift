@@ -23,7 +23,7 @@ struct BagListView: View {
             return bags.filter { $0.family == nil }
         }
         let familyBags = bags.filter { $0.family?.id == family.id }
-        if !familyBags.isEmpty {
+        if !familyBags.isEmpty || family.prefersStrictCloudKitScoping {
             return familyBags
         }
         return bags.filter { $0.family == nil }

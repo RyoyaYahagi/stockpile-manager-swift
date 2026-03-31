@@ -222,11 +222,19 @@ final class CloudKitFamilySharingService {
 
     func syncFamilyStateFromCloudKit(for family: Family) async throws {
         guard family.isCloudKitSharedFamily else { return }
-        _ = try await syncZoneToLocal(
-            zoneID: zoneID(for: family),
-            database: database(for: family),
-            scope: family.cloudKitDatabaseScope ?? .privateDatabase
-        )
+        do {
+            _ = try await syncZoneToLocal(
+                zoneID: zoneID(for: family),
+                database: database(for: family),
+                scope: family.cloudKitDatabaseScope ?? .privateDatabase
+            )
+        } catch {
+            if shouldTreatMissingRemoteStateAsEmptySnapshot(error) {
+                try clearLocalFamilyDataForMissingRemoteState(for: family)
+                return
+            }
+            throw error
+        }
     }
 
     func fetchRemoteRecordCounts(for family: Family) async throws -> RemoteRecordCounts {
@@ -440,6 +448,23 @@ final class CloudKitFamilySharingService {
         family.id = id
         modelContext.insert(family)
         return family
+    }
+
+    private func clearLocalFamilyDataForMissingRemoteState(for family: Family) throws {
+        let scopedItems = try fetchLocalItems(for: family)
+        let scopedBags = try fetchLocalBags(for: family)
+        guard !scopedItems.isEmpty || !scopedBags.isEmpty else { return }
+
+        for item in scopedItems {
+            modelContext.delete(item)
+        }
+
+        for bag in scopedBags {
+            modelContext.delete(bag)
+        }
+
+        try modelContext.save()
+        NotificationManager.shared.requestReschedule(using: modelContext)
     }
 
     private func ensureCloudKitMetadata(for family: Family) {
@@ -918,6 +943,30 @@ final class CloudKitFamilySharingService {
                 return partialErrors.contains { shouldRetryAcceptedShareSync(after: $0) }
             }
             return false
+        default:
+            return false
+        }
+    }
+
+    private func shouldTreatMissingRemoteStateAsEmptySnapshot(_ error: Error) -> Bool {
+        if let sharingError = error as? CloudKitSharingError,
+           sharingError == .familyRecordNotFound {
+            return true
+        }
+
+        guard let ckError = error as? CKError else {
+            return false
+        }
+
+        switch ckError.code {
+        case .zoneNotFound, .userDeletedZone, .unknownItem:
+            return true
+        case .partialFailure:
+            guard let partialErrors = ckError.partialErrorsByItemID?.values,
+                  !partialErrors.isEmpty else {
+                return false
+            }
+            return partialErrors.allSatisfy { shouldTreatMissingRemoteStateAsEmptySnapshot($0) }
         default:
             return false
         }

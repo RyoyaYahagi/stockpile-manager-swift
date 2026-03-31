@@ -100,7 +100,7 @@ struct ContentView: View {
         }
 
         let familyItemsCount = items.filter { $0.family?.id == family.id }.count
-        if familyItemsCount > 0 {
+        if familyItemsCount > 0 || family.prefersStrictCloudKitScoping {
             return familyItemsCount
         }
         return items.filter { $0.family == nil }.count

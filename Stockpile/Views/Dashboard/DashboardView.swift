@@ -108,8 +108,6 @@ struct DashboardView: View {
     @State private var undoWorkItem: DispatchWorkItem?
     @State private var selectedExpiryFilter: ExpiryFilter = .all
     @State private var autoSyncedFamilyID: UUID?
-    @State private var isRefreshingCloudKit = false
-    @State private var cloudKitRefreshError: String?
     
     enum ExpiryFilter {
         case all
@@ -412,30 +410,6 @@ struct DashboardView: View {
             }
             
             ToolbarItem(placement: .topBarTrailing) {
-                if let family = currentFamily, family.shareState != .localOnly {
-                    Button {
-                        refreshCloudKitNow()
-                    } label: {
-                        ZStack {
-                            if isRefreshingCloudKit {
-                                ProgressView()
-                                    .tint(.primary)
-                            } else {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.body.weight(.semibold))
-                            }
-                        }
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isRefreshingCloudKit)
-                    .accessibilityLabel("iCloudから更新")
-                    .controlSize(.regular)
-                }
-            }
-
-            ToolbarItem(placement: .topBarTrailing) {
                 if !scopedItems.isEmpty {
                     Button(isSelectionMode ? LocalizedStringKey("完了") : LocalizedStringKey("選択")) {
                         withAnimation {
@@ -550,20 +524,6 @@ struct DashboardView: View {
                 deleteSelectedItems()
             }
             Button("キャンセル", role: .cancel) {}
-        }
-        .alert("iCloud更新エラー", isPresented: Binding(
-            get: { cloudKitRefreshError != nil },
-            set: { newValue in
-                if !newValue {
-                    cloudKitRefreshError = nil
-                }
-            }
-        )) {
-            Button("OK", role: .cancel) {
-                cloudKitRefreshError = nil
-            }
-        } message: {
-            Text(cloudKitRefreshError ?? "")
         }
     }
     
@@ -717,26 +677,6 @@ struct DashboardView: View {
             try await sharingService.syncFamilyStateFromCloudKit(for: family)
         } catch {
             // 自動同期の失敗はUI操作を妨げない
-        }
-    }
-
-    private func refreshCloudKitNow() {
-        guard let family = currentFamily else { return }
-        guard family.shareState != .localOnly else { return }
-        guard !isRefreshingCloudKit else { return }
-
-        isRefreshingCloudKit = true
-        cloudKitRefreshError = nil
-
-        Task {
-            defer { isRefreshingCloudKit = false }
-
-            do {
-                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
-                try await sharingService.syncFamilyStateFromCloudKit(for: family)
-            } catch {
-                cloudKitRefreshError = error.localizedDescription
-            }
         }
     }
 
