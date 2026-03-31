@@ -1,3 +1,9 @@
+import {
+  DEFAULT_REQUEST_HEADERS,
+  DEFAULT_UPSTREAM_TIMEOUTS_MS,
+  fetchUpstream
+} from "./search.js";
+
 const PRODUCT_SEARCH_URL =
   "https://openapi.rakuten.co.jp/ichibaproduct/api/Product/Search/20250801";
 const ITEM_SEARCH_URL =
@@ -11,8 +17,8 @@ if (!globalThis.__stockpileRateLimitBuckets) {
   globalThis.__stockpileRateLimitBuckets = rateLimitBuckets;
 }
 
-function readEnv(name) {
-  const value = process.env[name];
+function readEnv(name, env = process.env) {
+  const value = env[name];
   if (typeof value !== "string") {
     return "";
   }
@@ -38,9 +44,9 @@ function normalizeKeyword(input) {
   return rawValue.replace(/\s+/g, " ").trim().slice(0, 80);
 }
 
-function rateLimitMaxRequests() {
+function rateLimitMaxRequests(env = process.env) {
   const configuredValue = Number.parseInt(
-    readEnv("RATE_LIMIT_MAX_REQUESTS_PER_MINUTE"),
+    readEnv("RATE_LIMIT_MAX_REQUESTS_PER_MINUTE", env),
     10
   );
   return Number.isFinite(configuredValue) && configuredValue > 0
@@ -77,11 +83,11 @@ function pruneRateLimitBuckets(now) {
   }
 }
 
-function consumeRateLimit(request) {
+function consumeRateLimit(request, env = process.env) {
   const now = Date.now();
   pruneRateLimitBuckets(now);
 
-  const limit = rateLimitMaxRequests();
+  const limit = rateLimitMaxRequests(env);
   const bucketKey = clientAddress(request);
   const bucket = rateLimitBuckets.get(bucketKey) || { timestamps: [] };
   bucket.timestamps = bucket.timestamps.filter(
@@ -191,24 +197,20 @@ function buildKeywordSearchURL(keyword, applicationId, accessKey, affiliateId) {
   return url;
 }
 
-async function fetchJSON(url) {
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "stockpile-rakuten-proxy/1.0"
-    }
+function mergeTimeouts(overrides = {}) {
+  return {
+    ...DEFAULT_UPSTREAM_TIMEOUTS_MS,
+    ...overrides
+  };
+}
+
+async function fetchJSON(url, { apiName, timeoutMs, fetchImpl = fetch }) {
+  return fetchUpstream(url, {
+    apiName,
+    headers: DEFAULT_REQUEST_HEADERS,
+    timeoutMs,
+    fetchImpl
   });
-
-  const text = await response.text();
-  let json = null;
-  if (text) {
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = null;
-    }
-  }
-
-  return { response, json, text };
 }
 
 function firstObject(value) {
@@ -269,7 +271,11 @@ function buildRakutenSearchResultsURL(keyword) {
   return `https://search.rakuten.co.jp/search/mall/${encodeURIComponent(searchKeyword)}/`;
 }
 
-export default async function handler(request, response) {
+export async function handleRakutenRedirect(request, response, dependencies = {}) {
+  const env = dependencies.env ?? process.env;
+  const fetchImpl = dependencies.fetchImpl ?? fetch;
+  const timeouts = mergeTimeouts(dependencies.timeouts);
+
   if (request.method !== "GET") {
     response.setHeader("Allow", "GET");
     return sendJSON(response, 405, {
@@ -277,7 +283,7 @@ export default async function handler(request, response) {
     });
   }
 
-  const rateLimit = consumeRateLimit(request);
+  const rateLimit = consumeRateLimit(request, env);
   setRateLimitHeaders(response, rateLimit);
   if (!rateLimit.allowed) {
     return sendJSON(response, 429, {
@@ -285,9 +291,9 @@ export default async function handler(request, response) {
     });
   }
 
-  const applicationId = readEnv("RAKUTEN_APP_ID");
-  const accessKey = readEnv("RAKUTEN_ACCESS_KEY");
-  const affiliateId = readEnv("RAKUTEN_AFFILIATE_ID");
+  const applicationId = readEnv("RAKUTEN_APP_ID", env);
+  const accessKey = readEnv("RAKUTEN_ACCESS_KEY", env);
+  const affiliateId = readEnv("RAKUTEN_AFFILIATE_ID", env);
 
   if (!applicationId || !accessKey) {
     return sendJSON(response, 500, {
@@ -306,20 +312,30 @@ export default async function handler(request, response) {
 
   try {
     const productResult = await fetchJSON(
-      buildProductSearchURL(janCode, applicationId, accessKey, affiliateId)
+      buildProductSearchURL(janCode, applicationId, accessKey, affiliateId),
+      {
+        apiName: "product",
+        timeoutMs: timeouts.product,
+        fetchImpl
+      }
     );
     const productTarget = readProductAffiliateURL(productResult.json);
-    if (productResult.response.ok && productTarget) {
+    if (productResult.response?.ok && productTarget) {
       response.setHeader("Cache-Control", "no-store");
       response.setHeader("Referrer-Policy", "no-referrer");
       return response.redirect(307, productTarget);
     }
 
     const itemResult = await fetchJSON(
-      buildItemSearchURL(janCode, applicationId, accessKey, affiliateId)
+      buildItemSearchURL(janCode, applicationId, accessKey, affiliateId),
+      {
+        apiName: "item",
+        timeoutMs: timeouts.item,
+        fetchImpl
+      }
     );
     const itemTarget = readItemAffiliateURL(itemResult.json);
-    if (itemResult.response.ok && itemTarget) {
+    if (itemResult.response?.ok && itemTarget) {
       response.setHeader("Cache-Control", "no-store");
       response.setHeader("Referrer-Policy", "no-referrer");
       return response.redirect(307, itemTarget);
@@ -327,10 +343,15 @@ export default async function handler(request, response) {
 
     if (itemName) {
       const keywordResult = await fetchJSON(
-        buildKeywordSearchURL(itemName, applicationId, accessKey, affiliateId)
+        buildKeywordSearchURL(itemName, applicationId, accessKey, affiliateId),
+        {
+          apiName: "keyword",
+          timeoutMs: timeouts.keyword,
+          fetchImpl
+        }
       );
       const keywordTarget = readItemAffiliateURL(keywordResult.json);
-      if (keywordResult.response.ok && keywordTarget) {
+      if (keywordResult.response?.ok && keywordTarget) {
         response.setHeader("Cache-Control", "no-store");
         response.setHeader("Referrer-Policy", "no-referrer");
         return response.redirect(307, keywordTarget);
@@ -349,4 +370,8 @@ export default async function handler(request, response) {
       error: "upstream_error"
     });
   }
+}
+
+export default async function handler(request, response) {
+  return handleRakutenRedirect(request, response);
 }

@@ -4,9 +4,9 @@ const ITEM_SEARCH_URL =
   "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601";
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 30;
-const SEARCH_CACHE_CONTROL =
+export const SEARCH_CACHE_CONTROL =
   "public, max-age=0, s-maxage=86400, stale-while-revalidate=3600";
-const DEFAULT_REQUEST_HEADERS = {
+export const DEFAULT_REQUEST_HEADERS = {
   "User-Agent": "stockpile-rakuten-proxy/1.0"
 };
 export const DEFAULT_UPSTREAM_TIMEOUTS_MS = Object.freeze({
@@ -24,7 +24,7 @@ export function resetRateLimitBuckets() {
   rateLimitBuckets.clear();
 }
 
-function readEnv(name, env = process.env) {
+export function readEnv(name, env = process.env) {
   const value = env[name];
   if (typeof value !== "string") {
     return "";
@@ -33,7 +33,7 @@ function readEnv(name, env = process.env) {
   return value.trim();
 }
 
-function validateJAN(input) {
+export function validateJAN(input) {
   const rawValue = Array.isArray(input) ? input[0] : input;
   const normalized = typeof rawValue === "string" ? rawValue.trim() : "";
   if (/^\d{8}$/.test(normalized) || /^\d{13}$/.test(normalized)) {
@@ -51,7 +51,7 @@ function normalizeKeyword(input) {
   return rawValue.replace(/\s+/g, " ").trim().slice(0, 80);
 }
 
-function trimText(value) {
+export function trimText(value) {
   if (typeof value !== "string") {
     return null;
   }
@@ -117,7 +117,7 @@ function pruneRateLimitBuckets(now) {
   }
 }
 
-function consumeRateLimit(request, env = process.env) {
+export function consumeRateLimit(request, env = process.env) {
   const now = Date.now();
   pruneRateLimitBuckets(now);
 
@@ -152,7 +152,7 @@ function consumeRateLimit(request, env = process.env) {
   };
 }
 
-function setRateLimitHeaders(response, rateLimit) {
+export function setRateLimitHeaders(response, rateLimit) {
   response.setHeader("X-RateLimit-Limit", String(rateLimit.limit));
   response.setHeader("X-RateLimit-Remaining", String(rateLimit.remaining));
 
@@ -273,8 +273,6 @@ function isUpstreamUnavailable(statusCode) {
 }
 
 function logUpstreamResult(result) {
-  const detail =
-    typeof result?.text === "string" ? result.text.trim().slice(0, 200) : "";
   const statusCode = result?.response?.status;
   const shouldError =
     result?.timedOut ||
@@ -286,8 +284,7 @@ function logUpstreamResult(result) {
     api: result?.api,
     status: statusCode,
     timedOut: Boolean(result?.timedOut),
-    elapsedMs: result?.elapsedMs,
-    detail: detail || undefined
+    elapsedMs: result?.elapsedMs
   });
 }
 
@@ -378,14 +375,19 @@ function readItemResult(json, janCode) {
   };
 }
 
-function sendJSON(response, statusCode, body, { cacheControl = "no-store" } = {}) {
+export function sendJSON(
+  response,
+  statusCode,
+  body,
+  { cacheControl = "no-store" } = {}
+) {
   response.status(statusCode).setHeader("Cache-Control", cacheControl);
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.send(JSON.stringify(body));
 }
 
-function classifyUpstreamResult(result) {
+export function classifyUpstreamResult(result) {
   if (result.timedOut) {
     return "unavailable";
   }

@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>Stockpile</string>
+	<key>NSCameraUsageDescription</key>
+	<string>バーコードの読み取りと商品パッケージの文字認識にカメラを使用します。</string>
 	<key>BackendBaseURL</key>
 	<string>https://stockpile-rakuten-proxy.vercel.app</string>
 	<key>CKSharingSupported</key>

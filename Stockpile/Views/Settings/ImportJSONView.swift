@@ -378,6 +378,7 @@ struct ExportJSONView: View {
     @State private var exportDocument: JSONExportDocument?
     @State private var suggestedFileName = "stockpile-export"
     @State private var isExporting = false
+    @State private var showExportConfirmation = false
     @State private var exportResult: ExportResult?
 
     enum ExportResult {
@@ -430,7 +431,7 @@ struct ExportJSONView: View {
                         .font(.subheadline.weight(.medium))
 
                     Button {
-                        prepareExport()
+                        showExportConfirmation = true
                     } label: {
                             Label("バックアップを書き出す", systemImage: "square.and.arrow.up")
                             .font(.headline)
@@ -479,6 +480,16 @@ struct ExportJSONView: View {
                 defaultFilename: suggestedFileName,
                 onCompletion: handleExportResult
             )
+            .alert("平文のバックアップを書き出しますか？", isPresented: $showExportConfirmation) {
+                Button("キャンセル", role: .cancel) {}
+                Button("書き出す") {
+                    prepareExport()
+                }
+            } message: {
+                Text(
+                    "書き出しファイルは暗号化されない JSON です。アイテム名、JAN、期限、収納場所メモが含まれる場合があるため、安全な保存先を選んでください。"
+                )
+            }
         }
     }
 
