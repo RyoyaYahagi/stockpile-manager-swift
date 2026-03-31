@@ -50,14 +50,12 @@ private enum FirstLaunchAction {
 private enum TutorialIllustrationKind {
     case welcome
     case addButton
-    case addForm
-    case expiryOptional
     case notifications
     case familySharing
     case settingsGuide
 }
 
-private let firstLaunchTutorialStepCount = 7
+private let firstLaunchTutorialStepCount = 5
 
 struct ContentView: View {
     private static let isRunningUnderXCTest =
@@ -83,8 +81,6 @@ struct ContentView: View {
     @State private var tutorialStepIndex = 0
     @State private var shouldResumeTutorialAfterAction = false
     @State private var tutorialPendingAction: FirstLaunchAction?
-    @State private var tutorialItemCountBeforeAction: Int?
-    @State private var tutorialDidAddItem = false
     @State private var tutorialHadFamilyBeforeAction = false
     @State private var tutorialDidSetUpFamily = false
     @State private var cloudKitShareSuccessMessage: String?
@@ -92,18 +88,6 @@ struct ContentView: View {
     
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
-    }
-
-    private var tutorialScopedItemCount: Int {
-        guard let family = currentFamily else {
-            return items.filter { $0.family == nil }.count
-        }
-
-        let familyItemsCount = items.filter { $0.family?.id == family.id }.count
-        if familyItemsCount > 0 || family.prefersStrictCloudKitScoping {
-            return familyItemsCount
-        }
-        return items.filter { $0.family == nil }.count
     }
 
     private var notificationRescheduleSignature: String {
@@ -238,7 +222,6 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showFirstLaunchTutorial) {
             FirstLaunchTutorialView(
                 stepIndex: $tutorialStepIndex,
-                didAddItem: tutorialDidAddItem,
                 didSetUpFamily: tutorialDidSetUpFamily,
                 onTryStep: handleFirstLaunchTutorialTryStep,
                 onAdvanceStep: handleFirstLaunchTutorialAdvance,
@@ -294,8 +277,6 @@ struct ContentView: View {
         tutorialStepIndex = min(max(0, index), firstLaunchTutorialStepCount - 1)
         shouldResumeTutorialAfterAction = false
         tutorialPendingAction = nil
-        tutorialItemCountBeforeAction = nil
-        tutorialDidAddItem = false
         tutorialHadFamilyBeforeAction = currentFamily != nil
         tutorialDidSetUpFamily = currentFamily != nil
         showFirstLaunchTutorial = true
@@ -333,11 +314,6 @@ struct ContentView: View {
         tutorialStepIndex = nextStep
         shouldResumeTutorialAfterAction = true
         tutorialPendingAction = action
-        if action == .addItem {
-            tutorialItemCountBeforeAction = tutorialScopedItemCount
-        } else {
-            tutorialItemCountBeforeAction = nil
-        }
         if action == .familySharing {
             tutorialHadFamilyBeforeAction = currentFamily != nil
         }
@@ -390,17 +366,12 @@ struct ContentView: View {
         guard router.path.isEmpty else { return }
         guard router.presentedSheet == nil else { return }
 
-        if tutorialPendingAction == .addItem {
-            let previousCount = tutorialItemCountBeforeAction ?? 0
-            tutorialDidAddItem = tutorialScopedItemCount > previousCount
-        }
         if tutorialPendingAction == .familySharing {
             tutorialDidSetUpFamily = currentFamily != nil || tutorialHadFamilyBeforeAction
         }
 
         shouldResumeTutorialAfterAction = false
         tutorialPendingAction = nil
-        tutorialItemCountBeforeAction = nil
         showFirstLaunchTutorial = true
     }
 
@@ -646,7 +617,6 @@ private struct LanguageOptionCard: View {
 
 private struct FirstLaunchTutorialView: View {
     @Binding var stepIndex: Int
-    let didAddItem: Bool
     let didSetUpFamily: Bool
     let onTryStep: (FirstLaunchAction) -> Void
     let onAdvanceStep: () -> Void
@@ -665,29 +635,11 @@ private struct FirstLaunchTutorialView: View {
             ),
             TutorialStep(
                 title: "まずは右下の + を押します",
-                message: "右下の + を押すと、登録画面が開きます。",
+                message: "登録画面が開いたら、名前を入れて保存するだけで使い始められます。",
                 primaryTitle: "+ボタンを開く",
                 action: .addItem,
                 secondaryTitle: "今は説明だけ見る",
                 illustration: .addButton
-            ),
-            TutorialStep(
-                title: didAddItem ? "登録できました" : "名前だけでも保存できます",
-                message: didAddItem
-                    ? "一覧に1件増えていれば、最初の登録は完了です。"
-                    : "登録画面では、名前を入れて保存すれば使い始められます。",
-                primaryTitle: "次へ進む",
-                action: nil,
-                secondaryTitle: nil,
-                illustration: .addForm
-            ),
-            TutorialStep(
-                title: "期限は分かるときだけで大丈夫です",
-                message: "賞味期限が分からない物は、あとで追加できます。",
-                primaryTitle: "次へ進む",
-                action: nil,
-                secondaryTitle: nil,
-                illustration: .expiryOptional
             ),
             TutorialStep(
                 title: "通知は必要になってから設定できます",
@@ -849,7 +801,7 @@ private struct TutorialLiveIllustrationPreview: View {
             }
 
         case .addButton:
-            preview(offsetY: -455) {
+            preview(offsetY: -388, scale: 0.7) {
                 hostedPreview(container: TutorialPreviewFixtures.dashboardContainer) {
                     NavigationStack {
                         DashboardView()
@@ -865,50 +817,11 @@ private struct TutorialLiveIllustrationPreview: View {
                     Image(systemName: "arrow.down.right")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(.blue)
-                        .padding(.trailing, 20)
-                    TutorialFloatingAddButtonReplica()
+                        .padding(.trailing, 26)
+                    TutorialHighlightCircle(tint: .blue)
+                        .frame(width: 78, height: 78)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            }
-
-        case .addForm:
-            preview(offsetY: -34) {
-                hostedPreview(container: TutorialPreviewFixtures.itemFormFixture.container) {
-                    ItemFormSheet(mode: .add)
-                }
-            } overlay: {
-                ZStack {
-                    TutorialHighlightFrame(tint: .green)
-                        .frame(width: 250, height: 52)
-                        .offset(x: 0, y: -14)
-
-                    TutorialCalloutBadge(
-                        text: "ここに名前を入れる",
-                        symbol: "text.cursor",
-                        tint: .green
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                }
-            }
-
-        case .expiryOptional:
-            preview(offsetY: -188) {
-                hostedPreview(container: TutorialPreviewFixtures.itemFormFixture.container) {
-                    ItemFormSheet(mode: .edit(TutorialPreviewFixtures.itemFormFixture.expiryConfiguredItem))
-                }
-            } overlay: {
-                ZStack {
-                    TutorialHighlightFrame(tint: .orange)
-                        .frame(width: 266, height: 98)
-                        .offset(x: 0, y: 12)
-
-                    TutorialCalloutBadge(
-                        text: "期限はあとで追加できます",
-                        symbol: "clock.badge.plus",
-                        tint: .orange
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                }
             }
 
         case .notifications:
@@ -929,34 +842,46 @@ private struct TutorialLiveIllustrationPreview: View {
 
         case .familySharing:
             if didSetUpFamily {
-                preview(offsetY: -96) {
+                preview(offsetY: -72, scale: 0.72) {
                     hostedPreview(container: TutorialPreviewFixtures.familyFixture.container) {
                         NavigationStack {
                             FamilySettingsView(family: TutorialPreviewFixtures.familyFixture.family)
                         }
                     }
                 } overlay: {
-                    TutorialCalloutBadge(
-                        text: "共有リンクを送れます",
-                        symbol: "paperplane.fill",
-                        tint: .green
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    ZStack {
+                        TutorialHighlightFrame(tint: .green)
+                            .frame(width: 268, height: 86)
+                            .offset(x: 0, y: -8)
+
+                        TutorialCalloutBadge(
+                            text: "共有リンクを送れます",
+                            symbol: "paperplane.fill",
+                            tint: .green
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    }
                 }
             } else {
-                preview(offsetY: -20) {
+                preview(offsetY: -54, scale: 0.72) {
                     hostedPreview(container: TutorialPreviewFixtures.familySetupContainer) {
                         NavigationStack {
                             FamilySetupView()
                         }
                     }
                 } overlay: {
-                    TutorialCalloutBadge(
-                        text: "ここで共有を始めます",
-                        symbol: "person.3.fill",
-                        tint: .green
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    ZStack {
+                        TutorialHighlightFrame(tint: .green)
+                            .frame(width: 248, height: 54)
+                            .offset(x: 0, y: 8)
+
+                        TutorialCalloutBadge(
+                            text: "ここで共有を始めます",
+                            symbol: "person.3.fill",
+                            tint: .green
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    }
                 }
             }
 
@@ -980,18 +905,21 @@ private struct TutorialLiveIllustrationPreview: View {
 
     private func preview<Content: View>(
         offsetY: CGFloat,
+        scale: CGFloat = 0.76,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        TutorialScreenPreview(offsetY: offsetY, content: content)
+        TutorialScreenPreview(offsetY: offsetY, scale: scale, content: content)
     }
 
     private func preview<Content: View, Overlay: View>(
         offsetY: CGFloat,
+        scale: CGFloat = 0.76,
         @ViewBuilder content: () -> Content,
         @ViewBuilder overlay: () -> Overlay
     ) -> some View {
         TutorialScreenPreview(
             offsetY: offsetY,
+            scale: scale,
             content: content,
             overlay: overlay
         )
@@ -1018,16 +946,18 @@ private struct TutorialScreenPreview<Content: View, Overlay: View>: View {
     private let content: Content
     private let overlay: Overlay
     private let offsetY: CGFloat
+    private let previewScale: CGFloat
 
     private let previewSize = CGSize(width: 390, height: 844)
-    private let previewScale: CGFloat = 0.76
 
     init(
         offsetY: CGFloat,
+        scale: CGFloat,
         @ViewBuilder content: () -> Content,
         @ViewBuilder overlay: () -> Overlay = { EmptyView() }
     ) {
         self.offsetY = offsetY
+        self.previewScale = scale
         self.content = content()
         self.overlay = overlay()
     }
@@ -1075,24 +1005,23 @@ private struct TutorialHighlightFrame: View {
     }
 }
 
-private struct TutorialFloatingAddButtonReplica: View {
+private struct TutorialHighlightCircle: View {
+    let tint: Color
+
     var body: some View {
         Circle()
-            .fill(Color.blue)
-            .frame(width: 56, height: 56)
+            .fill(.white.opacity(0.08))
             .overlay {
-                Image(systemName: "plus")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(.white)
+                Circle()
+                    .stroke(tint.opacity(0.9), lineWidth: 4)
             }
-            .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+            .shadow(color: tint.opacity(0.18), radius: 10, x: 0, y: 4)
     }
 }
 
 @MainActor
 private enum TutorialPreviewFixtures {
     static let dashboardContainer = makeDashboardContainer()
-    static let itemFormFixture = makeItemFormFixture()
     static let notificationContainer = makeNotificationContainer()
     static let familySetupContainer = makeFamilySetupContainer()
     static let familyFixture = makeFamilyFixture()
@@ -1116,29 +1045,6 @@ private enum TutorialPreviewFixtures {
         items.forEach { context.insert($0) }
         try? context.save()
         return container
-    }
-
-    private static func makeItemFormFixture() -> TutorialItemFormFixture {
-        let container = makeContainer()
-        let context = container.mainContext
-        let pantry = Bag(name: "キッチン棚")
-        let shelf = Bag(name: "玄関収納")
-        let expiryConfiguredItem = Item(
-            name: "レトルトカレー",
-            quantity: 3,
-            expiryDate: Calendar.current.date(byAdding: .day, value: 30, to: Date()),
-            locationNote: "予備棚"
-        )
-        expiryConfiguredItem.bag = shelf
-
-        context.insert(pantry)
-        context.insert(shelf)
-        context.insert(expiryConfiguredItem)
-        try? context.save()
-        return TutorialItemFormFixture(
-            container: container,
-            expiryConfiguredItem: expiryConfiguredItem
-        )
     }
 
     private static func makeNotificationContainer() -> ModelContainer {
@@ -1231,12 +1137,6 @@ private enum TutorialPreviewFixtures {
         item.family = family
         return item
     }
-}
-
-@MainActor
-private struct TutorialItemFormFixture {
-    let container: ModelContainer
-    let expiryConfiguredItem: Item
 }
 
 @MainActor
