@@ -849,7 +849,7 @@ private struct TutorialLiveIllustrationPreview: View {
             }
 
         case .addButton:
-            preview(offsetY: -430) {
+            preview(offsetY: -455) {
                 hostedPreview(container: TutorialPreviewFixtures.dashboardContainer) {
                     NavigationStack {
                         DashboardView()
@@ -865,37 +865,50 @@ private struct TutorialLiveIllustrationPreview: View {
                     Image(systemName: "arrow.down.right")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(.blue)
-                        .padding(.trailing, 18)
+                        .padding(.trailing, 20)
+                    TutorialFloatingAddButtonReplica()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
 
         case .addForm:
-            preview(offsetY: -18) {
+            preview(offsetY: -34) {
                 hostedPreview(container: TutorialPreviewFixtures.itemFormFixture.container) {
                     ItemFormSheet(mode: .add)
                 }
             } overlay: {
-                TutorialCalloutBadge(
-                    text: "名前を入れて保存",
-                    symbol: "square.and.arrow.down.fill",
-                    tint: .green
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                ZStack {
+                    TutorialHighlightFrame(tint: .green)
+                        .frame(width: 250, height: 52)
+                        .offset(x: 0, y: -14)
+
+                    TutorialCalloutBadge(
+                        text: "ここに名前を入れる",
+                        symbol: "text.cursor",
+                        tint: .green
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                }
             }
 
         case .expiryOptional:
-            preview(offsetY: -128) {
+            preview(offsetY: -188) {
                 hostedPreview(container: TutorialPreviewFixtures.itemFormFixture.container) {
-                    ItemFormSheet(mode: .edit(TutorialPreviewFixtures.itemFormFixture.expiryOptionalItem))
+                    ItemFormSheet(mode: .edit(TutorialPreviewFixtures.itemFormFixture.expiryConfiguredItem))
                 }
             } overlay: {
-                TutorialCalloutBadge(
-                    text: "あとで追加できます",
-                    symbol: "clock.badge.plus",
-                    tint: .orange
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                ZStack {
+                    TutorialHighlightFrame(tint: .orange)
+                        .frame(width: 266, height: 98)
+                        .offset(x: 0, y: 12)
+
+                    TutorialCalloutBadge(
+                        text: "期限はあとで追加できます",
+                        symbol: "clock.badge.plus",
+                        tint: .orange
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                }
             }
 
         case .notifications:
@@ -1048,6 +1061,34 @@ private struct TutorialScreenPreview<Content: View, Overlay: View>: View {
     }
 }
 
+private struct TutorialHighlightFrame: View {
+    let tint: Color
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(.white.opacity(0.08))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(tint.opacity(0.9), lineWidth: 3)
+            }
+            .shadow(color: tint.opacity(0.18), radius: 10, x: 0, y: 4)
+    }
+}
+
+private struct TutorialFloatingAddButtonReplica: View {
+    var body: some View {
+        Circle()
+            .fill(Color.blue)
+            .frame(width: 56, height: 56)
+            .overlay {
+                Image(systemName: "plus")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+    }
+}
+
 @MainActor
 private enum TutorialPreviewFixtures {
     static let dashboardContainer = makeDashboardContainer()
@@ -1082,21 +1123,21 @@ private enum TutorialPreviewFixtures {
         let context = container.mainContext
         let pantry = Bag(name: "キッチン棚")
         let shelf = Bag(name: "玄関収納")
-        let expiryOptionalItem = Item(
-            name: "ラップ",
-            quantity: 2,
-            expiryDate: nil,
+        let expiryConfiguredItem = Item(
+            name: "レトルトカレー",
+            quantity: 3,
+            expiryDate: Calendar.current.date(byAdding: .day, value: 30, to: Date()),
             locationNote: "予備棚"
         )
-        expiryOptionalItem.bag = shelf
+        expiryConfiguredItem.bag = shelf
 
         context.insert(pantry)
         context.insert(shelf)
-        context.insert(expiryOptionalItem)
+        context.insert(expiryConfiguredItem)
         try? context.save()
         return TutorialItemFormFixture(
             container: container,
-            expiryOptionalItem: expiryOptionalItem
+            expiryConfiguredItem: expiryConfiguredItem
         )
     }
 
@@ -1195,7 +1236,7 @@ private enum TutorialPreviewFixtures {
 @MainActor
 private struct TutorialItemFormFixture {
     let container: ModelContainer
-    let expiryOptionalItem: Item
+    let expiryConfiguredItem: Item
 }
 
 @MainActor
