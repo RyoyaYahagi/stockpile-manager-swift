@@ -801,8 +801,8 @@ private struct TutorialLiveIllustrationPreview: View {
             }
 
         case .addButton:
-            preview(offsetY: -388, scale: 0.7) {
-                hostedPreview(container: TutorialPreviewFixtures.dashboardContainer) {
+            preview(offsetY: -430, scale: 0.78) {
+                hostedPreview(container: TutorialPreviewFixtures.emptyDashboardContainer) {
                     NavigationStack {
                         DashboardView()
                     }
@@ -842,7 +842,7 @@ private struct TutorialLiveIllustrationPreview: View {
 
         case .familySharing:
             if didSetUpFamily {
-                preview(offsetY: -72, scale: 0.72) {
+                preview(offsetY: -20, scale: 0.72) {
                     hostedPreview(container: TutorialPreviewFixtures.familyFixture.container) {
                         NavigationStack {
                             FamilySettingsView(family: TutorialPreviewFixtures.familyFixture.family)
@@ -851,8 +851,8 @@ private struct TutorialLiveIllustrationPreview: View {
                 } overlay: {
                     ZStack {
                         TutorialHighlightFrame(tint: .green)
-                            .frame(width: 268, height: 86)
-                            .offset(x: 0, y: -8)
+                            .frame(width: 276, height: 84)
+                            .offset(x: 0, y: -26)
 
                         TutorialCalloutBadge(
                             text: "共有リンクを送れます",
@@ -863,7 +863,7 @@ private struct TutorialLiveIllustrationPreview: View {
                     }
                 }
             } else {
-                preview(offsetY: -54, scale: 0.72) {
+                preview(offsetY: 8, scale: 0.72) {
                     hostedPreview(container: TutorialPreviewFixtures.familySetupContainer) {
                         NavigationStack {
                             FamilySetupView()
@@ -872,8 +872,8 @@ private struct TutorialLiveIllustrationPreview: View {
                 } overlay: {
                     ZStack {
                         TutorialHighlightFrame(tint: .green)
-                            .frame(width: 248, height: 54)
-                            .offset(x: 0, y: 8)
+                            .frame(width: 274, height: 54)
+                            .offset(x: 0, y: -18)
 
                         TutorialCalloutBadge(
                             text: "ここで共有を始めます",
@@ -1022,6 +1022,7 @@ private struct TutorialHighlightCircle: View {
 @MainActor
 private enum TutorialPreviewFixtures {
     static let dashboardContainer = makeDashboardContainer()
+    static let emptyDashboardContainer = makeEmptyDashboardContainer()
     static let notificationContainer = makeNotificationContainer()
     static let familySetupContainer = makeFamilySetupContainer()
     static let familyFixture = makeFamilyFixture()
@@ -1045,6 +1046,10 @@ private enum TutorialPreviewFixtures {
         items.forEach { context.insert($0) }
         try? context.save()
         return container
+    }
+
+    private static func makeEmptyDashboardContainer() -> ModelContainer {
+        makeContainer()
     }
 
     private static func makeNotificationContainer() -> ModelContainer {
