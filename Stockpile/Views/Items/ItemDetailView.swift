@@ -15,7 +15,6 @@ struct ItemDetailView: View {
     
     var body: some View {
         let expiryStatus = item.expiryStatus
-        let purchaseURL = item.janCode.flatMap { APIConfig.rakutenPurchaseURL(for: $0, itemName: item.name) }
         
         List {
             // 期限セクション
@@ -87,20 +86,6 @@ struct ItemDetailView: View {
                 }
             }
 
-            if let purchaseURL {
-                Section {
-                    Link(destination: purchaseURL) {
-                        Label("楽天市場で購入", systemImage: "cart")
-                    }
-
-                    Text("外部サイトへ移動します")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("購入")
-                }
-            }
-            
             // アクション
             Section {
                 Button {

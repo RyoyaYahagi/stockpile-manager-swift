@@ -462,48 +462,57 @@ actor ProductSearchService {
             }
         }
 
-        // 1. Backend経由の楽天検索を最優先
-        if APIConfig.isRakutenBackendConfigured {
-            if let product = resolve(await runSearchAttempt(source: .rakuten) {
-                try await performRakutenBackendSearch(janCode: cleanedCode)
-            }, isCommercialSource: true) {
-                return product
-            }
-        } else {
-            debugLog("[ProductSearch] 楽天Backendは未設定です")
-        }
-
-        // 2. ローカル設定の楽天APIにフォールバック
-        if !APIConfig.isRakutenBackendConfigured && APIConfig.isRakutenConfigured {
-            if let product = resolve(await runSearchAttempt(source: .rakuten) {
-                try await performRakutenProductSearch(janCode: cleanedCode)
-            }, isCommercialSource: true) {
-                return product
-            }
-
-            if let product = resolve(await runSearchAttempt(source: .rakuten) {
-                try await performRakutenKeywordSearch(janCode: cleanedCode)
-            }, isCommercialSource: true) {
-                return product
-            }
-        } else if APIConfig.isRakutenBackendConfigured {
-            debugLog("[ProductSearch] Backend設定があるため direct Rakuten API はスキップします")
-        } else {
-            debugLog("[ProductSearch] 楽天APIは未設定です")
-        }
-
-        // 3. Open Food Facts API（無料・登録不要）
-        if let product = resolve(await runSearchAttempt(source: .openFoodFacts) {
-            try await performOpenFoodFactsSearch(janCode: cleanedCode)
-        }, isCommercialSource: false) {
-            return product
-        }
-
-        // 4. Yahoo APIにフォールバック
+        // 1. Yahooが設定されている場合はYahoo検索を優先
         if APIConfig.isYahooConfigured {
+            debugLog("[ProductSearch] Yahoo検索を優先します")
             if let product = resolve(await runSearchAttempt(source: .yahoo) {
                 try await performYahooSearch(janCode: cleanedCode)
             }, isCommercialSource: true) {
+                return product
+            }
+            
+            // 2. Open Food Facts API（無料・登録不要）
+            if let product = resolve(await runSearchAttempt(source: .openFoodFacts) {
+                try await performOpenFoodFactsSearch(janCode: cleanedCode)
+            }, isCommercialSource: false) {
+                return product
+            }
+        } else {
+            debugLog("[ProductSearch] Yahoo APIは未設定です")
+
+            // 2. 従来どおり楽天検索を優先
+            if APIConfig.isRakutenBackendConfigured {
+                if let product = resolve(await runSearchAttempt(source: .rakuten) {
+                    try await performRakutenBackendSearch(janCode: cleanedCode)
+                }, isCommercialSource: true) {
+                    return product
+                }
+            } else {
+                debugLog("[ProductSearch] 楽天Backendは未設定です")
+            }
+
+            if !APIConfig.isRakutenBackendConfigured && APIConfig.isRakutenConfigured {
+                if let product = resolve(await runSearchAttempt(source: .rakuten) {
+                    try await performRakutenProductSearch(janCode: cleanedCode)
+                }, isCommercialSource: true) {
+                    return product
+                }
+
+                if let product = resolve(await runSearchAttempt(source: .rakuten) {
+                    try await performRakutenKeywordSearch(janCode: cleanedCode)
+                }, isCommercialSource: true) {
+                    return product
+                }
+            } else if APIConfig.isRakutenBackendConfigured {
+                debugLog("[ProductSearch] Backend設定があるため direct Rakuten API はスキップします")
+            } else {
+                debugLog("[ProductSearch] 楽天APIは未設定です")
+            }
+
+            // 3. Open Food Facts API（無料・登録不要）
+            if let product = resolve(await runSearchAttempt(source: .openFoodFacts) {
+                try await performOpenFoodFactsSearch(janCode: cleanedCode)
+            }, isCommercialSource: false) {
                 return product
             }
         }
@@ -927,7 +936,7 @@ actor ProductSearchService {
     // MARK: - Yahoo API
     
     /// Yahoo ショッピング商品検索API V3
-    /// https://developer.yahoo.co.jp/webapi/shopping/shopping/v3/itemsearch.html
+    /// https://developer.yahoo.co.jp/webapi/shopping/v3/itemsearch.html
     private func searchYahoo(janCode: String, timeout: TimeInterval) async throws -> ProductInfo? {
         let clientId = APIConfig.yahooClientId
         
@@ -935,8 +944,9 @@ actor ProductSearchService {
         var components = URLComponents(string: "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch")!
         components.queryItems = [
             URLQueryItem(name: "appid", value: clientId),
-            URLQueryItem(name: "jan", value: janCode),
-            URLQueryItem(name: "results", value: "1")
+            URLQueryItem(name: "jan_code", value: janCode),
+            URLQueryItem(name: "results", value: "1"),
+            URLQueryItem(name: "image_size", value: "300")
         ]
         
         guard let url = components.url else {
@@ -987,24 +997,42 @@ actor ProductSearchService {
             return nil
         }
 
-        guard let itemName = normalizedText(firstHit["name"]) else {
+        func normalizedField(_ value: Any?) -> String? {
+            guard let text = value as? String else { return nil }
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+
+        guard let itemName = normalizedField(firstHit["name"]) else {
             throw SearchAttemptFailure.parse(
                 source: .yahoo,
                 detail: L10n.string("Yahoo検索APIの name を取得できませんでした")
             )
         }
         
-        let description = normalizedText(firstHit["description"])
-        let category = normalizedText((firstHit["genreCategory"] as? [String: Any])?["name"])
-        let imageId = firstHit["imageId"] as? String
-        let imageURL = imageId.flatMap { URL(string: "https://item-shopping.c.yimg.jp/i/n/\($0)") }
+        let descriptionValue = firstHit["description"]
+        let headlineValue = firstHit["headLine"]
+        let genreCategory = firstHit["genreCategory"] as? [String: Any]
+        let exImage = firstHit["exImage"] as? [String: Any]
+        let image = firstHit["image"] as? [String: Any]
+        let returnedJANCode = firstHit["janCode"]
+
+        let description = normalizedField(descriptionValue)
+            ?? normalizedField(headlineValue)
+        let category = normalizedField(genreCategory?["name"])
+        let imageURLString =
+            normalizedField(exImage?["url"])
+            ?? normalizedField(image?["medium"])
+            ?? normalizedField(image?["small"])
+        let imageURL = imageURLString.flatMap { URL(string: $0) }
+        let resolvedJANCode = normalizedField(returnedJANCode) ?? janCode
         
         return ProductInfo(
             name: itemName,
             description: description,
             category: category,
             imageURL: imageURL,
-            janCode: janCode,
+            janCode: resolvedJANCode,
             source: .yahoo
         )
     }
