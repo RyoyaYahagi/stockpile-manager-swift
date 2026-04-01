@@ -862,7 +862,7 @@ private struct TutorialLiveIllustrationPreview: View {
                     }
                 }
             } else {
-                preview(offsetY: -36, scale: 0.62) {
+                preview(offsetY: -8, scale: 0.62) {
                     hostedPreview(container: TutorialPreviewFixtures.familySetupContainer) {
                         NavigationStack {
                             FamilySetupView()
@@ -871,8 +871,8 @@ private struct TutorialLiveIllustrationPreview: View {
                 } overlay: {
                     ZStack {
                         TutorialHighlightFrame(tint: .green)
-                            .frame(width: 204, height: 34)
-                            .offset(x: 0, y: -46)
+                            .frame(width: 236, height: 42)
+                            .offset(x: 0, y: -58)
 
                         TutorialCalloutBadge(
                             text: "ここで共有を始めます",
@@ -885,7 +885,7 @@ private struct TutorialLiveIllustrationPreview: View {
             }
 
         case .settingsGuide:
-            preview(offsetY: -248, scale: 0.72) {
+            preview(offsetY: -166, scale: 0.72) {
                 hostedPreview(container: TutorialPreviewFixtures.settingsContainer) {
                     NavigationStack {
                         SettingsView()
