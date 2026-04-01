@@ -801,25 +801,24 @@ private struct TutorialLiveIllustrationPreview: View {
             }
 
         case .addButton:
-            preview(offsetY: -430, scale: 0.78) {
+            preview(offsetY: -112, scale: 0.48) {
                 hostedPreview(container: TutorialPreviewFixtures.emptyDashboardContainer) {
                     NavigationStack {
                         DashboardView()
                     }
                 }
             } overlay: {
-                VStack(alignment: .trailing, spacing: 8) {
+                ZStack {
+                    TutorialHighlightCircle(tint: .blue)
+                        .frame(width: 74, height: 74)
+                        .offset(x: 18, y: 18)
+
                     TutorialCalloutBadge(
                         text: "ここを押す",
                         symbol: "hand.tap.fill",
                         tint: .blue
                     )
-                    Image(systemName: "arrow.down.right")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.blue)
-                        .padding(.trailing, 26)
-                    TutorialHighlightCircle(tint: .blue)
-                        .frame(width: 78, height: 78)
+                    .offset(x: -32, y: -12)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
@@ -842,7 +841,7 @@ private struct TutorialLiveIllustrationPreview: View {
 
         case .familySharing:
             if didSetUpFamily {
-                preview(offsetY: -20, scale: 0.72) {
+                preview(offsetY: -56, scale: 0.62) {
                     hostedPreview(container: TutorialPreviewFixtures.familyFixture.container) {
                         NavigationStack {
                             FamilySettingsView(family: TutorialPreviewFixtures.familyFixture.family)
@@ -851,8 +850,8 @@ private struct TutorialLiveIllustrationPreview: View {
                 } overlay: {
                     ZStack {
                         TutorialHighlightFrame(tint: .green)
-                            .frame(width: 276, height: 84)
-                            .offset(x: 0, y: -26)
+                            .frame(width: 248, height: 36)
+                            .offset(x: 0, y: -14)
 
                         TutorialCalloutBadge(
                             text: "共有リンクを送れます",
@@ -863,7 +862,7 @@ private struct TutorialLiveIllustrationPreview: View {
                     }
                 }
             } else {
-                preview(offsetY: 8, scale: 0.72) {
+                preview(offsetY: -36, scale: 0.62) {
                     hostedPreview(container: TutorialPreviewFixtures.familySetupContainer) {
                         NavigationStack {
                             FamilySetupView()
@@ -872,8 +871,8 @@ private struct TutorialLiveIllustrationPreview: View {
                 } overlay: {
                     ZStack {
                         TutorialHighlightFrame(tint: .green)
-                            .frame(width: 274, height: 54)
-                            .offset(x: 0, y: -18)
+                            .frame(width: 204, height: 34)
+                            .offset(x: 0, y: -46)
 
                         TutorialCalloutBadge(
                             text: "ここで共有を始めます",
@@ -886,19 +885,25 @@ private struct TutorialLiveIllustrationPreview: View {
             }
 
         case .settingsGuide:
-            preview(offsetY: -230) {
+            preview(offsetY: -248, scale: 0.72) {
                 hostedPreview(container: TutorialPreviewFixtures.settingsContainer) {
                     NavigationStack {
                         SettingsView()
                     }
                 }
             } overlay: {
-                TutorialCalloutBadge(
-                    text: "ここから見直せます",
-                    symbol: "arrow.uturn.backward.circle.fill",
-                    tint: .blue
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                ZStack {
+                    TutorialHighlightFrame(tint: .blue)
+                        .frame(width: 252, height: 44)
+                        .offset(x: 0, y: -4)
+
+                    TutorialCalloutBadge(
+                        text: "ここから見直せます",
+                        symbol: "arrow.uturn.backward.circle.fill",
+                        tint: .blue
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                }
             }
         }
     }
@@ -1072,6 +1077,8 @@ private enum TutorialPreviewFixtures {
         let container = makeContainer()
         let context = container.mainContext
         let family = Family(name: "わが家")
+        family.cloudKitDatabaseScope = .privateDatabase
+        family.cloudKitShareURL = URL(string: "https://icloud.com/share/stockpile-family")
         let pantry = Bag(name: "パントリー")
         pantry.family = family
 
