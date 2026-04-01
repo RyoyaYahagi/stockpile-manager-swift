@@ -872,7 +872,7 @@ private struct TutorialLiveIllustrationPreview: View {
                     ZStack {
                         TutorialHighlightFrame(tint: .green)
                             .frame(width: 236, height: 42)
-                            .offset(x: 0, y: -18)
+                            .offset(x: 0, y: -22)
 
                         TutorialCalloutBadge(
                             text: "ここで共有を始めます",
