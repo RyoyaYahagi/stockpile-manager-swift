@@ -2,6 +2,46 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
+private struct BackupImportPayload: Decodable {
+    let name: String
+    let janCode: String?
+    let quantity: Int?
+    let expiryDate: String?
+    let bagName: String?
+    let locationNote: String?
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        janCode =
+            try container.decodeIfPresent(String.self, forKey: .janCode)
+            ?? container.decodeIfPresent(String.self, forKey: .jan)
+            ?? container.decodeIfPresent(String.self, forKey: .barcode)
+        quantity = try container.decodeIfPresent(Int.self, forKey: .quantity)
+        expiryDate = try container.decodeIfPresent(String.self, forKey: .expiryDate)
+        locationNote = try container.decodeIfPresent(String.self, forKey: .locationNote)
+        bagName =
+            try container.decodeIfPresent(String.self, forKey: .bagName)
+            ?? container.decodeIfPresent(String.self, forKey: .bagname)
+            ?? container.decodeIfPresent(String.self, forKey: .bag_name)
+            ?? container.decodeIfPresent(String.self, forKey: .storageName)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case janCode
+        case jan
+        case barcode
+        case quantity
+        case expiryDate
+        case locationNote
+        case bagName
+        case bagname
+        case bag_name
+        case storageName
+    }
+}
+
 /// バックアップ復元ビュー
 struct ImportJSONView: View {
     @Environment(\.modelContext) private var modelContext
@@ -10,9 +50,11 @@ struct ImportJSONView: View {
     
     @State private var isImporting = false
     @State private var importResult: ImportResult?
+    @State private var pendingImportPayloads: [BackupImportPayload] = []
+    @State private var showSharedRestoreOptions = false
     
     enum ImportResult {
-        case success(count: Int)
+        case success(String)
         case error(String)
     }
 
@@ -87,6 +129,27 @@ struct ImportJSONView: View {
                 allowedContentTypes: [.json],
                 onCompletion: handleFileImport
             )
+            .confirmationDialog(
+                "復元先を選択",
+                isPresented: $showSharedRestoreOptions,
+                titleVisibility: .visible
+            ) {
+                Button("この端末だけに復元（推奨）") {
+                    Task {
+                        await restorePendingPayloadsLocally()
+                    }
+                }
+                Button("iCloud共有データとして復元") {
+                    Task {
+                        await restorePendingPayloadsToCurrentSharedFamily()
+                    }
+                }
+                Button("キャンセル", role: .cancel) {
+                    clearPendingRestoreChoice()
+                }
+            } message: {
+                Text(sharedRestoreDialogMessage)
+            }
         }
     }
     
@@ -107,11 +170,11 @@ struct ImportJSONView: View {
     @ViewBuilder
     private func resultView(_ result: ImportResult) -> some View {
         switch result {
-        case .success(let count):
+        case .success(let message):
             HStack {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                Text(L10n.format("%@件のアイテムを復元しました", String(count)))
+                Text(message)
             }
             .padding()
             .background(Color.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
@@ -138,14 +201,24 @@ struct ImportJSONView: View {
                 defer { url.stopAccessingSecurityScopedResource() }
                 
                 let data = try Data(contentsOf: url)
-                let items = try parseJSON(data)
-                
-                for item in items {
-                    modelContext.insert(item)
+                let payloads = try decodeImportPayloads(from: data)
+
+                if let family = currentFamily, family.isCloudKitSharedFamily {
+                    pendingImportPayloads = payloads
+                    showSharedRestoreOptions = true
+                    return
                 }
-                try modelContext.save()
-                
-                importResult = .success(count: items.count)
+
+                Task {
+                    await restoreImportPayloads(
+                        payloads,
+                        into: currentFamily,
+                        syncToCloudKit: false,
+                        successMessage: { count in
+                            L10n.format("%@件のアイテムを復元しました", String(count))
+                        }
+                    )
+                }
                 
             } catch {
                 importResult = .error(L10n.format("復元に失敗しました: %@", error.localizedDescription))
@@ -156,47 +229,110 @@ struct ImportJSONView: View {
         }
     }
     
-    private func parseJSON(_ data: Data) throws -> [Item] {
-        struct ImportItem: Decodable {
-            let name: String
-            let janCode: String?
-            let quantity: Int?
-            let expiryDate: String?
-            let bagName: String?
-            let locationNote: String?
+    private var sharedRestoreDialogMessage: String {
+        let familyName = currentFamily?.name ?? L10n.string("現在の家族")
+        return L10n.format(
+            "現在は「%@」が iCloud共有中です。%@件の復元データを、この端末だけに戻すか、iCloud共有データとして反映するかを選んでください。",
+            familyName,
+            String(pendingImportPayloads.count)
+        )
+    }
 
-            init(from decoder: Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                name = try container.decode(String.self, forKey: .name)
-                janCode =
-                    try container.decodeIfPresent(String.self, forKey: .janCode)
-                    ?? container.decodeIfPresent(String.self, forKey: .jan)
-                    ?? container.decodeIfPresent(String.self, forKey: .barcode)
-                quantity = try container.decodeIfPresent(Int.self, forKey: .quantity)
-                expiryDate = try container.decodeIfPresent(String.self, forKey: .expiryDate)
-                locationNote = try container.decodeIfPresent(String.self, forKey: .locationNote)
-                bagName =
-                    try container.decodeIfPresent(String.self, forKey: .bagName)
-                    ?? container.decodeIfPresent(String.self, forKey: .bagname)
-                    ?? container.decodeIfPresent(String.self, forKey: .bag_name)
-                    ?? container.decodeIfPresent(String.self, forKey: .storageName)
-            }
+    private func restorePendingPayloadsLocally() async {
+        let payloads = pendingImportPayloads
+        clearPendingRestoreChoice()
 
-            private enum CodingKeys: String, CodingKey {
-                case name
-                case janCode
-                case jan
-                case barcode
-                case quantity
-                case expiryDate
-                case locationNote
-                case bagName
-                case bagname
-                case bag_name
-                case storageName
+        let localFamily = makeLocalRestoreFamily()
+        await restoreImportPayloads(
+            payloads,
+            into: localFamily,
+            syncToCloudKit: false,
+            successMessage: { count in
+                L10n.format(
+                    "%@件のアイテムを「%@」へローカル復元しました",
+                    String(count),
+                    localFamily.name
+                )
             }
+        )
+    }
+
+    private func restorePendingPayloadsToCurrentSharedFamily() async {
+        let payloads = pendingImportPayloads
+        let targetFamily = currentFamily
+        clearPendingRestoreChoice()
+
+        guard let targetFamily else {
+            importResult = .error(L10n.string("復元先の家族を特定できませんでした"))
+            return
         }
-        
+
+        await restoreImportPayloads(
+            payloads,
+            into: targetFamily,
+            syncToCloudKit: true,
+            successMessage: { count in
+                L10n.format(
+                    "%@件のアイテムを復元し、iCloud共有データを更新しました",
+                    String(count)
+                )
+            }
+        )
+    }
+
+    private func clearPendingRestoreChoice() {
+        pendingImportPayloads = []
+        showSharedRestoreOptions = false
+    }
+
+    private func decodeImportPayloads(from data: Data) throws -> [BackupImportPayload] {
+        let decoder = JSONDecoder()
+        return try decoder.decode([BackupImportPayload].self, from: data)
+    }
+
+    private func restoreImportPayloads(
+        _ payloads: [BackupImportPayload],
+        into targetFamily: Family?,
+        syncToCloudKit: Bool,
+        successMessage: (Int) -> String
+    ) async {
+        do {
+            let items = try buildImportItems(from: payloads, targetFamily: targetFamily)
+            for item in items {
+                modelContext.insert(item)
+            }
+            try modelContext.save()
+
+            if syncToCloudKit, let targetFamily {
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                try await sharingService.syncFamilyDataToCloudKit(for: targetFamily)
+            }
+
+            importResult = .success(successMessage(items.count))
+        } catch {
+            importResult = .error(L10n.format("復元に失敗しました: %@", error.localizedDescription))
+        }
+    }
+
+    private func makeLocalRestoreFamily() -> Family {
+        let baseName = currentFamily?.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let familyName: String
+        if let baseName, !baseName.isEmpty {
+            familyName = L10n.format("%@（ローカル復元）", baseName)
+        } else {
+            familyName = L10n.string("ローカル復元データ")
+        }
+
+        let family = Family(name: familyName)
+        family.markAsCurrent()
+        modelContext.insert(family)
+        return family
+    }
+
+    private func buildImportItems(
+        from importItems: [BackupImportPayload],
+        targetFamily: Family?
+    ) throws -> [Item] {
         struct ItemSignature: Hashable {
             let name: String
             let janCode: String?
@@ -205,10 +341,7 @@ struct ImportJSONView: View {
             let locationNote: String?
             let bagName: String?
         }
-        
-        let decoder = JSONDecoder()
-        let importItems = try decoder.decode([ImportItem].self, from: data)
-        
+
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         
@@ -241,8 +374,6 @@ struct ImportJSONView: View {
             )
         }
         
-        let targetFamily = currentFamily
-
         // 既存のBagを取得
         let bagDescriptor = FetchDescriptor<Bag>()
         let existingBags = ((try? modelContext.fetch(bagDescriptor)) ?? []).filter { bag in
@@ -344,7 +475,7 @@ struct ImportJSONView: View {
 
 #Preview {
     ImportJSONView()
-        .modelContainer(for: [Item.self], inMemory: true)
+        .modelContainer(for: [Family.self, Bag.self, Item.self], inMemory: true)
 }
 
 private struct JSONExportDocument: FileDocument {

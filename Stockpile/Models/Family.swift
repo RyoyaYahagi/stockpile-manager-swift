@@ -17,6 +17,7 @@ final class Family {
     var cloudKitShareURLString: String?
     var cloudKitPendingSync: Bool = false
     var cloudKitHasRemoteBaseline: Bool = false
+    var lastSelectedAt: Date?
     var createdAt: Date = Date()
     
     @Relationship(deleteRule: .cascade, inverse: \User.family)
@@ -80,6 +81,10 @@ enum FamilyShareState {
 }
 
 extension Family {
+    func markAsCurrent(at date: Date = Date()) {
+        lastSelectedAt = date
+    }
+
     var hasScopedLocalData: Bool {
         !uniqueMembers.isEmpty || !resolvedBags.isEmpty || !resolvedItems.isEmpty
     }
@@ -182,12 +187,30 @@ enum CurrentFamilyResolver {
     }
 
     private static func compare(_ lhs: Family, _ rhs: Family) -> Bool {
+        if let selectionComparison = compareSelectionPriority(lhs, rhs) {
+            return selectionComparison
+        }
+
         let lhsScore = score(for: lhs)
         let rhsScore = score(for: rhs)
         if lhsScore != rhsScore {
             return lhsScore < rhsScore
         }
         return lhs.createdAt < rhs.createdAt
+    }
+
+    private static func compareSelectionPriority(_ lhs: Family, _ rhs: Family) -> Bool? {
+        switch (lhs.lastSelectedAt, rhs.lastSelectedAt) {
+        case let (lhsDate?, rhsDate?):
+            guard lhsDate != rhsDate else { return nil }
+            return lhsDate < rhsDate
+        case (_?, nil):
+            return false
+        case (nil, _?):
+            return true
+        case (nil, nil):
+            return nil
+        }
     }
 
     private static func score(for family: Family) -> Int {

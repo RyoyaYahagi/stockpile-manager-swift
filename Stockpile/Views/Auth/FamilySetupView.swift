@@ -85,6 +85,7 @@ struct FamilySetupView: View {
         guard !trimmedName.isEmpty else { return }
 
         let family = Family(name: trimmedName)
+        family.markAsCurrent()
         modelContext.insert(family)
         
         do {

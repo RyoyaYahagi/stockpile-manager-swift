@@ -202,6 +202,21 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertEqual(CurrentFamilyResolver.currentFamily(from: [sharedFamily, localFamily])?.id, localFamily.id)
     }
 
+    func testCurrentFamilyResolverPrefersMostRecentlySelectedFamily() {
+        let sharedFamily = Family(name: "共有家族")
+        sharedFamily.cloudKitDatabaseScope = .sharedDatabase
+        sharedFamily.cloudKitShareURL = URL(string: "https://example.com/share")
+        sharedFamily.cloudKitHasRemoteBaseline = true
+        sharedFamily.lastSelectedAt = Date(timeIntervalSince1970: 10)
+
+        let localFamily = Family(name: "ローカル復元")
+        let item = Item(name: "保存水", quantity: 6)
+        item.family = localFamily
+        localFamily.lastSelectedAt = Date(timeIntervalSince1970: 20)
+
+        XCTAssertEqual(CurrentFamilyResolver.currentFamily(from: [sharedFamily, localFamily])?.id, localFamily.id)
+    }
+
     private static func makeFamilyRecord(id: UUID, name: String, zoneID: CKRecordZone.ID) -> CKRecord {
         let record = CKRecord(
             recordType: "Family",
