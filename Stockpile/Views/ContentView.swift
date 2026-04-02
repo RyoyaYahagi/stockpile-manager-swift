@@ -65,6 +65,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Environment(LocalizationController.self) private var localizationController
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
     @Query private var items: [Item]
     @Query(sort: \NotificationSettings.createdAt, order: .forward)
     private var notificationSettingsList: [NotificationSettings]
@@ -138,6 +139,7 @@ struct ContentView: View {
         .id(refreshToken)
         .localizedRefresh()
         .environment(router)
+        .premiumPaywallSheet()
         .sheet(item: $router.presentedSheet) { sheet in
             sheetContent(for: sheet)
                 .environment(router)
@@ -173,9 +175,11 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, newValue in
             guard newValue == .active else { return }
             LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
+            premiumAccessManager.refreshUsageState()
             requestRescheduleForCurrentData()
             resumeTutorialIfNeeded()
             Task {
+                await premiumAccessManager.refresh()
                 await refreshCloudKitSharedFamilies()
             }
             presentPendingFirstLaunchFlowIfNeeded()
@@ -388,7 +392,7 @@ struct ContentView: View {
             return existing
         }
 
-        let created = NotificationSettings.createDefault()
+        let created = NotificationSettings.createDefault(isPremium: premiumAccessManager.hasPremiumAccess)
         modelContext.insert(created)
         do {
             try modelContext.save()
@@ -916,6 +920,7 @@ private struct TutorialLiveIllustrationPreview: View {
         return content()
             .environment(Router())
             .environment(localizationController)
+            .environment(PremiumAccessManager.shared)
             .environment(\.locale, localizationController.locale)
             .modelContainer(container)
             .scrollDisabled(true)
@@ -1161,4 +1166,5 @@ private struct TutorialCalloutBadge: View {
 #Preview {
     ContentView()
         .modelContainer(for: [Family.self, User.self, Bag.self, Item.self, NotificationSettings.self], inMemory: true)
+        .environment(PremiumAccessManager.shared)
 }

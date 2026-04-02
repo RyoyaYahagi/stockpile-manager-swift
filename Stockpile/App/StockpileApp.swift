@@ -48,6 +48,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
 struct StockpileApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var localizationController = LocalizationController()
+    @State private var premiumAccessManager = PremiumAccessManager.shared
     
     private let sharedModelContainer: ModelContainer = {
         prepareProtectedApplicationSupportDirectory()
@@ -72,6 +73,7 @@ struct StockpileApp: App {
         WindowGroup {
             ContentView()
                 .environment(localizationController)
+                .environment(premiumAccessManager)
                 .environment(\.locale, localizationController.locale)
         }
         .modelContainer(sharedModelContainer)

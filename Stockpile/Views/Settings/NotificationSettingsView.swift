@@ -5,6 +5,7 @@ import UserNotifications
 /// 通知設定画面
 struct NotificationSettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
     @StateObject private var notificationManager = NotificationManager.shared
     @Query private var items: [Item]
     @State private var settings: NotificationSettings?
@@ -14,8 +15,16 @@ struct NotificationSettingsView: View {
     @FocusState private var focusedTimingIndex: Int?
 
     private var notificationTimingSectionFooter: String {
-        L10n.format(
-            "通知タイミングは日・週・月単位で設定できます。最大%@件まで追加でき、0日は当日通知です。",
+        if premiumAccessManager.hasPremiumAccess {
+            return L10n.format(
+                "通知タイミングは日・週・月単位で設定できます。最大%@件まで追加でき、0日は当日通知です。",
+                String(NotificationSettings.maximumTimingRules)
+            )
+        }
+
+        return L10n.format(
+            "無料版では通知タイミングは%@件までです。有料版では最大%@件まで追加できます。0日は当日通知です。",
+            String(NotificationSettings.freeTimingRulesLimit),
             String(NotificationSettings.maximumTimingRules)
         )
     }
@@ -99,11 +108,9 @@ struct NotificationSettingsView: View {
                     }
 
                     Button("通知タイミングを追加") {
-                        settings.addNotificationTimingRule()
-                        focusedTimingIndex = nil
-                        persistSettingsAndReschedule(settings)
+                        addNotificationTimingRule(for: settings)
                     }
-                    .disabled(!settings.isEnabled || settings.notificationTimingRules.count >= NotificationSettings.maximumTimingRules)
+                    .disabled(!settings.isEnabled || reachedNotificationTimingMaximum(for: settings))
                 } header: {
                     Text(notificationTimingSectionTitle(for: settings))
                 } footer: {
@@ -259,7 +266,7 @@ struct NotificationSettingsView: View {
             return
         }
         
-        let newSettings = NotificationSettings.createDefault()
+        let newSettings = NotificationSettings.createDefault(isPremium: premiumAccessManager.hasPremiumAccess)
         modelContext.insert(newSettings)
         try? modelContext.save()
         settings = newSettings
@@ -270,8 +277,44 @@ struct NotificationSettingsView: View {
         L10n.format(
             "通知タイミング（%@/%@）",
             String(settings.notificationTimingRules.count),
-            String(NotificationSettings.maximumTimingRules)
+            String(allowedTimingRuleCount(for: settings))
         )
+    }
+
+    private func allowedTimingRuleCount(for settings: NotificationSettings) -> Int {
+        if premiumAccessManager.hasPremiumAccess {
+            return NotificationSettings.maximumTimingRules
+        }
+        return max(NotificationSettings.freeTimingRulesLimit, settings.notificationTimingRules.count)
+    }
+
+    private func canAddNotificationTiming(for settings: NotificationSettings) -> Bool {
+        if premiumAccessManager.hasPremiumAccess {
+            return settings.notificationTimingRules.count < NotificationSettings.maximumTimingRules
+        }
+        return premiumAccessManager.canAddNotificationTiming(currentCount: settings.notificationTimingRules.count)
+    }
+
+    private func reachedNotificationTimingMaximum(for settings: NotificationSettings) -> Bool {
+        premiumAccessManager.hasPremiumAccess
+            && settings.notificationTimingRules.count >= NotificationSettings.maximumTimingRules
+    }
+
+    private func addNotificationTimingRule(for settings: NotificationSettings) {
+        guard settings.isEnabled else { return }
+
+        if canAddNotificationTiming(for: settings) {
+            settings.addNotificationTimingRule(maximumCount: allowedTimingRuleCount(for: settings))
+            focusedTimingIndex = nil
+            persistSettingsAndReschedule(settings)
+            return
+        }
+
+        premiumAccessManager.presentPaywall(for: .notificationTimingLimit) {
+            settings.addNotificationTimingRule(maximumCount: self.allowedTimingRuleCount(for: settings))
+            self.focusedTimingIndex = nil
+            self.persistSettingsAndReschedule(settings)
+        }
     }
     
     private func timeFromComponents(using settings: NotificationSettings) -> Date {
@@ -430,5 +473,6 @@ struct NotificationSettingsView: View {
     NavigationStack {
         NotificationSettingsView()
     }
+    .environment(PremiumAccessManager.shared)
     .modelContainer(for: [NotificationSettings.self, Item.self], inMemory: true)
 }

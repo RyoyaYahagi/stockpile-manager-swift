@@ -17,6 +17,7 @@ struct ItemFormSheet: View {
     
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
     
     let mode: Mode
     
@@ -85,6 +86,12 @@ struct ItemFormSheet: View {
                         } label: {
                             Label("バーコードで登録", systemImage: "barcode.viewfinder")
                         }
+
+                        if let barcodeQuotaText {
+                            Text(barcodeQuotaText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     
                     HStack {
@@ -142,9 +149,15 @@ struct ItemFormSheet: View {
                         )
                         
                         Button {
-                            showOCRCamera = true
+                            openOCRCamera()
                         } label: {
                             Label("カメラで読み取り", systemImage: "camera")
+                        }
+
+                        if let ocrQuotaText {
+                            Text(ocrQuotaText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 } header: {
@@ -199,6 +212,7 @@ struct ItemFormSheet: View {
                 }
             }
         }
+        .premiumPaywallSheet()
     }
     
     private func save() {
@@ -267,10 +281,32 @@ struct ItemFormSheet: View {
         
         dismiss()
     }
+
+    private var ocrQuotaText: String? {
+        guard let remaining = premiumAccessManager.remainingOCRQuota else { return nil }
+        return L10n.format("無料版はあと%@回OCRを使えます。", String(remaining))
+    }
+
+    private var barcodeQuotaText: String? {
+        guard let remaining = premiumAccessManager.remainingBarcodeQuota else { return nil }
+        return L10n.format("無料版はあと%@回バーコード検索できます。", String(remaining))
+    }
+
+    private func openOCRCamera() {
+        if premiumAccessManager.canUseOCR() {
+            showOCRCamera = true
+            return
+        }
+
+        premiumAccessManager.presentPaywall(for: .ocrQuota) {
+            self.showOCRCamera = true
+        }
+    }
 }
 
 #Preview("Add") {
     ItemFormSheet(mode: .add)
         .environment(Router())
+        .environment(PremiumAccessManager.shared)
         .modelContainer(for: [Family.self, Item.self, Bag.self, NotificationSettings.self], inMemory: true)
 }

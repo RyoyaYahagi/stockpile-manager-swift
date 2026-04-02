@@ -175,7 +175,9 @@ final class NotificationManager: ObservableObject {
                 try? modelContext.save()
             }
         } else {
-            let created = NotificationSettings.createDefault()
+            let created = NotificationSettings.createDefault(
+                isPremium: PremiumAccessManager.shared.hasPremiumAccess
+            )
             modelContext.insert(created)
             try? modelContext.save()
             settings = created

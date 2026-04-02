@@ -89,17 +89,21 @@ struct NotificationTimingRule: Hashable, Identifiable {
 @Model
 final class NotificationSettings {
     static let maximumTimingRules = 5
+    static let freeTimingRulesLimit = 1
 
-    private static let defaultTimingRules = [
+    private static let defaultFreeTimingRules = [
         NotificationTimingRule(amount: 0, unit: .day),
-        NotificationTimingRule(amount: 3, unit: .day),
-        NotificationTimingRule(amount: 1, unit: .week)
+    ]
+    private static let defaultPremiumTimingRules = [
+        NotificationTimingRule(amount: 0, unit: .day),
+        NotificationTimingRule(amount: 1, unit: .week),
+        NotificationTimingRule(amount: 1, unit: .month)
     ]
     private static let addPresetTimingRules = [
         NotificationTimingRule(amount: 0, unit: .day),
-        NotificationTimingRule(amount: 3, unit: .day),
         NotificationTimingRule(amount: 1, unit: .week),
         NotificationTimingRule(amount: 1, unit: .month),
+        NotificationTimingRule(amount: 3, unit: .day),
         NotificationTimingRule(amount: 3, unit: .month)
     ]
 
@@ -206,9 +210,10 @@ final class NotificationSettings {
         return true
     }
 
-    func addNotificationTimingRule() {
+    func addNotificationTimingRule(maximumCount: Int? = nil) {
+        let allowedCount = maximumCount ?? Self.maximumTimingRules
         let current = Self.normalizeTimingRules(notificationTimingRules)
-        guard current.count < Self.maximumTimingRules else { return }
+        guard current.count < allowedCount else { return }
         let used = Set(current)
 
         if let suggested = Self.addPresetTimingRules.first(where: { !used.contains($0) }) {
@@ -248,9 +253,9 @@ final class NotificationSettings {
     }
     
     /// デフォルト設定を作成
-    static func createDefault() -> NotificationSettings {
+    static func createDefault(isPremium: Bool = false) -> NotificationSettings {
         let settings = NotificationSettings()
-        settings.notificationTimingRules = defaultTimingRules
+        settings.notificationTimingRules = isPremium ? defaultPremiumTimingRules : defaultFreeTimingRules
         return settings
     }
 

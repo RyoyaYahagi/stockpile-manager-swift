@@ -39,8 +39,11 @@
 		036 /* LanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136 /* LanguageSettingsView.swift */; };
 		037 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 137 /* Localizable.strings */; };
 		038 /* CloudKitDeletionMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146 /* CloudKitDeletionMarker.swift */; };
+		039 /* PremiumAccessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 147 /* PremiumAccessManager.swift */; };
+		040 /* PremiumPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 148 /* PremiumPlanView.swift */; };
 		A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000002 /* ProductSearchServiceTests.swift */; };
 		A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */; };
+		A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000004 /* PremiumAccessManagerTests.swift */; };
 		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -96,9 +99,13 @@
 		144 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
 		145 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		146 /* CloudKitDeletionMarker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitDeletionMarker.swift; sourceTree = "<group>"; };
+		147 /* PremiumAccessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumAccessManager.swift; sourceTree = "<group>"; };
+		148 /* PremiumPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumPlanView.swift; sourceTree = "<group>"; };
+		149 /* StockpilePremium.storekit */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = StockpilePremium.storekit; sourceTree = "<group>"; };
 		A4B100000000000000000001 /* StockpileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StockpileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A4B100000000000000000002 /* ProductSearchServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchServiceTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitFamilySharingServiceTests.swift; sourceTree = "<group>"; };
+		A4B100000000000000000004 /* PremiumAccessManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumAccessManagerTests.swift; sourceTree = "<group>"; };
 		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockpileRelease.entitlements; sourceTree = "<group>"; };
 		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -162,6 +169,7 @@
 		A4B100000000000000000301 /* StockpileTests */ = {
 			isa = PBXGroup;
 			children = (
+				A4B100000000000000000004 /* PremiumAccessManagerTests.swift */,
 				A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */,
 				A4B100000000000000000002 /* ProductSearchServiceTests.swift */,
 			);
@@ -246,6 +254,7 @@
 				132 /* FamilySettingsView.swift */,
 				118 /* ImportJSONView.swift */,
 				125 /* NotificationSettingsView.swift */,
+				148 /* PremiumPlanView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -275,6 +284,7 @@
 				124 /* NotificationManager.swift */,
 				127 /* ProductSearchService.swift */,
 				131 /* FamilySharingService.swift */,
+				147 /* PremiumAccessManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -283,6 +293,7 @@
 			isa = PBXGroup;
 			children = (
 				128 /* APIConfig.swift */,
+				149 /* StockpilePremium.storekit */,
 			);
 			path = Config;
 			sourceTree = "<group>";
@@ -440,6 +451,8 @@
 				035 /* AppLocalization.swift in Sources */,
 				036 /* LanguageSettingsView.swift in Sources */,
 				038 /* CloudKitDeletionMarker.swift in Sources */,
+				039 /* PremiumAccessManager.swift in Sources */,
+				040 /* PremiumPlanView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -447,6 +460,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */,
 				A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */,
 				A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */,
 			);

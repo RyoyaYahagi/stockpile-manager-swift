@@ -5,6 +5,7 @@ import SwiftData
 struct BagListView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
     
     @Query private var bags: [Bag]
     @Query private var items: [Item]
@@ -61,7 +62,7 @@ struct BagListView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showAddSheet = true
+                    presentAddBagFlow()
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -179,6 +180,17 @@ struct BagListView: View {
             }
         }
     }
+
+    private func presentAddBagFlow() {
+        if premiumAccessManager.canAddBag(currentCount: scopedBags.count) {
+            showAddSheet = true
+            return
+        }
+
+        premiumAccessManager.presentPaywall(for: .bagLimit) {
+            self.showAddSheet = true
+        }
+    }
 }
 
 struct BagRow: View {
@@ -207,6 +219,8 @@ struct BagRow: View {
 struct BagFormSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
+    @Query private var bags: [Bag]
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var name = ""
@@ -214,6 +228,21 @@ struct BagFormSheet: View {
     
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var currentFamily: Family? {
+        CurrentFamilyResolver.currentFamily(from: families)
+    }
+
+    private var scopedBags: [Bag] {
+        guard let family = currentFamily else {
+            return bags.filter { $0.family == nil }
+        }
+        let familyBags = bags.filter { $0.family?.id == family.id }
+        if !familyBags.isEmpty || family.prefersStrictCloudKitScoping {
+            return familyBags
+        }
+        return bags.filter { $0.family == nil }
     }
     
     var body: some View {
@@ -251,6 +280,7 @@ struct BagFormSheet: View {
                 }
             }
         }
+        .premiumPaywallSheet()
         .presentationDetents([.medium])
     }
 
@@ -260,10 +290,17 @@ struct BagFormSheet: View {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
 
+        guard premiumAccessManager.canAddBag(currentCount: scopedBags.count) else {
+            premiumAccessManager.presentPaywall(for: .bagLimit) {
+                self.addBag()
+            }
+            return
+        }
+
         isSaving = true
 
         let bag = Bag(name: trimmedName)
-        let family = CurrentFamilyResolver.currentFamily(from: families)
+        let family = currentFamily
         bag.family = family
         modelContext.insert(bag)
 
@@ -340,5 +377,6 @@ struct BagUndoSnackbar: View {
         BagListView()
     }
     .environment(Router())
+    .environment(PremiumAccessManager.shared)
     .modelContainer(for: [Family.self, Bag.self, Item.self], inMemory: true)
 }

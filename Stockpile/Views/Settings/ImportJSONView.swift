@@ -46,6 +46,7 @@ private struct BackupImportPayload: Decodable {
 struct ImportJSONView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var isImporting = false
@@ -139,6 +140,7 @@ struct ImportJSONView: View {
                     .presentationCornerRadius(28)
             }
         }
+        .premiumPaywallSheet()
     }
     
     private var formatExample: String {
@@ -286,6 +288,24 @@ struct ImportJSONView: View {
         let payloads = pendingImportPayloads
         clearPendingRestoreChoice()
 
+        guard projectedBagCount(
+            for: payloads,
+            targetFamily: nil,
+            includeExistingData: false
+        ) <= PremiumAccessManager.freeBagLimit
+            || premiumAccessManager.hasPremiumAccess else {
+            premiumAccessManager.presentPaywall(for: .bagLimit) {
+                Task {
+                    await self.restorePendingPayloadsLocally(with: payloads)
+                }
+            }
+            return
+        }
+
+        await restorePendingPayloadsLocally(with: payloads)
+    }
+
+    private func restorePendingPayloadsLocally(with payloads: [BackupImportPayload]) async {
         let localFamily = makeLocalRestoreFamily()
         await restoreImportPayloads(
             payloads,
@@ -338,8 +358,25 @@ struct ImportJSONView: View {
         _ payloads: [BackupImportPayload],
         into targetFamily: Family?,
         syncToCloudKit: Bool,
-        successMessage: (Int) -> String
+        successMessage: @escaping (Int) -> String
     ) async {
+        let projectedBagTotal = projectedBagCount(for: payloads, targetFamily: targetFamily)
+
+        guard premiumAccessManager.hasPremiumAccess
+            || projectedBagTotal <= PremiumAccessManager.freeBagLimit else {
+            premiumAccessManager.presentPaywall(for: .bagLimit) {
+                Task {
+                    await self.restoreImportPayloads(
+                        payloads,
+                        into: targetFamily,
+                        syncToCloudKit: syncToCloudKit,
+                        successMessage: successMessage
+                    )
+                }
+            }
+            return
+        }
+
         do {
             let items = try buildImportItems(from: payloads, targetFamily: targetFamily)
             for item in items {
@@ -359,18 +396,127 @@ struct ImportJSONView: View {
     }
 
     private func makeLocalRestoreFamily() -> Family {
-        let baseName = currentFamily?.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let familyName: String
-        if let baseName, !baseName.isEmpty {
-            familyName = L10n.format("%@（ローカル復元）", baseName)
-        } else {
-            familyName = L10n.string("ローカル復元データ")
-        }
-
+        let familyName = localRestoreFamilyName()
         let family = Family(name: familyName)
         family.markAsCurrent()
         modelContext.insert(family)
         return family
+    }
+
+    private func localRestoreFamilyName() -> String {
+        let baseName = currentFamily?.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let baseName, !baseName.isEmpty {
+            return L10n.format("%@（ローカル復元）", baseName)
+        }
+        return L10n.string("ローカル復元データ")
+    }
+
+    private func projectedBagCount(
+        for payloads: [BackupImportPayload],
+        targetFamily: Family?,
+        includeExistingData: Bool = true
+    ) -> Int {
+        struct ItemSignature: Hashable {
+            let name: String
+            let janCode: String?
+            let quantity: Int
+            let expiryDate: String?
+            let locationNote: String?
+            let bagName: String?
+        }
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+
+        func signature(
+            name: String,
+            janCode: String?,
+            quantity: Int,
+            expiryDate: Date?,
+            locationNote: String?,
+            bagName: String?
+        ) -> ItemSignature {
+            ItemSignature(
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                janCode: normalized(janCode),
+                quantity: quantity,
+                expiryDate: expiryDate.map { dateFormatter.string(from: $0) },
+                locationNote: normalized(locationNote),
+                bagName: normalized(bagName)
+            )
+        }
+
+        let existingBags: [Bag]
+        let existingItems: [Item]
+        if includeExistingData {
+            let bagDescriptor = FetchDescriptor<Bag>()
+            existingBags = ((try? modelContext.fetch(bagDescriptor)) ?? []).filter { bag in
+                guard let targetFamily else {
+                    return bag.family == nil
+                }
+                return bag.family?.id == targetFamily.id
+            }
+
+            let itemDescriptor = FetchDescriptor<Item>()
+            existingItems = ((try? modelContext.fetch(itemDescriptor)) ?? []).filter { item in
+                guard let targetFamily else {
+                    return item.family == nil
+                }
+                return item.family?.id == targetFamily.id
+            }
+        } else {
+            existingBags = []
+            existingItems = []
+        }
+
+        var allBagKeys = Set(existingBags.compactMap { bag in
+            bagLookupKey(bag.name)
+        })
+        var existingSignatures = Set(existingItems.map { item in
+            signature(
+                name: item.name,
+                janCode: item.janCode,
+                quantity: item.quantity,
+                expiryDate: item.expiryDate,
+                locationNote: item.locationNote,
+                bagName: item.bag?.name
+            )
+        })
+
+        for payload in payloads {
+            let expiryDate = payload.expiryDate.flatMap { dateFormatter.date(from: $0) }
+            let quantity = payload.quantity ?? 1
+            let itemSignature = signature(
+                name: payload.name,
+                janCode: payload.janCode,
+                quantity: quantity,
+                expiryDate: expiryDate,
+                locationNote: payload.locationNote,
+                bagName: payload.bagName
+            )
+
+            guard !existingSignatures.contains(itemSignature) else { continue }
+            existingSignatures.insert(itemSignature)
+
+            if let key = bagLookupKey(payload.bagName) {
+                allBagKeys.insert(key)
+            }
+        }
+        return allBagKeys.count
+    }
+
+    private func normalized(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func bagLookupKey(_ value: String?) -> String? {
+        guard let normalized = normalized(value) else { return nil }
+        return normalized.folding(
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+            locale: .current
+        )
     }
 
     private func buildImportItems(
@@ -388,17 +534,6 @@ struct ImportJSONView: View {
 
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
-        
-        func normalized(_ value: String?) -> String? {
-            guard let value else { return nil }
-            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : trimmed
-        }
-
-        func bagLookupKey(_ value: String?) -> String? {
-            guard let normalized = normalized(value) else { return nil }
-            return normalized.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
-        }
         
         func signature(
             name: String,
@@ -563,6 +698,7 @@ struct ImportJSONView: View {
 
 #Preview {
     ImportJSONView()
+        .environment(PremiumAccessManager.shared)
         .modelContainer(for: [Family.self, Bag.self, Item.self], inMemory: true)
 }
 

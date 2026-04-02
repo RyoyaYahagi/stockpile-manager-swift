@@ -5,6 +5,7 @@ import AudioToolbox
 /// バーコード（JAN）スキャナービュー
 struct BarcodeScannerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
     @State private var scannedCode: String?
     @State private var searchState: SearchState = .idle
     @State private var productInfo: ProductInfo?
@@ -76,12 +77,19 @@ struct BarcodeScannerView: View {
                         }
                         
                         // 手動入力ボタン
-                        Button {
-                            showManualEntry = true
-                        } label: {
-                            Label("手動でJANコードを入力", systemImage: "keyboard")
-                                .font(.footnote)
-                                .foregroundStyle(.white.opacity(0.8))
+                        VStack(spacing: 8) {
+                            Button {
+                                showManualEntry = true
+                            } label: {
+                                Label("手動でJANコードを入力", systemImage: "keyboard")
+                                    .font(.footnote)
+                                    .foregroundStyle(.white.opacity(0.8))
+                            }
+                            if let quotaText = barcodeQuotaText {
+                                Text(quotaText)
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.8))
+                            }
                         }
                         .padding(.bottom, 40)
                     }
@@ -140,6 +148,7 @@ struct BarcodeScannerView: View {
                 }
             }
         }
+        .premiumPaywallSheet()
     }
     
     // MARK: - 検索結果カード
@@ -283,18 +292,37 @@ struct BarcodeScannerView: View {
     }
     
     private func searchProduct(janCode: String) async {
+        let trimmedCode = janCode.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard premiumAccessManager.canUseBarcodeSearch() else {
+            searchState = .error(L10n.string("今日のバーコード検索無料枠を使い切りました。"))
+            premiumAccessManager.presentPaywall(for: .barcodeQuota) {
+                Task {
+                    await self.searchProduct(janCode: trimmedCode)
+                }
+            }
+            return
+        }
+
         productInfo = nil
         searchState = .searching
         
         do {
-            let product = try await ProductSearchService.shared.search(janCode: janCode)
+            let product = try await ProductSearchService.shared.search(janCode: trimmedCode)
             productInfo = product
             searchState = .found
+            _ = premiumAccessManager.recordBarcodeUsageIfNeeded()
         } catch ProductSearchError.notFound {
             searchState = .notFound
+            _ = premiumAccessManager.recordBarcodeUsageIfNeeded()
         } catch {
             searchState = .error(userFacingMessage(for: error))
         }
+    }
+
+    private var barcodeQuotaText: String? {
+        guard let remaining = premiumAccessManager.remainingBarcodeQuota else { return nil }
+        return L10n.format("無料版はあと%@回バーコード検索できます。", String(remaining))
     }
 
     private func userFacingMessage(for error: Error) -> String {
@@ -470,6 +498,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
 
 struct ManualJANEntryView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
     @Binding var code: String
     let onSubmit: (String) -> Void
     
@@ -487,7 +516,7 @@ struct ManualJANEntryView: View {
                 } header: {
                     Text("JANコード")
                 } footer: {
-                    Text("商品パッケージのバーコード下に記載されている数字を入力してください")
+                    Text(manualEntryFooterText)
                 }
             }
             .navigationTitle("JANコード入力")
@@ -510,9 +539,21 @@ struct ManualJANEntryView: View {
         }
         .presentationDetents([.medium])
     }
+
+    private var manualEntryFooterText: String {
+        guard let remaining = premiumAccessManager.remainingBarcodeQuota else {
+            return L10n.string("商品パッケージのバーコード下に記載されている数字を入力してください")
+        }
+
+        return L10n.format(
+            "商品パッケージのバーコード下に記載されている数字を入力してください\n無料版はあと%@回バーコード検索できます。",
+            String(remaining)
+        )
+    }
 }
 
 #Preview {
     BarcodeScannerView { _ in
     }
+    .environment(PremiumAccessManager.shared)
 }

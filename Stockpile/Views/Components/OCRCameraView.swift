@@ -8,6 +8,7 @@ import CoreImage.CIFilterBuiltins
 /// OCRカメラビュー（賞味期限読み取り）
 struct OCRCameraView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
     let onDateDetected: (Date?) -> Void
     
     @State private var viewModel = OCRCameraViewModel()
@@ -21,7 +22,7 @@ struct OCRCameraView: View {
             ZStack {
                 if isCameraAvailable {
                     CameraView(onImageCaptured: { image in
-                        viewModel.processImage(image)
+                        processCapturedImage(image)
                     })
                     .ignoresSafeArea()
                 } else {
@@ -42,6 +43,15 @@ struct OCRCameraView: View {
                 
                 if isCameraAvailable {
                     VStack {
+                        if let quotaText = ocrQuotaText {
+                            Text(quotaText)
+                                .font(.caption)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(.regularMaterial, in: Capsule())
+                                .padding(.top, 16)
+                        }
+
                         Spacer()
                         
                         // 検出結果表示
@@ -100,6 +110,23 @@ struct OCRCameraView: View {
                 }
             }
         }
+        .premiumPaywallSheet()
+    }
+
+    private var ocrQuotaText: String? {
+        guard let remaining = premiumAccessManager.remainingOCRQuota else { return nil }
+        return L10n.format("無料版はあと%@回OCRを使えます。", String(remaining))
+    }
+
+    private func processCapturedImage(_ image: UIImage) {
+        guard premiumAccessManager.canUseOCR() else {
+            premiumAccessManager.presentPaywall(for: .ocrQuota)
+            return
+        }
+
+        viewModel.processImage(image) {
+            _ = premiumAccessManager.recordOCRUsageIfNeeded()
+        }
     }
 }
 
@@ -112,7 +139,7 @@ final class OCRCameraViewModel {
     var detectedDate: Date?
     var isProcessing = false
     
-    func processImage(_ image: UIImage) {
+    func processImage(_ image: UIImage, onCompleted: @escaping @MainActor () -> Void) {
         isProcessing = true
         detectedText = ""
         detectedDate = nil
@@ -142,6 +169,7 @@ final class OCRCameraViewModel {
                 self.isProcessing = false
                 self.detectedText = bestText
                 self.detectedDate = bestDate
+                onCompleted()
             }
         }
     }
@@ -644,4 +672,5 @@ extension CameraViewController: AVCapturePhotoCaptureDelegate {
 #Preview {
     OCRCameraView { _ in
     }
+    .environment(PremiumAccessManager.shared)
 }
