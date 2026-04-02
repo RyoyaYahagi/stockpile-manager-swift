@@ -840,47 +840,24 @@ private struct TutorialLiveIllustrationPreview: View {
             }
 
         case .familySharing:
-            if didSetUpFamily {
-                preview(offsetY: -56, scale: 0.62) {
-                    hostedPreview(container: TutorialPreviewFixtures.familyFixture.container) {
-                        NavigationStack {
-                            FamilySettingsView(family: TutorialPreviewFixtures.familyFixture.family)
-                        }
-                    }
-                } overlay: {
-                    ZStack {
-                        TutorialHighlightFrame(tint: .green)
-                            .frame(width: 248, height: 36)
-                            .offset(x: 0, y: -14)
-
-                        TutorialCalloutBadge(
-                            text: "共有リンクを送れます",
-                            symbol: "paperplane.fill",
-                            tint: .green
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            preview(offsetY: 50, scale: 0.62) {
+                hostedPreview(container: TutorialPreviewFixtures.familySetupContainer) {
+                    NavigationStack {
+                        FamilySetupView()
                     }
                 }
-            } else {
-                preview(offsetY: 50, scale: 0.62) {
-                    hostedPreview(container: TutorialPreviewFixtures.familySetupContainer) {
-                        NavigationStack {
-                            FamilySetupView()
-                        }
-                    }
-                } overlay: {
-                    ZStack {
-                        TutorialHighlightFrame(tint: .green)
-                            .frame(width: 236, height: 42)
-                            .offset(x: 0, y: -22)
+            } overlay: {
+                ZStack {
+                    TutorialHighlightFrame(tint: .green)
+                        .frame(width: 236, height: 42)
+                        .offset(x: 0, y: -22)
 
-                        TutorialCalloutBadge(
-                            text: "ここで共有を始めます",
-                            symbol: "person.3.fill",
-                            tint: .green
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    }
+                    TutorialCalloutBadge(
+                        text: "ここで共有を始めます",
+                        symbol: "person.3.fill",
+                        tint: .green
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 }
             }
 
