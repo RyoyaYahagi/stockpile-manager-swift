@@ -187,6 +187,191 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertEqual(try harness.context.fetch(FetchDescriptor<Item>()).count, 0)
     }
 
+    func testSyncFamilyDataDoesNotDeleteRemoteRecordsWhenLocalIsEmpty() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有家族")
+        family.cloudKitDatabaseScope = .sharedDatabase
+        family.cloudKitPendingSync = false
+        family.cloudKitHasRemoteBaseline = true
+        family.cloudKitZoneName = "shared-zone"
+        family.cloudKitZoneOwnerName = "owner"
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let remoteBagID = UUID()
+        let remoteItemID = UUID()
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordsHandler = { recordType, zoneID, scope in
+            XCTAssertEqual(scope, .sharedDatabase)
+            switch recordType {
+            case "Family":
+                return [Self.makeFamilyRecord(id: family.id, name: "共有家族", zoneID: zoneID)]
+            case "Bag":
+                return [Self.makeBagRecord(id: remoteBagID, name: "非常袋", familyID: family.id, zoneID: zoneID)]
+            case "Item":
+                return [
+                    Self.makeItemRecord(
+                        id: remoteItemID,
+                        name: "保存水",
+                        familyID: family.id,
+                        bagID: remoteBagID,
+                        zoneID: zoneID
+                    )
+                ]
+            case "DeletionMarker":
+                return []
+            default:
+                return []
+            }
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        try await service.syncFamilyDataToCloudKit(for: family)
+
+        XCTAssertTrue(backend.modifyCalls.allSatisfy { $0.deletedRecordNames.isEmpty })
+    }
+
+    func testSyncFamilyDataUploadsDeletionMarkerForExplicitItemDelete() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有家族")
+        family.cloudKitDatabaseScope = .sharedDatabase
+        family.cloudKitPendingSync = false
+        family.cloudKitHasRemoteBaseline = true
+        family.cloudKitZoneName = "shared-zone"
+        family.cloudKitZoneOwnerName = "owner"
+
+        let item = Item(name: "保存水", quantity: 6)
+        item.family = family
+
+        harness.context.insert(family)
+        harness.context.insert(item)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordsHandler = { recordType, zoneID, scope in
+            XCTAssertEqual(scope, .sharedDatabase)
+            switch recordType {
+            case "Family":
+                return [Self.makeFamilyRecord(id: family.id, name: "共有家族", zoneID: zoneID)]
+            case "Item":
+                return [Self.makeItemRecord(id: item.id, name: "保存水", familyID: family.id, bagID: nil, zoneID: zoneID)]
+            case "Bag", "DeletionMarker":
+                return []
+            default:
+                return []
+            }
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        try service.deleteItemLocally(item, in: family)
+        try harness.context.save()
+        try await service.syncFamilyDataToCloudKit(for: family)
+
+        let markers = try harness.context.fetch(FetchDescriptor<CloudKitDeletionMarker>())
+        XCTAssertEqual(markers.count, 1)
+        XCTAssertFalse(try XCTUnwrap(markers.first).isPendingUpload)
+        XCTAssertTrue(
+            backend.modifyCalls.contains { call in
+                call.recordTypes.contains("DeletionMarker")
+                    && call.deletedRecordNames.contains("item-\(item.id.uuidString)")
+            }
+        )
+    }
+
+    func testSyncFamilyStateDeletesLocalItemWhenRemoteDeletionMarkerIsNewer() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有家族")
+        family.cloudKitDatabaseScope = .sharedDatabase
+        family.cloudKitPendingSync = false
+        family.cloudKitHasRemoteBaseline = true
+        family.cloudKitZoneName = "shared-zone"
+        family.cloudKitZoneOwnerName = "owner"
+
+        let item = Item(name: "ラジオ", quantity: 1)
+        item.family = family
+        item.updatedAt = Date(timeIntervalSince1970: 100)
+
+        harness.context.insert(family)
+        harness.context.insert(item)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordsHandler = { recordType, zoneID, scope in
+            XCTAssertEqual(scope, .sharedDatabase)
+            switch recordType {
+            case "Family":
+                return [Self.makeFamilyRecord(id: family.id, name: "共有家族", zoneID: zoneID)]
+            case "Item", "Bag":
+                return []
+            case "DeletionMarker":
+                return [
+                    Self.makeDeletionMarkerRecord(
+                        familyID: family.id,
+                        entityType: .item,
+                        targetRecordID: item.id.uuidString,
+                        deletedAt: Date(timeIntervalSince1970: 200),
+                        zoneID: zoneID
+                    )
+                ]
+            default:
+                return []
+            }
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        try await service.syncFamilyStateFromCloudKit(for: family)
+
+        XCTAssertEqual(try harness.context.fetch(FetchDescriptor<Item>()).count, 0)
+    }
+
+    func testSyncFamilyStateKeepsLocalItemWhenLocalUpdateIsNewerThanRemoteDeletionMarker() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有家族")
+        family.cloudKitDatabaseScope = .sharedDatabase
+        family.cloudKitPendingSync = false
+        family.cloudKitHasRemoteBaseline = true
+        family.cloudKitZoneName = "shared-zone"
+        family.cloudKitZoneOwnerName = "owner"
+
+        let item = Item(name: "ラジオ", quantity: 1)
+        item.family = family
+        item.updatedAt = Date(timeIntervalSince1970: 300)
+
+        harness.context.insert(family)
+        harness.context.insert(item)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordsHandler = { recordType, zoneID, scope in
+            XCTAssertEqual(scope, .sharedDatabase)
+            switch recordType {
+            case "Family":
+                return [Self.makeFamilyRecord(id: family.id, name: "共有家族", zoneID: zoneID)]
+            case "Item", "Bag":
+                return []
+            case "DeletionMarker":
+                return [
+                    Self.makeDeletionMarkerRecord(
+                        familyID: family.id,
+                        entityType: .item,
+                        targetRecordID: item.id.uuidString,
+                        deletedAt: Date(timeIntervalSince1970: 200),
+                        zoneID: zoneID
+                    )
+                ]
+            default:
+                return []
+            }
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        try await service.syncFamilyStateFromCloudKit(for: family)
+
+        let remainingItems = try harness.context.fetch(FetchDescriptor<Item>())
+        XCTAssertEqual(remainingItems.count, 1)
+        XCTAssertEqual(remainingItems.first?.id, item.id)
+    }
+
     func testCurrentFamilyResolverPrefersDataBackedLocalFamilyOverEmptyPendingSharedFamily() {
         let localFamily = Family(name: "ローカル家族")
         let bag = Bag(name: "押入れ")
@@ -224,7 +409,72 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         )
         record["id"] = id.uuidString as CKRecordValue
         record["name"] = name as CKRecordValue
-        record["createdAt"] = Date() as CKRecordValue
+        let createdAt = Date(timeIntervalSince1970: 10)
+        record["createdAt"] = createdAt as CKRecordValue
+        record["updatedAt"] = createdAt as CKRecordValue
+        return record
+    }
+
+    private static func makeBagRecord(
+        id: UUID,
+        name: String,
+        familyID: UUID,
+        zoneID: CKRecordZone.ID
+    ) -> CKRecord {
+        let record = CKRecord(
+            recordType: "Bag",
+            recordID: CKRecord.ID(recordName: "bag-\(id.uuidString)", zoneID: zoneID)
+        )
+        let createdAt = Date(timeIntervalSince1970: 20)
+        record["id"] = id.uuidString as CKRecordValue
+        record["name"] = name as CKRecordValue
+        record["familyID"] = familyID.uuidString as CKRecordValue
+        record["createdAt"] = createdAt as CKRecordValue
+        record["updatedAt"] = createdAt as CKRecordValue
+        return record
+    }
+
+    private static func makeItemRecord(
+        id: UUID,
+        name: String,
+        familyID: UUID,
+        bagID: UUID?,
+        zoneID: CKRecordZone.ID
+    ) -> CKRecord {
+        let record = CKRecord(
+            recordType: "Item",
+            recordID: CKRecord.ID(recordName: "item-\(id.uuidString)", zoneID: zoneID)
+        )
+        let createdAt = Date(timeIntervalSince1970: 30)
+        record["id"] = id.uuidString as CKRecordValue
+        record["name"] = name as CKRecordValue
+        record["familyID"] = familyID.uuidString as CKRecordValue
+        record["quantity"] = 1 as CKRecordValue
+        record["createdAt"] = createdAt as CKRecordValue
+        record["updatedAt"] = createdAt as CKRecordValue
+        if let bagID {
+            record["bagID"] = bagID.uuidString as CKRecordValue
+        }
+        return record
+    }
+
+    private static func makeDeletionMarkerRecord(
+        familyID: UUID,
+        entityType: CloudKitDeletionMarkerEntityType,
+        targetRecordID: String,
+        deletedAt: Date,
+        zoneID: CKRecordZone.ID
+    ) -> CKRecord {
+        let markerID = UUID()
+        let record = CKRecord(
+            recordType: "DeletionMarker",
+            recordID: CKRecord.ID(recordName: "deletion-\(markerID.uuidString)", zoneID: zoneID)
+        )
+        record["id"] = markerID.uuidString as CKRecordValue
+        record["familyID"] = familyID.uuidString as CKRecordValue
+        record["entityType"] = entityType.rawValue as CKRecordValue
+        record["targetRecordID"] = targetRecordID as CKRecordValue
+        record["deletedAt"] = deletedAt as CKRecordValue
         return record
     }
 }
@@ -241,6 +491,7 @@ private struct TestHarness {
             User.self,
             Bag.self,
             Item.self,
+            CloudKitDeletionMarker.self,
             NotificationSettings.self,
             configurations: configuration
         )

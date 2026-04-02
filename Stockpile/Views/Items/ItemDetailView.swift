@@ -114,7 +114,15 @@ struct ItemDetailView: View {
                     locationNote: item.locationNote,
                     bagId: item.bag?.id
                 )
-                modelContext.delete(item)
+                do {
+                    let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                    try sharingService.deleteItemLocally(item, in: currentFamily)
+                } catch {
+                    #if DEBUG
+                    print("ローカル削除に失敗: \(error)")
+                    #endif
+                    return
+                }
                 do {
                     try modelContext.save()
                 } catch {

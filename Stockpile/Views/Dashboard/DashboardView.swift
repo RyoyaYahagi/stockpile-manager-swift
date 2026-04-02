@@ -529,8 +529,16 @@ struct DashboardView: View {
     
     private func deleteItem(_ item: Item) {
         deletedItemInfoList = [snapshotForUndo(from: item)]
-        
-        modelContext.delete(item)
+
+        do {
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            try sharingService.deleteItemLocally(item, in: currentFamily)
+        } catch {
+            #if DEBUG
+            print("ローカル削除に失敗: \(error)")
+            #endif
+            return
+        }
         persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
         
         // スナックバーを表示
@@ -554,6 +562,7 @@ struct DashboardView: View {
     }
     
     private func undoDelete(_ infoList: [DeletedItemInfo]) {
+        let restoredAt = Date()
         for info in infoList {
             let newItem = Item(
                 name: info.name,
@@ -563,11 +572,25 @@ struct DashboardView: View {
                 locationNote: info.locationNote
             )
             newItem.id = info.id
+            newItem.markUpdated(at: restoredAt)
             if let bagId = info.bagId {
                 newItem.bag = scopedBags.first { $0.id == bagId }
             }
             newItem.family = currentFamily
             modelContext.insert(newItem)
+        }
+
+        if let family = currentFamily {
+            do {
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                for info in infoList {
+                    try sharingService.removeDeletionMarkerIfNeeded(forItemID: info.id, family: family)
+                }
+            } catch {
+                #if DEBUG
+                print("削除マーカーの取り消しに失敗: \(error)")
+                #endif
+            }
         }
         persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
         
@@ -600,8 +623,15 @@ struct DashboardView: View {
             .filter { selectedItems.contains($0.id) }
             .map { snapshotForUndo(from: $0) }
 
-        for item in scopedItems where selectedItems.contains(item.id) {
-            modelContext.delete(item)
+        do {
+            let itemsToDelete = scopedItems.filter { selectedItems.contains($0.id) }
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            try sharingService.deleteItemsLocally(itemsToDelete, in: currentFamily)
+        } catch {
+            #if DEBUG
+            print("ローカル削除に失敗: \(error)")
+            #endif
+            return
         }
         persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
         if !deletedItemInfoList.isEmpty {
@@ -615,6 +645,7 @@ struct DashboardView: View {
         let targetBag = scopedBags.first { $0.id == bagId }
         for item in scopedItems where selectedItems.contains(item.id) {
             item.bag = targetBag
+            item.markUpdated()
         }
         persistAndSyncFamilyDataIfPossible()
         selectedItems.removeAll()

@@ -43,6 +43,7 @@ final class Item {
     var notified7: Bool = false
     var notified1: Bool = false
     var createdAt: Date = Date()
+    var updatedAt: Date = Date.distantPast
     
     var family: Family?
     var bag: Bag?
@@ -64,6 +65,7 @@ final class Item {
         self.notified7 = false
         self.notified1 = false
         self.createdAt = Date()
+        self.updatedAt = createdAt
     }
     
     /// 期限状態を計算
@@ -112,5 +114,13 @@ final class Item {
         let today = calendar.startOfDay(for: referenceDate)
         let normalizedExpiry = calendar.startOfDay(for: expiryDate)
         return calendar.dateComponents([.day], from: today, to: normalizedExpiry).day ?? 0
+    }
+
+    func markUpdated(at date: Date = Date()) {
+        updatedAt = date
+    }
+
+    var syncTimestamp: Date {
+        updatedAt == .distantPast ? createdAt : updatedAt
     }
 }

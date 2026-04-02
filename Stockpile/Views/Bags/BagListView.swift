@@ -7,6 +7,7 @@ struct BagListView: View {
     @Environment(Router.self) private var router
     
     @Query private var bags: [Bag]
+    @Query private var items: [Item]
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var showAddSheet = false
@@ -89,10 +90,17 @@ struct BagListView: View {
     
     private func deleteBag(_ bag: Bag) {
         // Undo用に情報を保存
-        deletedBagInfo = DeletedBagInfo(name: bag.name)
-        
-        // 紐づくアイテムは未分類になる（deleteRule: .nullify）
-        modelContext.delete(bag)
+        deletedBagInfo = DeletedBagInfo(id: bag.id, name: bag.name, itemIDs: bag.resolvedItems.map(\.id))
+
+        do {
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            try sharingService.deleteBagLocally(bag, in: currentFamily)
+        } catch {
+            #if DEBUG
+            print("ローカル削除に失敗: \(error)")
+            #endif
+            return
+        }
         persistAndSyncFamilyIfPossible()
         
         // スナックバーを表示
@@ -115,8 +123,26 @@ struct BagListView: View {
     
     private func undoDelete(_ info: DeletedBagInfo) {
         let newBag = Bag(name: info.name)
+        newBag.id = info.id
+        newBag.markUpdated()
         newBag.family = currentFamily
         modelContext.insert(newBag)
+
+        for item in items where info.itemIDs.contains(item.id) {
+            item.bag = newBag
+            item.markUpdated()
+        }
+
+        if let family = currentFamily {
+            do {
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                try sharingService.removeDeletionMarkerIfNeeded(forBagID: info.id, family: family)
+            } catch {
+                #if DEBUG
+                print("削除マーカーの取り消しに失敗: \(error)")
+                #endif
+            }
+        }
         persistAndSyncFamilyIfPossible()
         dismissUndoSnackbar()
     }
@@ -271,7 +297,9 @@ struct BagFormSheet: View {
 // MARK: - Undo Snackbar
 
 struct DeletedBagInfo {
+    let id: UUID
     let name: String
+    let itemIDs: [UUID]
 }
 
 struct BagUndoSnackbar: View {

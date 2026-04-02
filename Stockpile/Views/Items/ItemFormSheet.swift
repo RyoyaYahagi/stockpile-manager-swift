@@ -238,6 +238,7 @@ struct ItemFormSheet: View {
             if item.family == nil {
                 item.family = family
             }
+            item.markUpdated()
         }
         
         do {

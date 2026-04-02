@@ -9,6 +9,33 @@ final class CloudKitFamilySharingService {
         static let familyRecordType = "Family"
         static let bagRecordType = "Bag"
         static let itemRecordType = "Item"
+        static let deletionMarkerRecordType = "DeletionMarker"
+    }
+
+    private struct RemoteZoneState {
+        let familyRecord: CKRecord?
+        let bagRecords: [CKRecord]
+        let itemRecords: [CKRecord]
+        let deletionMarkers: [RemoteDeletionMarkerPayload]
+    }
+
+    private struct RemoteDeletionMarkerPayload {
+        let markerID: UUID
+        let familyID: UUID
+        let entityType: CloudKitDeletionMarkerEntityType
+        let targetRecordID: String
+        let deletedAt: Date
+
+        var key: String {
+            Self.makeKey(entityType: entityType, targetRecordID: targetRecordID)
+        }
+
+        static func makeKey(
+            entityType: CloudKitDeletionMarkerEntityType,
+            targetRecordID: String
+        ) -> String {
+            "\(entityType.rawValue)::\(targetRecordID)"
+        }
     }
 
     private enum RemoteSnapshotState {
@@ -214,6 +241,67 @@ final class CloudKitFamilySharingService {
         }
     }
 
+    func deleteItemLocally(_ item: Item, in family: Family?) throws {
+        try deleteItemsLocally([item], in: family)
+    }
+
+    func deleteItemsLocally(_ items: [Item], in family: Family?) throws {
+        let deletedAt = Date()
+
+        for item in items {
+            let targetFamily = family ?? item.family
+            if let targetFamily, targetFamily.isCloudKitSharedFamily {
+                try upsertLocalDeletionMarker(
+                    familyID: targetFamily.id,
+                    entityType: .item,
+                    targetRecordID: item.id.uuidString,
+                    deletedAt: deletedAt,
+                    isPendingUpload: true
+                )
+            }
+            modelContext.delete(item)
+        }
+    }
+
+    func deleteBagLocally(_ bag: Bag, in family: Family?) throws {
+        let deletedAt = Date()
+        let linkedItems = bag.resolvedItems
+
+        for item in linkedItems {
+            item.bag = nil
+            item.markUpdated(at: deletedAt)
+        }
+
+        let targetFamily = family ?? bag.family
+        if let targetFamily, targetFamily.isCloudKitSharedFamily {
+            try upsertLocalDeletionMarker(
+                familyID: targetFamily.id,
+                entityType: .bag,
+                targetRecordID: bag.id.uuidString,
+                deletedAt: deletedAt,
+                isPendingUpload: true
+            )
+        }
+
+        modelContext.delete(bag)
+    }
+
+    func removeDeletionMarkerIfNeeded(forItemID itemID: UUID, family: Family) throws {
+        try removeLocalDeletionMarkers(
+            familyID: family.id,
+            entityType: .item,
+            targetRecordID: itemID.uuidString
+        )
+    }
+
+    func removeDeletionMarkerIfNeeded(forBagID bagID: UUID, family: Family) throws {
+        try removeLocalDeletionMarkers(
+            familyID: family.id,
+            entityType: .bag,
+            targetRecordID: bagID.uuidString
+        )
+    }
+
     func syncFamilyDataToCloudKit(for family: Family) async throws {
         guard family.isCloudKitSharedFamily else { return }
         try attachOrphanLocalDataIfNeeded(to: family)
@@ -224,30 +312,112 @@ final class CloudKitFamilySharingService {
             try await ensureZoneExists(for: family)
         }
 
+        let remoteState = try await fetchRemoteZoneState(
+            zoneID: zoneID(for: family),
+            scope: scope
+        )
+        try applyRemoteDeletionMarkersToLocal(remoteState.deletionMarkers, family: family)
+
         let scopedBags = try fetchLocalBags(for: family)
         let scopedItems = try fetchLocalItems(for: family)
-        let familyRecord = makeFamilyRecord(from: family)
-        let bagRecords = scopedBags.map { makeBagRecord(from: $0, family: family) }
-        let itemRecords = scopedItems.map { makeItemRecord(from: $0, family: family) }
-        let recordsToSave = [familyRecord] + bagRecords + itemRecords
-
-        let remoteBagIDs = try await fetchRecordIDs(
-            forRecordType: Constants.bagRecordType,
-            in: zoneID(for: family),
-            scope: scope
+        let localDeletionMarkers = try fetchLocalDeletionMarkers(for: family)
+        let remoteDeletionMap = Dictionary(
+            remoteState.deletionMarkers.map { ($0.key, $0) },
+            uniquingKeysWith: { lhs, rhs in lhs.deletedAt >= rhs.deletedAt ? lhs : rhs }
         )
-        let remoteItemIDs = try await fetchRecordIDs(
-            forRecordType: Constants.itemRecordType,
-            in: zoneID(for: family),
-            scope: scope
+        let remoteBagMap = Dictionary(
+            remoteState.bagRecords.compactMap { record -> (UUID, CKRecord)? in
+                guard let bagID = uuidValue(from: record["id"]) else { return nil }
+                return (bagID, record)
+            },
+            uniquingKeysWith: { lhs, rhs in
+                remoteRecordTimestamp(rhs) >= remoteRecordTimestamp(lhs) ? rhs : lhs
+            }
+        )
+        let remoteItemMap = Dictionary(
+            remoteState.itemRecords.compactMap { record -> (UUID, CKRecord)? in
+                guard let itemID = uuidValue(from: record["id"]) else { return nil }
+                return (itemID, record)
+            },
+            uniquingKeysWith: { lhs, rhs in
+                remoteRecordTimestamp(rhs) >= remoteRecordTimestamp(lhs) ? rhs : lhs
+            }
         )
 
-        let desiredBagIDs = Set(bagRecords.map(\.recordID))
-        let desiredItemIDs = Set(itemRecords.map(\.recordID))
-        let recordIDsToDelete = Array(remoteBagIDs.subtracting(desiredBagIDs))
-            + Array(remoteItemIDs.subtracting(desiredItemIDs))
+        var recordsToSave: [CKRecord] = []
+        var recordIDsToDelete: [CKRecord.ID] = []
 
-        try await modify(recordsToSave: recordsToSave, recordIDsToDelete: recordIDsToDelete, scope: scope)
+        if shouldUploadRecord(
+            localTimestamp: family.syncTimestamp,
+            remoteRecord: remoteState.familyRecord
+        ) {
+            recordsToSave.append(makeFamilyRecord(from: family))
+        }
+
+        for bag in scopedBags {
+            let remoteDeletion = remoteDeletionMap[
+                RemoteDeletionMarkerPayload.makeKey(
+                    entityType: .bag,
+                    targetRecordID: bag.id.uuidString
+                )
+            ]
+            guard shouldUploadRecord(
+                localTimestamp: bag.syncTimestamp,
+                remoteRecord: remoteBagMap[bag.id],
+                remoteDeletionTimestamp: remoteDeletion?.deletedAt
+            ) else {
+                continue
+            }
+            recordsToSave.append(makeBagRecord(from: bag, family: family))
+        }
+
+        for item in scopedItems {
+            let remoteDeletion = remoteDeletionMap[
+                RemoteDeletionMarkerPayload.makeKey(
+                    entityType: .item,
+                    targetRecordID: item.id.uuidString
+                )
+            ]
+            guard shouldUploadRecord(
+                localTimestamp: item.syncTimestamp,
+                remoteRecord: remoteItemMap[item.id],
+                remoteDeletionTimestamp: remoteDeletion?.deletedAt
+            ) else {
+                continue
+            }
+            recordsToSave.append(makeItemRecord(from: item, family: family))
+        }
+
+        var uploadedDeletionMarkerIDs = Set<UUID>()
+        for marker in localDeletionMarkers where marker.isPendingUpload {
+            if let remoteMarker = remoteDeletionMap[markerKey(for: marker)],
+               remoteMarker.deletedAt >= marker.deletedAt {
+                marker.isPendingUpload = false
+                continue
+            }
+
+            recordsToSave.append(makeDeletionMarkerRecord(from: marker, family: family))
+            recordIDsToDelete.append(recordIDForDeletionMarkerTarget(marker, family: family))
+            uploadedDeletionMarkerIDs.insert(marker.id)
+        }
+
+        if !recordsToSave.isEmpty || !recordIDsToDelete.isEmpty {
+            try await modify(
+                recordsToSave: recordsToSave,
+                recordIDsToDelete: recordIDsToDelete,
+                scope: scope
+            )
+        }
+
+        for marker in localDeletionMarkers
+        where uploadedDeletionMarkerIDs.contains(marker.id) {
+            marker.isPendingUpload = false
+        }
+
+        if remoteState.familyRecord != nil {
+            family.cloudKitHasRemoteBaseline = true
+        }
+        try modelContext.save()
     }
 
     func syncFamilyStateFromCloudKit(for family: Family) async throws {
@@ -308,6 +478,9 @@ final class CloudKitFamilySharingService {
 
     func leaveFamily(_ family: Family) async throws {
         guard family.cloudKitDatabaseScope == .sharedDatabase else { return }
+        for marker in try fetchLocalDeletionMarkers(for: family) {
+            modelContext.delete(marker)
+        }
         modelContext.delete(family)
         try modelContext.save()
     }
@@ -326,26 +499,11 @@ final class CloudKitFamilySharingService {
         zoneID: CKRecordZone.ID,
         scope: FamilyCloudKitDatabaseScope
     ) async throws -> Family {
-        let familyRecords = try await fetchRecords(
-            forRecordType: Constants.familyRecordType,
-            in: zoneID,
-            scope: scope
-        )
+        let remoteState = try await fetchRemoteZoneState(zoneID: zoneID, scope: scope)
 
-        guard let familyRecord = familyRecords.first else {
+        guard let familyRecord = remoteState.familyRecord else {
             throw CloudKitSharingError.familyRecordNotFound
         }
-
-        let bags = try await fetchRecords(
-            forRecordType: Constants.bagRecordType,
-            in: zoneID,
-            scope: scope
-        )
-        let items = try await fetchRecords(
-            forRecordType: Constants.itemRecordType,
-            in: zoneID,
-            scope: scope
-        )
 
         let familyID = uuidValue(from: familyRecord["id"]) ?? UUID()
         let familyName = (familyRecord["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -354,47 +512,56 @@ final class CloudKitFamilySharingService {
             fallbackName: familyName?.isEmpty == false ? familyName! : L10n.string("家族")
         )
 
-        currentFamily.name = familyName?.isEmpty == false ? familyName! : currentFamily.name
+        let remoteFamilyTimestamp = remoteRecordTimestamp(familyRecord)
+        let shouldAdoptRemoteFamilyMetadata = !currentFamily.cloudKitHasRemoteBaseline
+            || currentFamily.syncTimestamp <= remoteFamilyTimestamp
+        if shouldAdoptRemoteFamilyMetadata {
+            currentFamily.name = familyName?.isEmpty == false ? familyName! : currentFamily.name
+            currentFamily.updatedAt = remoteFamilyTimestamp
+        }
         currentFamily.cloudKitZoneName = zoneID.zoneName
         currentFamily.cloudKitZoneOwnerName = zoneID.ownerName
         currentFamily.cloudKitDatabaseScope = scope
         currentFamily.cloudKitPendingSync = false
         currentFamily.cloudKitHasRemoteBaseline = true
 
-        let validBagRecords = bags.compactMap { bagRecord -> (UUID, String)? in
+        let remoteDeletionMap = Dictionary(
+            remoteState.deletionMarkers.map { ($0.key, $0) },
+            uniquingKeysWith: { lhs, rhs in lhs.deletedAt >= rhs.deletedAt ? lhs : rhs }
+        )
+
+        var bagMap = Dictionary(
+            uniqueKeysWithValues: try fetchLocalBags(for: currentFamily).map { ($0.id, $0) }
+        )
+
+        let validBagRecords = remoteState.bagRecords.compactMap { bagRecord -> (UUID, String, Date)? in
             guard let bagID = uuidValue(from: bagRecord["id"]),
                   let bagName = normalizedNonEmptyString(bagRecord["name"] as? String) else { return nil }
-            return (bagID, bagName)
+            return (bagID, bagName, remoteRecordTimestamp(bagRecord))
         }
 
-        var bagMap: [UUID: Bag] = [:]
-        let remoteBagIDs = Set(validBagRecords.map(\.0))
-        for (bagID, bagName) in validBagRecords {
-
-            let descriptor = FetchDescriptor<Bag>(predicate: #Predicate { $0.id == bagID })
-            let bag = try modelContext.fetch(descriptor).first ?? {
+        for (bagID, bagName, remoteUpdatedAt) in validBagRecords {
+            let bag = bagMap[bagID] ?? {
                 let newBag = Bag(name: bagName)
                 newBag.id = bagID
                 modelContext.insert(newBag)
                 return newBag
             }()
 
-            bag.name = bagName
+            if bag.syncTimestamp <= remoteUpdatedAt {
+                bag.name = bagName
+                bag.updatedAt = remoteUpdatedAt
+            }
             bag.family = currentFamily
             bagMap[bagID] = bag
         }
 
-        for existingBag in currentFamily.resolvedBags where !remoteBagIDs.contains(existingBag.id) {
-            modelContext.delete(existingBag)
-        }
-
-        let validItemRecords = items.compactMap { itemRecord -> (CKRecord, UUID, String)? in
+        let validItemRecords = remoteState.itemRecords.compactMap { itemRecord -> (CKRecord, UUID, String, Date)? in
             guard let itemID = uuidValue(from: itemRecord["id"]),
                   let itemName = normalizedNonEmptyString(itemRecord["name"] as? String) else { return nil }
-            return (itemRecord, itemID, itemName)
+            return (itemRecord, itemID, itemName, remoteRecordTimestamp(itemRecord))
         }
-        let remoteItemIDs = Set(validItemRecords.map(\.1))
-        for (itemRecord, itemID, itemName) in validItemRecords {
+        for (itemRecord, itemID, itemName, remoteUpdatedAt) in validItemRecords {
 
             let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemID })
             let item = try modelContext.fetch(descriptor).first ?? {
@@ -404,26 +571,31 @@ final class CloudKitFamilySharingService {
                 return newItem
             }()
 
-            item.name = itemName
-            item.janCode = normalizedOptionalString(itemRecord["janCode"] as? String)
-            item.quantity = intValue(from: itemRecord["quantity"]) ?? item.quantity
-            item.expiryDate = itemRecord["expiryDate"] as? Date
-            item.locationNote = normalizedOptionalString(itemRecord["locationNote"] as? String)
-            item.notified30 = (itemRecord["notified30"] as? NSNumber)?.boolValue ?? item.notified30
-            item.notified7 = (itemRecord["notified7"] as? NSNumber)?.boolValue ?? item.notified7
-            item.notified1 = (itemRecord["notified1"] as? NSNumber)?.boolValue ?? item.notified1
-            item.family = currentFamily
-
-            if let bagID = uuidValue(from: itemRecord["bagID"]) {
-                item.bag = bagMap[bagID]
-            } else {
-                item.bag = nil
+            if item.syncTimestamp <= remoteUpdatedAt {
+                item.name = itemName
+                item.janCode = normalizedOptionalString(itemRecord["janCode"] as? String)
+                item.quantity = intValue(from: itemRecord["quantity"]) ?? item.quantity
+                item.expiryDate = itemRecord["expiryDate"] as? Date
+                item.locationNote = normalizedOptionalString(itemRecord["locationNote"] as? String)
+                item.notified30 = (itemRecord["notified30"] as? NSNumber)?.boolValue ?? item.notified30
+                item.notified7 = (itemRecord["notified7"] as? NSNumber)?.boolValue ?? item.notified7
+                item.notified1 = (itemRecord["notified1"] as? NSNumber)?.boolValue ?? item.notified1
+                item.updatedAt = remoteUpdatedAt
+                if let bagID = uuidValue(from: itemRecord["bagID"]) {
+                    item.bag = bagMap[bagID]
+                } else {
+                    item.bag = nil
+                }
             }
+            item.family = currentFamily
         }
 
-        for existingItem in currentFamily.resolvedItems where !remoteItemIDs.contains(existingItem.id) {
-            modelContext.delete(existingItem)
-        }
+        try mergeRemoteDeletionMarkersIntoLocal(remoteState.deletionMarkers)
+        try applyRemoteDeletionMarkersToLocal(
+            remoteState.deletionMarkers,
+            family: currentFamily,
+            remoteDeletionMap: remoteDeletionMap
+        )
 
         try modelContext.save()
         LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
@@ -478,7 +650,8 @@ final class CloudKitFamilySharingService {
     private func clearLocalFamilyDataForMissingRemoteState(for family: Family) throws {
         let scopedItems = try fetchLocalItems(for: family)
         let scopedBags = try fetchLocalBags(for: family)
-        guard !scopedItems.isEmpty || !scopedBags.isEmpty else { return }
+        let deletionMarkers = try fetchLocalDeletionMarkers(for: family)
+        guard !scopedItems.isEmpty || !scopedBags.isEmpty || !deletionMarkers.isEmpty else { return }
 
         for item in scopedItems {
             modelContext.delete(item)
@@ -486,6 +659,10 @@ final class CloudKitFamilySharingService {
 
         for bag in scopedBags {
             modelContext.delete(bag)
+        }
+
+        for marker in deletionMarkers {
+            modelContext.delete(marker)
         }
 
         try modelContext.save()
@@ -740,6 +917,14 @@ final class CloudKitFamilySharingService {
         return try modelContext.fetch(descriptor)
     }
 
+    private func fetchLocalDeletionMarkers(for family: Family) throws -> [CloudKitDeletionMarker] {
+        let familyID = family.id
+        let descriptor = FetchDescriptor<CloudKitDeletionMarker>(
+            predicate: #Predicate { $0.familyID == familyID }
+        )
+        return try modelContext.fetch(descriptor)
+    }
+
     private func zoneID(for family: Family) -> CKRecordZone.ID {
         CKRecordZone.ID(
             zoneName: family.cloudKitZoneName ?? "family-\(family.id.uuidString)",
@@ -759,6 +944,7 @@ final class CloudKitFamilySharingService {
         record["id"] = family.id.uuidString as CKRecordValue
         record["name"] = family.name as CKRecordValue
         record["createdAt"] = family.createdAt as CKRecordValue
+        record["updatedAt"] = family.syncTimestamp as CKRecordValue
         return record
     }
 
@@ -771,6 +957,7 @@ final class CloudKitFamilySharingService {
         record["id"] = bag.id.uuidString as CKRecordValue
         record["name"] = bag.name as CKRecordValue
         record["createdAt"] = bag.createdAt as CKRecordValue
+        record["updatedAt"] = bag.syncTimestamp as CKRecordValue
         if let familyID = bag.family?.id.uuidString {
             record["familyID"] = familyID as CKRecordValue
         }
@@ -799,6 +986,7 @@ final class CloudKitFamilySharingService {
         record["notified7"] = item.notified7 as CKRecordValue
         record["notified1"] = item.notified1 as CKRecordValue
         record["createdAt"] = item.createdAt as CKRecordValue
+        record["updatedAt"] = item.syncTimestamp as CKRecordValue
         if let bagID = item.bag?.id.uuidString {
             record["bagID"] = bagID as CKRecordValue
         }
@@ -806,6 +994,239 @@ final class CloudKitFamilySharingService {
             record["familyID"] = familyID as CKRecordValue
         }
         return record
+    }
+
+    private func makeDeletionMarkerRecord(from marker: CloudKitDeletionMarker, family: Family) -> CKRecord {
+        let zoneID = zoneID(for: family)
+        let record = CKRecord(
+            recordType: Constants.deletionMarkerRecordType,
+            recordID: CKRecord.ID(recordName: "deletion-\(marker.id.uuidString)", zoneID: zoneID)
+        )
+        record["id"] = marker.id.uuidString as CKRecordValue
+        record["familyID"] = marker.familyID.uuidString as CKRecordValue
+        record["entityType"] = marker.entityType.rawValue as CKRecordValue
+        record["targetRecordID"] = marker.targetRecordID as CKRecordValue
+        record["deletedAt"] = marker.deletedAt as CKRecordValue
+        return record
+    }
+
+    private func recordIDForDeletionMarkerTarget(
+        _ marker: CloudKitDeletionMarker,
+        family: Family
+    ) -> CKRecord.ID {
+        let recordNamePrefix: String
+        switch marker.entityType {
+        case .bag:
+            recordNamePrefix = "bag"
+        case .item:
+            recordNamePrefix = "item"
+        }
+
+        return CKRecord.ID(
+            recordName: "\(recordNamePrefix)-\(marker.targetRecordID)",
+            zoneID: zoneID(for: family)
+        )
+    }
+
+    private func shouldUploadRecord(
+        localTimestamp: Date,
+        remoteRecord: CKRecord?,
+        remoteDeletionTimestamp: Date? = nil
+    ) -> Bool {
+        if let remoteDeletionTimestamp, remoteDeletionTimestamp > localTimestamp {
+            return false
+        }
+        guard let remoteRecord else {
+            return true
+        }
+        return localTimestamp > remoteRecordTimestamp(remoteRecord)
+    }
+
+    private func remoteRecordTimestamp(_ record: CKRecord) -> Date {
+        (record["updatedAt"] as? Date)
+            ?? (record["createdAt"] as? Date)
+            ?? .distantPast
+    }
+
+    private func markerKey(for marker: CloudKitDeletionMarker) -> String {
+        RemoteDeletionMarkerPayload.makeKey(
+            entityType: marker.entityType,
+            targetRecordID: marker.targetRecordID
+        )
+    }
+
+    private func fetchRemoteZoneState(
+        zoneID: CKRecordZone.ID,
+        scope: FamilyCloudKitDatabaseScope
+    ) async throws -> RemoteZoneState {
+        async let familyRecords = fetchRecords(
+            forRecordType: Constants.familyRecordType,
+            in: zoneID,
+            scope: scope
+        )
+        async let bagRecords = fetchRecords(
+            forRecordType: Constants.bagRecordType,
+            in: zoneID,
+            scope: scope
+        )
+        async let itemRecords = fetchRecords(
+            forRecordType: Constants.itemRecordType,
+            in: zoneID,
+            scope: scope
+        )
+        async let deletionMarkerRecords = fetchRecords(
+            forRecordType: Constants.deletionMarkerRecordType,
+            in: zoneID,
+            scope: scope
+        )
+
+        let resolvedFamilyRecords = try await familyRecords
+        let resolvedBagRecords = try await bagRecords
+        let resolvedItemRecords = try await itemRecords
+        let resolvedDeletionMarkerRecords = try await deletionMarkerRecords
+        let resolvedDeletionMarkers = resolvedDeletionMarkerRecords.compactMap {
+            remoteDeletionMarkerPayload(from: $0)
+        }
+
+        return RemoteZoneState(
+            familyRecord: resolvedFamilyRecords.first,
+            bagRecords: resolvedBagRecords,
+            itemRecords: resolvedItemRecords,
+            deletionMarkers: resolvedDeletionMarkers
+        )
+    }
+
+    private func remoteDeletionMarkerPayload(from record: CKRecord) -> RemoteDeletionMarkerPayload? {
+        guard let markerID = uuidValue(from: record["id"]),
+              let familyID = uuidValue(from: record["familyID"]),
+              let entityTypeRawValue = record["entityType"] as? String,
+              let entityType = CloudKitDeletionMarkerEntityType(rawValue: entityTypeRawValue),
+              let targetRecordID = normalizedNonEmptyString(record["targetRecordID"] as? String),
+              let deletedAt = record["deletedAt"] as? Date else {
+            return nil
+        }
+
+        return RemoteDeletionMarkerPayload(
+            markerID: markerID,
+            familyID: familyID,
+            entityType: entityType,
+            targetRecordID: targetRecordID,
+            deletedAt: deletedAt
+        )
+    }
+
+    private func upsertLocalDeletionMarker(
+        familyID: UUID,
+        entityType: CloudKitDeletionMarkerEntityType,
+        targetRecordID: String,
+        deletedAt: Date,
+        isPendingUpload: Bool
+    ) throws {
+        let entityTypeRawValue = entityType.rawValue
+        let descriptor = FetchDescriptor<CloudKitDeletionMarker>(
+            predicate: #Predicate {
+                $0.familyID == familyID
+                    && $0.entityTypeRawValue == entityTypeRawValue
+                    && $0.targetRecordID == targetRecordID
+            }
+        )
+        let existingMarkers = try modelContext.fetch(descriptor)
+
+        let marker = existingMarkers.first ?? {
+            let newMarker = CloudKitDeletionMarker(
+                familyID: familyID,
+                entityType: entityType,
+                targetRecordID: targetRecordID,
+                deletedAt: deletedAt,
+                isPendingUpload: isPendingUpload
+            )
+            modelContext.insert(newMarker)
+            return newMarker
+        }()
+
+        marker.deletedAt = max(marker.deletedAt, deletedAt)
+        marker.isPendingUpload = marker.isPendingUpload || isPendingUpload
+
+        for duplicate in existingMarkers.dropFirst() {
+            modelContext.delete(duplicate)
+        }
+    }
+
+    private func removeLocalDeletionMarkers(
+        familyID: UUID,
+        entityType: CloudKitDeletionMarkerEntityType,
+        targetRecordID: String
+    ) throws {
+        let entityTypeRawValue = entityType.rawValue
+        let descriptor = FetchDescriptor<CloudKitDeletionMarker>(
+            predicate: #Predicate {
+                $0.familyID == familyID
+                    && $0.entityTypeRawValue == entityTypeRawValue
+                    && $0.targetRecordID == targetRecordID
+            }
+        )
+        for marker in try modelContext.fetch(descriptor) {
+            modelContext.delete(marker)
+        }
+    }
+
+    private func mergeRemoteDeletionMarkersIntoLocal(
+        _ remoteDeletionMarkers: [RemoteDeletionMarkerPayload]
+    ) throws {
+        for remoteMarker in remoteDeletionMarkers {
+            try upsertLocalDeletionMarker(
+                familyID: remoteMarker.familyID,
+                entityType: remoteMarker.entityType,
+                targetRecordID: remoteMarker.targetRecordID,
+                deletedAt: remoteMarker.deletedAt,
+                isPendingUpload: false
+            )
+        }
+    }
+
+    private func applyRemoteDeletionMarkersToLocal(
+        _ remoteDeletionMarkers: [RemoteDeletionMarkerPayload],
+        family: Family,
+        remoteDeletionMap: [String: RemoteDeletionMarkerPayload]? = nil
+    ) throws {
+        let resolvedDeletionMap = remoteDeletionMap ?? Dictionary(
+            remoteDeletionMarkers.map { ($0.key, $0) },
+            uniquingKeysWith: { lhs, rhs in lhs.deletedAt >= rhs.deletedAt ? lhs : rhs }
+        )
+        let scopedItems = try fetchLocalItems(for: family)
+        let scopedBags = try fetchLocalBags(for: family)
+        var didChange = false
+
+        for item in scopedItems {
+            let key = RemoteDeletionMarkerPayload.makeKey(
+                entityType: .item,
+                targetRecordID: item.id.uuidString
+            )
+            guard let marker = resolvedDeletionMap[key],
+                  marker.deletedAt > item.syncTimestamp else { continue }
+            modelContext.delete(item)
+            didChange = true
+        }
+
+        for bag in scopedBags {
+            let key = RemoteDeletionMarkerPayload.makeKey(
+                entityType: .bag,
+                targetRecordID: bag.id.uuidString
+            )
+            guard let marker = resolvedDeletionMap[key],
+                  marker.deletedAt > bag.syncTimestamp else { continue }
+
+            for item in bag.resolvedItems {
+                item.bag = nil
+                item.markUpdated(at: marker.deletedAt)
+            }
+            modelContext.delete(bag)
+            didChange = true
+        }
+
+        if didChange {
+            try modelContext.save()
+        }
     }
 
     private func fetchRecords(

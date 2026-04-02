@@ -19,6 +19,7 @@ final class Family {
     var cloudKitHasRemoteBaseline: Bool = false
     var lastSelectedAt: Date?
     var createdAt: Date = Date()
+    var updatedAt: Date = Date.distantPast
     
     @Relationship(deleteRule: .cascade, inverse: \User.family)
     var members: [User]? = []
@@ -34,6 +35,7 @@ final class Family {
         self.name = name
         self.inviteCode = inviteCode ?? ""
         self.createdAt = Date()
+        self.updatedAt = createdAt
     }
 
     var resolvedMembers: [User] {
@@ -83,6 +85,14 @@ enum FamilyShareState {
 extension Family {
     func markAsCurrent(at date: Date = Date()) {
         lastSelectedAt = date
+    }
+
+    func markUpdated(at date: Date = Date()) {
+        updatedAt = date
+    }
+
+    var syncTimestamp: Date {
+        updatedAt == .distantPast ? createdAt : updatedAt
     }
 
     var hasScopedLocalData: Bool {

@@ -364,6 +364,7 @@ struct FamilySettingsView: View {
         let trimmedName = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedName.isEmpty {
             family.name = trimmedName
+            family.markUpdated()
         }
 
         do {
@@ -400,6 +401,7 @@ struct FamilySettingsView: View {
         guard !trimmedName.isEmpty else { return }
 
         family.name = trimmedName
+        family.markUpdated()
 
         do {
             try modelContext.save()

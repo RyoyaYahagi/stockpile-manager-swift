@@ -60,6 +60,7 @@ struct StockpileApp: App {
                 User.self,
                 Bag.self,
                 Item.self,
+                CloudKitDeletionMarker.self,
                 NotificationSettings.self,
                 configurations: configuration
             )
