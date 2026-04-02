@@ -129,26 +129,14 @@ struct ImportJSONView: View {
                 allowedContentTypes: [.json],
                 onCompletion: handleFileImport
             )
-            .confirmationDialog(
-                "復元先を選択",
+            .sheet(
                 isPresented: $showSharedRestoreOptions,
-                titleVisibility: .visible
+                onDismiss: clearPendingRestoreChoice
             ) {
-                Button("この端末だけに復元（推奨）") {
-                    Task {
-                        await restorePendingPayloadsLocally()
-                    }
-                }
-                Button("iCloud共有データとして復元") {
-                    Task {
-                        await restorePendingPayloadsToCurrentSharedFamily()
-                    }
-                }
-                Button("キャンセル", role: .cancel) {
-                    clearPendingRestoreChoice()
-                }
-            } message: {
-                Text(sharedRestoreDialogMessage)
+                sharedRestoreOptionsSheet
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(28)
             }
         }
     }
@@ -236,6 +224,62 @@ struct ImportJSONView: View {
             familyName,
             String(pendingImportPayloads.count)
         )
+    }
+
+    private var sharedRestoreOptionsSheet: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Capsule()
+                .fill(Color.secondary.opacity(0.25))
+                .frame(width: 36, height: 5)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Label("復元先を選択", systemImage: "arrow.triangle.branch")
+                    .font(.title3.bold())
+                    .foregroundStyle(.primary)
+
+                Text(sharedRestoreDialogMessage)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 12) {
+                sharedRestoreOptionButton(
+                    title: "この端末だけに復元",
+                    subtitle: "新しいローカル家族を作って、共有データとは切り離して戻します。",
+                    badge: "推奨",
+                    tint: .blue
+                ) {
+                    Task {
+                        await restorePendingPayloadsLocally()
+                    }
+                }
+
+                sharedRestoreOptionButton(
+                    title: "iCloud共有データとして復元",
+                    subtitle: "この復元内容を共有データへ反映し、ほかの参加端末にも同期します。",
+                    tint: .orange
+                ) {
+                    Task {
+                        await restorePendingPayloadsToCurrentSharedFamily()
+                    }
+                }
+            }
+
+            Button("キャンセル") {
+                clearPendingRestoreChoice()
+            }
+            .font(.body.weight(.semibold))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .foregroundStyle(.secondary)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 20)
     }
 
     private func restorePendingPayloadsLocally() async {
@@ -454,6 +498,50 @@ struct ImportJSONView: View {
         }
         
         return uniqueItems
+    }
+
+    @ViewBuilder
+    private func sharedRestoreOptionButton(
+        title: String,
+        subtitle: String,
+        badge: String? = nil,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    if let badge {
+                        Text(badge)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(tint)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(tint.opacity(0.12), in: Capsule())
+                    }
+                }
+
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(tint.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(tint.opacity(0.18), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
