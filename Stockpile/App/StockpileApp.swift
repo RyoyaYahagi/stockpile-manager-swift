@@ -52,7 +52,7 @@ struct StockpileApp: App {
     private let sharedModelContainer: ModelContainer = {
         prepareProtectedApplicationSupportDirectory()
         
-        let configuration = ModelConfiguration()
+        let configuration = ModelConfiguration(cloudKitDatabase: .none)
         
         do {
             return try ModelContainer(

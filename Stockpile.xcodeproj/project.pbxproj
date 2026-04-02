@@ -39,6 +39,7 @@
 		036 /* LanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136 /* LanguageSettingsView.swift */; };
 		037 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 137 /* Localizable.strings */; };
 		A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000002 /* ProductSearchServiceTests.swift */; };
+		A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */; };
 		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -95,6 +96,7 @@
 		145 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A4B100000000000000000001 /* StockpileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StockpileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A4B100000000000000000002 /* ProductSearchServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchServiceTests.swift; sourceTree = "<group>"; };
+		A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitFamilySharingServiceTests.swift; sourceTree = "<group>"; };
 		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockpileRelease.entitlements; sourceTree = "<group>"; };
 		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -158,6 +160,7 @@
 		A4B100000000000000000301 /* StockpileTests */ = {
 			isa = PBXGroup;
 			children = (
+				A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */,
 				A4B100000000000000000002 /* ProductSearchServiceTests.swift */,
 			);
 			path = StockpileTests;
@@ -440,6 +443,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */,
 				A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

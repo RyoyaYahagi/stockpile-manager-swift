@@ -16,6 +16,7 @@ final class Family {
     var cloudKitDatabaseScopeRawValue: String?
     var cloudKitShareURLString: String?
     var cloudKitPendingSync: Bool = false
+    var cloudKitHasRemoteBaseline: Bool = false
     var createdAt: Date = Date()
     
     @Relationship(deleteRule: .cascade, inverse: \User.family)
@@ -79,6 +80,10 @@ enum FamilyShareState {
 }
 
 extension Family {
+    var hasScopedLocalData: Bool {
+        !uniqueMembers.isEmpty || !resolvedBags.isEmpty || !resolvedItems.isEmpty
+    }
+
     var isVisibleInApp: Bool {
         true
     }
@@ -145,7 +150,7 @@ extension Family {
     }
 
     var prefersStrictCloudKitScoping: Bool {
-        shareState != .localOnly
+        shareState != .localOnly && (cloudKitHasRemoteBaseline || hasScopedLocalData)
     }
 
     var displayNameForCurrentState: String {
@@ -186,14 +191,15 @@ enum CurrentFamilyResolver {
     }
 
     private static func score(for family: Family) -> Int {
+        let hasEstablishedSharedContext = family.cloudKitHasRemoteBaseline || family.hasScopedLocalData
         switch family.shareState {
         case .shared:
             if family.cloudKitDatabaseScope == .sharedDatabase {
-                return 300
+                return hasEstablishedSharedContext ? 300 : 90
             }
-            return 250
+            return hasEstablishedSharedContext ? 250 : 90
         case .preparing:
-            return 200
+            return hasEstablishedSharedContext ? 200 : 80
         case .localOnly:
             var score = 100
             score += min(family.uniqueMembers.count, 5) * 4
