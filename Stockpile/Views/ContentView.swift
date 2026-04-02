@@ -862,7 +862,7 @@ private struct TutorialLiveIllustrationPreview: View {
                     }
                 }
             } else {
-                preview(offsetY: 42, scale: 0.62) {
+                preview(offsetY: 50, scale: 0.62) {
                     hostedPreview(container: TutorialPreviewFixtures.familySetupContainer) {
                         NavigationStack {
                             FamilySetupView()
@@ -885,7 +885,7 @@ private struct TutorialLiveIllustrationPreview: View {
             }
 
         case .settingsGuide:
-            preview(offsetY: -166, scale: 0.72) {
+            preview(offsetY: -140, scale: 0.72) {
                 hostedPreview(container: TutorialPreviewFixtures.settingsContainer) {
                     NavigationStack {
                         SettingsView()
