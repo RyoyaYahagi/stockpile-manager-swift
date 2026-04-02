@@ -47,10 +47,6 @@ function createResponseAdapter(response) {
       response.statusCode = statusCode;
       response.end(body);
     },
-    json(body) {
-      this.setHeader("Content-Type", "application/json; charset=utf-8");
-      this.send(JSON.stringify(body));
-    },
     redirect(code, location) {
       if (ended) {
         return;

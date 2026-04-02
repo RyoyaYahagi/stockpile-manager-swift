@@ -844,7 +844,7 @@ private struct TutorialLiveIllustrationPreview: View {
             }
 
         case .familySharing:
-            preview(offsetY: 54, scale: 0.62) {
+            preview(offsetY: 62, scale: 0.62) {
                 hostedPreview(container: TutorialPreviewFixtures.familySetupContainer) {
                     NavigationStack {
                         FamilySetupView()
