@@ -20,7 +20,7 @@ final class PremiumAccessManagerTests: XCTestCase {
         super.tearDown()
     }
 
-    func testFreeUserLimitsBagsAndNotificationTiming() async {
+    func testAllUsersHaveUnlimitedAccessWhenEverythingIsFree() async {
         let controller = FakePremiumPurchaseController(entitlementActive: false)
         let manager = makeManager(
             controller: controller,
@@ -30,15 +30,15 @@ final class PremiumAccessManagerTests: XCTestCase {
         await manager.refresh()
 
         XCTAssertEqual(manager.purchaseState, .free)
-        XCTAssertFalse(manager.hasPremiumAccess)
+        XCTAssertTrue(manager.hasPremiumAccess)
         XCTAssertTrue(manager.canAddBag(currentCount: 0))
-        XCTAssertTrue(manager.canAddBag(currentCount: 1))
-        XCTAssertFalse(manager.canAddBag(currentCount: PremiumAccessManager.freeBagLimit))
+        XCTAssertTrue(manager.canAddBag(currentCount: PremiumAccessManager.freeBagLimit))
+        XCTAssertTrue(manager.canAddBag(currentCount: 999))
         XCTAssertTrue(manager.canAddNotificationTiming(currentCount: 0))
-        XCTAssertFalse(manager.canAddNotificationTiming(currentCount: NotificationSettings.freeTimingRulesLimit))
+        XCTAssertTrue(manager.canAddNotificationTiming(currentCount: NotificationSettings.freeTimingRulesLimit))
     }
 
-    func testPremiumUserHasUnlimitedFeatureAccess() async {
+    func testRemainingQuotasStayHiddenWhenEverythingIsFree() async {
         let controller = FakePremiumPurchaseController(entitlementActive: true)
         let manager = makeManager(
             controller: controller,
@@ -47,48 +47,19 @@ final class PremiumAccessManagerTests: XCTestCase {
 
         await manager.refresh()
 
-        XCTAssertEqual(manager.purchaseState, .premium)
+        XCTAssertEqual(manager.purchaseState, .free)
         XCTAssertTrue(manager.hasPremiumAccess)
-        XCTAssertTrue(manager.canAddBag(currentCount: 999))
-        XCTAssertTrue(manager.canAddNotificationTiming(currentCount: 999))
         XCTAssertTrue(manager.canUseOCR())
         XCTAssertTrue(manager.canUseBarcodeSearch())
         XCTAssertNil(manager.remainingOCRQuota)
         XCTAssertNil(manager.remainingBarcodeQuota)
-    }
-
-    func testDailyOCRAndBarcodeQuotasAreTrackedSeparatelyAndResetEachDay() async {
-        let clock = TestClock(date: Date(timeIntervalSinceReferenceDate: 0))
-        let controller = FakePremiumPurchaseController(entitlementActive: false)
-        let manager = makeManager(controller: controller, clock: clock)
-
-        await manager.refresh()
-
-        XCTAssertEqual(manager.remainingOCRQuota, PremiumAccessManager.dailyUsageLimit)
-        XCTAssertEqual(manager.remainingBarcodeQuota, PremiumAccessManager.dailyUsageLimit)
-
         XCTAssertTrue(manager.recordOCRUsageIfNeeded())
         XCTAssertTrue(manager.recordBarcodeUsageIfNeeded())
-        XCTAssertEqual(manager.remainingOCRQuota, PremiumAccessManager.dailyUsageLimit - 1)
-        XCTAssertEqual(manager.remainingBarcodeQuota, PremiumAccessManager.dailyUsageLimit - 1)
-
-        for _ in 0..<(PremiumAccessManager.dailyUsageLimit - 1) {
-            XCTAssertTrue(manager.recordOCRUsageIfNeeded())
-        }
-
-        XCTAssertEqual(manager.remainingOCRQuota, 0)
-        XCTAssertFalse(manager.canUseOCR())
-        XCTAssertTrue(manager.canUseBarcodeSearch())
-
-        clock.date = Date(timeIntervalSinceReferenceDate: 60 * 60 * 24)
-        manager.refreshUsageState()
-
-        XCTAssertEqual(manager.remainingOCRQuota, PremiumAccessManager.dailyUsageLimit)
-        XCTAssertEqual(manager.remainingBarcodeQuota, PremiumAccessManager.dailyUsageLimit)
-        XCTAssertTrue(manager.canUseOCR())
+        XCTAssertNil(manager.remainingOCRQuota)
+        XCTAssertNil(manager.remainingBarcodeQuota)
     }
 
-    func testPurchasePremiumUpdatesStateToPremium() async {
+    func testPurchasePremiumDoesNothingWhenEverythingIsFree() async {
         let controller = FakePremiumPurchaseController(entitlementActive: false)
         controller.purchaseResult = .purchased
         let manager = makeManager(
@@ -99,12 +70,12 @@ final class PremiumAccessManagerTests: XCTestCase {
         await manager.refresh()
         await manager.purchasePremium()
 
-        XCTAssertTrue(controller.purchaseCalled)
+        XCTAssertFalse(controller.purchaseCalled)
         XCTAssertTrue(manager.hasPremiumAccess)
-        XCTAssertEqual(manager.purchaseState, .premium)
+        XCTAssertEqual(manager.purchaseState, .free)
     }
 
-    func testRestorePurchasesUpdatesStateToPremium() async {
+    func testRestorePurchasesDoesNothingWhenEverythingIsFree() async {
         let controller = FakePremiumPurchaseController(entitlementActive: false)
         controller.restoreResult = true
         let manager = makeManager(
@@ -115,9 +86,9 @@ final class PremiumAccessManagerTests: XCTestCase {
         await manager.refresh()
         await manager.restorePurchases()
 
-        XCTAssertTrue(controller.restoreCalled)
+        XCTAssertFalse(controller.restoreCalled)
         XCTAssertTrue(manager.hasPremiumAccess)
-        XCTAssertEqual(manager.purchaseState, .premium)
+        XCTAssertEqual(manager.purchaseState, .free)
     }
 
     func testInternalOverrideGrantsPremiumWithoutEntitlement() async {
@@ -143,7 +114,7 @@ final class PremiumAccessManagerTests: XCTestCase {
         await manager.refresh()
 
         XCTAssertTrue(manager.hasPremiumAccess)
-        XCTAssertEqual(manager.purchaseState, .premium)
+        XCTAssertEqual(manager.purchaseState, .free)
     }
 
     func testLiveOverrideCanDisableDebugPremiumForAutomation() {

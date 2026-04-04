@@ -6,7 +6,6 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
     @Environment(LocalizationController.self) private var localizationController
-    @Environment(PremiumAccessManager.self) private var premiumAccessManager
     
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     @AppStorage("app.tutorial.replayRequestToken")
@@ -94,21 +93,6 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("通知")
-            }
-
-            Section {
-                Button {
-                    premiumAccessManager.presentPlanOverview()
-                } label: {
-                    HStack {
-                        Label("有料プラン", systemImage: "crown")
-                        Spacer()
-                        Text(premiumAccessManager.planStatusLabel)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            } header: {
-                Text("プラン")
             }
 
             Section {
@@ -206,6 +190,5 @@ struct SettingsView: View {
         SettingsView()
     }
     .environment(Router())
-    .environment(PremiumAccessManager.shared)
     .modelContainer(for: [Family.self], inMemory: true)
 }

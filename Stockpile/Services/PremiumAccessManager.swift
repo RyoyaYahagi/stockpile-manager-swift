@@ -325,6 +325,7 @@ final class StoreKitPremiumPurchaseController: PremiumPurchaseControlling {
 @Observable
 final class PremiumAccessManager {
     static let shared = PremiumAccessManager()
+    private static let allFeaturesFree = true
 
     nonisolated static let productID = "com.stockpile-manager.app.premium.lifetime"
     nonisolated static let freeBagLimit = 2
@@ -353,8 +354,8 @@ final class PremiumAccessManager {
         self.controller = controller ?? StoreKitPremiumPurchaseController(productID: Self.productID)
         self.quotaStore = quotaStore ?? PremiumDailyQuotaStore()
         self.overrideConfig = resolvedOverrideConfig
-        self.hasPremiumAccess = resolvedOverrideConfig.grantsPremiumAccess
-        self.purchaseState = resolvedOverrideConfig.grantsPremiumAccess ? .premium : .loading
+        self.hasPremiumAccess = Self.allFeaturesFree || resolvedOverrideConfig.grantsPremiumAccess
+        self.purchaseState = Self.allFeaturesFree ? .free : (resolvedOverrideConfig.grantsPremiumAccess ? .premium : .loading)
         refreshUsageState()
         startObservingTransactions()
 
@@ -364,52 +365,61 @@ final class PremiumAccessManager {
     }
 
     var planStatusLabel: String {
-        hasPremiumAccess ? L10n.string("有料版") : L10n.string("無料版")
+        L10n.string("無料版")
     }
 
     var purchaseButtonTitle: String {
-        if let productInfo {
-            return L10n.format("%@で購入", productInfo.displayPrice)
-        }
-        return L10n.string("300円で購入")
+        L10n.string("無料版")
     }
 
     func canAddBag(currentCount: Int) -> Bool {
-        hasPremiumAccess || currentCount < Self.freeBagLimit
+        true
     }
 
     func canAddNotificationTiming(currentCount: Int) -> Bool {
-        hasPremiumAccess || currentCount < Self.freeNotificationTimingLimit
+        true
     }
 
     func canUseOCR() -> Bool {
-        hasPremiumAccess || (remainingOCRQuota ?? 0) > 0
+        true
     }
 
     func canUseBarcodeSearch() -> Bool {
-        hasPremiumAccess || (remainingBarcodeQuota ?? 0) > 0
+        true
     }
 
     @discardableResult
     func recordOCRUsageIfNeeded() -> Bool {
-        let didRecord = quotaStore.recordUsageIfNeeded(for: .ocr, isPremium: hasPremiumAccess)
         refreshUsageState()
-        return didRecord
+        return true
     }
 
     @discardableResult
     func recordBarcodeUsageIfNeeded() -> Bool {
-        let didRecord = quotaStore.recordUsageIfNeeded(for: .barcode, isPremium: hasPremiumAccess)
         refreshUsageState()
-        return didRecord
+        return true
     }
 
     func refreshUsageState() {
+        if Self.allFeaturesFree {
+            remainingOCRQuota = nil
+            remainingBarcodeQuota = nil
+            return
+        }
+
         remainingOCRQuota = quotaStore.remainingQuota(for: .ocr, isPremium: hasPremiumAccess)
         remainingBarcodeQuota = quotaStore.remainingQuota(for: .barcode, isPremium: hasPremiumAccess)
     }
 
     func refresh() async {
+        if Self.allFeaturesFree {
+            productInfo = nil
+            hasPremiumAccess = true
+            purchaseState = .free
+            refreshUsageState()
+            return
+        }
+
         let loadedProductInfo = try? await controller.loadProduct()
         if let loadedProductInfo {
             productInfo = loadedProductInfo
@@ -430,6 +440,11 @@ final class PremiumAccessManager {
         for entryPoint: PremiumEntryPoint? = nil,
         onUnlocked: (@MainActor () -> Void)? = nil
     ) {
+        guard !Self.allFeaturesFree else {
+            onUnlocked?()
+            return
+        }
+
         if hasPremiumAccess {
             onUnlocked?()
             return
@@ -442,6 +457,7 @@ final class PremiumAccessManager {
     }
 
     func presentPlanOverview() {
+        guard !Self.allFeaturesFree else { return }
         presentedPaywall = PremiumPaywallPresentation(
             entryPoint: nil,
             onUnlocked: nil
@@ -453,6 +469,7 @@ final class PremiumAccessManager {
     }
 
     func purchasePremium() async {
+        guard !Self.allFeaturesFree else { return }
         if hasPremiumAccess {
             continueUnlockFlowIfNeeded()
             return
@@ -481,6 +498,7 @@ final class PremiumAccessManager {
     }
 
     func restorePurchases() async {
+        guard !Self.allFeaturesFree else { return }
         purchaseState = .purchaseInProgress
 
         do {
@@ -498,6 +516,12 @@ final class PremiumAccessManager {
     }
 
     private func startObservingTransactions() {
+        guard !Self.allFeaturesFree else {
+            updatesTask?.cancel()
+            updatesTask = nil
+            return
+        }
+
         updatesTask?.cancel()
         updatesTask = Task { [weak self] in
             guard let self else { return }

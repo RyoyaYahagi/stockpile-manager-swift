@@ -54,6 +54,15 @@ struct ItemDetailView: View {
                     Text("\(item.quantity)")
                         .foregroundStyle(.secondary)
                 }
+
+                if let janCode = item.janCode, !janCode.isEmpty {
+                    HStack {
+                        Label("JANコード", systemImage: "barcode")
+                        Spacer()
+                        Text(janCode)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 
                 if let bag = item.bag {
                     HStack {

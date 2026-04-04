@@ -4,6 +4,8 @@ import AudioToolbox
 
 /// バーコード（JAN）スキャナービュー
 struct BarcodeScannerView: View {
+    private static let yahooAttributionURL = URL(string: "https://developer.yahoo.co.jp/sitemap/")!
+
     @Environment(\.dismiss) private var dismiss
     @Environment(PremiumAccessManager.self) private var premiumAccessManager
     @State private var scannedCode: String?
@@ -90,6 +92,8 @@ struct BarcodeScannerView: View {
                                     .font(.caption)
                                     .foregroundStyle(.white.opacity(0.8))
                             }
+
+                            yahooAttributionView
                         }
                         .padding(.bottom, 40)
                     }
@@ -323,6 +327,12 @@ struct BarcodeScannerView: View {
     private var barcodeQuotaText: String? {
         guard let remaining = premiumAccessManager.remainingBarcodeQuota else { return nil }
         return L10n.format("無料版はあと%@回バーコード検索できます。", String(remaining))
+    }
+
+    private var yahooAttributionView: some View {
+        Link("Webサービス by Yahoo! JAPAN", destination: Self.yahooAttributionURL)
+            .font(.footnote)
+            .padding(.top, 4)
     }
 
     private func userFacingMessage(for error: Error) -> String {
