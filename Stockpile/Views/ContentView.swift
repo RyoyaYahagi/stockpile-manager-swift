@@ -846,7 +846,7 @@ private struct TutorialLiveIllustrationPreview: View {
             }
 
         case .familySharing:
-            preview(offsetY: -6, scale: 0.72) {
+            preview(offsetY: -10, scale: 0.72) {
                 hostedPreview(container: TutorialPreviewFixtures.familySetupContainer(language: localizationController.selectedLanguage)) {
                     TutorialFamilySharingPreviewView(highlightCreateFamilyButton: true)
                 }
@@ -930,22 +930,14 @@ private struct TutorialFamilySharingPreviewView: View {
     let highlightCreateFamilyButton: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
+        ZStack(alignment: .top) {
+            Color(.systemGroupedBackground)
+
+            VStack(spacing: 16) {
                 Text("家族セットアップ")
                     .font(.headline.weight(.semibold))
-                Spacer()
-            }
-            .padding(.top, 16)
-            .padding(.bottom, 18)
 
-            VStack(alignment: .leading, spacing: 16) {
-                Text("家族共有はiCloud共有リンクで行われます")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text("家族名")
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(.secondary)
@@ -960,45 +952,38 @@ private struct TutorialFamilySharingPreviewView: View {
                                 .padding(.horizontal, 14)
                         }
 
-                    Text("家族グループの名前を入力してください（例: 山田家）")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-
-                Button {} label: {
-                    Text("家族を作成")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 40)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(Color.blue)
-                        )
-                }
-                .buttonStyle(.plain)
-                .overlay {
-                    if highlightCreateFamilyButton {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.green.opacity(0.9), lineWidth: 4)
-                            .padding(-6)
-                            .shadow(color: Color.green.opacity(0.2), radius: 8, x: 0, y: 3)
+                    Button {} label: {
+                        Text("家族を作成")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 40)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.blue)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .overlay {
+                        if highlightCreateFamilyButton {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(Color.green.opacity(0.9), lineWidth: 4)
+                                .padding(-6)
+                                .shadow(color: Color.green.opacity(0.2), radius: 8, x: 0, y: 3)
+                        }
                     }
                 }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 18)
+                .background(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(.white)
+                        .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 4)
+                )
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 18)
-            .padding(.bottom, 24)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.white)
-                    .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 4)
-            )
-            .padding(.horizontal, 18)
-
-            Spacer(minLength: 0)
+            .padding(.horizontal, 28)
+            .padding(.top, 24)
         }
-        .background(Color(.systemGroupedBackground))
         .localizedRefresh()
     }
 }
