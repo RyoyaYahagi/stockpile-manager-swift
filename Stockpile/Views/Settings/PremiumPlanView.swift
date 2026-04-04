@@ -15,16 +15,32 @@ struct PremiumPlanView: View {
         entryPoint?.headline ?? L10n.string("有料版でできること")
     }
 
+    private var planTitleText: String {
+        L10n.string("有料プラン")
+    }
+
     private var descriptionText: String {
         entryPoint?.descriptionText
             ?? L10n.string("300円の買い切りで、収納場所・通知・OCR・バーコード検索の制限が外れます。")
+    }
+
+    private var featureTexts: [String] {
+        [
+            L10n.string("収納場所を無制限で追加できます"),
+            L10n.format(
+                "通知タイミングを最大%@件まで追加できます",
+                String(PremiumAccessManager.maximumNotificationTimingLimit)
+            ),
+            L10n.string("OCRを何度でも使えます"),
+            L10n.string("バーコード検索を何度でも使えます")
+        ]
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("有料プラン", systemImage: "crown.fill")
+                    Label(planTitleText, systemImage: "crown.fill")
                         .font(.title2.bold())
                         .foregroundStyle(.orange)
 
@@ -61,18 +77,12 @@ struct PremiumPlanView: View {
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("有料版でできること")
+                    Text(L10n.string("有料版でできること"))
                         .font(.headline)
 
-                    featureRow("収納場所を無制限で追加できます")
-                    featureRow(
-                        L10n.format(
-                            "通知タイミングを最大%@件まで追加できます",
-                            String(PremiumAccessManager.maximumNotificationTimingLimit)
-                        )
-                    )
-                    featureRow("OCRを何度でも使えます")
-                    featureRow("バーコード検索を何度でも使えます")
+                    ForEach(featureTexts, id: \.self) { text in
+                        featureRow(text)
+                    }
                 }
 
                 if case .error(let message) = premiumAccessManager.purchaseState {
@@ -118,14 +128,14 @@ struct PremiumPlanView: View {
                             || premiumAccessManager.hasPremiumAccess
                     )
 
-                    Button("購入を復元") {
+                    Button(L10n.string("購入を復元")) {
                         Task {
                             await premiumAccessManager.restorePurchases()
                         }
                     }
                     .disabled(premiumAccessManager.purchaseState == .purchaseInProgress)
 
-                    Button("閉じる") {
+                    Button(L10n.string("閉じる")) {
                         premiumAccessManager.dismissPaywall()
                         dismiss()
                     }
@@ -136,7 +146,7 @@ struct PremiumPlanView: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .navigationTitle("有料プラン")
+        .navigationTitle(planTitleText)
         .navigationBarTitleDisplayMode(.inline)
         .localizedRefresh()
     }
