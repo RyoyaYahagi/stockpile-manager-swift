@@ -790,6 +790,8 @@ private struct TutorialIllustrationCard: View {
 
 @MainActor
 private struct TutorialLiveIllustrationPreview: View {
+    @Environment(LocalizationController.self) private var localizationController
+
     let kind: TutorialIllustrationKind
     let didSetUpFamily: Bool
 
@@ -797,7 +799,7 @@ private struct TutorialLiveIllustrationPreview: View {
         switch kind {
         case .welcome:
             preview(offsetY: -12) {
-                hostedPreview(container: TutorialPreviewFixtures.dashboardContainer) {
+                hostedPreview(container: TutorialPreviewFixtures.dashboardContainer(language: localizationController.selectedLanguage)) {
                     NavigationStack {
                         DashboardView()
                     }
@@ -806,7 +808,7 @@ private struct TutorialLiveIllustrationPreview: View {
 
         case .addButton:
             preview(offsetY: -112, scale: 0.48) {
-                hostedPreview(container: TutorialPreviewFixtures.emptyDashboardContainer) {
+                hostedPreview(container: TutorialPreviewFixtures.emptyDashboardContainer(language: localizationController.selectedLanguage)) {
                     NavigationStack {
                         DashboardView()
                     }
@@ -829,7 +831,7 @@ private struct TutorialLiveIllustrationPreview: View {
 
         case .notifications:
             preview(offsetY: -118) {
-                hostedPreview(container: TutorialPreviewFixtures.notificationContainer) {
+                hostedPreview(container: TutorialPreviewFixtures.notificationContainer(language: localizationController.selectedLanguage)) {
                     NavigationStack {
                         NotificationSettingsView()
                     }
@@ -845,7 +847,7 @@ private struct TutorialLiveIllustrationPreview: View {
 
         case .familySharing:
             preview(offsetY: 62, scale: 0.62) {
-                hostedPreview(container: TutorialPreviewFixtures.familySetupContainer) {
+                hostedPreview(container: TutorialPreviewFixtures.familySetupContainer(language: localizationController.selectedLanguage)) {
                     NavigationStack {
                         FamilySetupView()
                     }
@@ -867,7 +869,7 @@ private struct TutorialLiveIllustrationPreview: View {
 
         case .settingsGuide:
             preview(offsetY: -140, scale: 0.72) {
-                hostedPreview(container: TutorialPreviewFixtures.settingsContainer) {
+                hostedPreview(container: TutorialPreviewFixtures.settingsContainer(language: localizationController.selectedLanguage)) {
                     NavigationStack {
                         SettingsView()
                     }
@@ -915,13 +917,15 @@ private struct TutorialLiveIllustrationPreview: View {
         container: ModelContainer,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        let localizationController = LocalizationController(initialLanguage: .japanese)
+        let previewLocalizationController = LocalizationController(
+            initialLanguage: localizationController.selectedLanguage
+        )
 
         return content()
             .environment(Router())
-            .environment(localizationController)
+            .environment(previewLocalizationController)
             .environment(PremiumAccessManager.shared)
-            .environment(\.locale, localizationController.locale)
+            .environment(\.locale, previewLocalizationController.locale)
             .modelContainer(container)
             .scrollDisabled(true)
             .preferredColorScheme(.light)
@@ -1008,25 +1012,38 @@ private struct TutorialHighlightCircle: View {
 
 @MainActor
 private enum TutorialPreviewFixtures {
-    static let dashboardContainer = makeDashboardContainer()
-    static let emptyDashboardContainer = makeEmptyDashboardContainer()
-    static let notificationContainer = makeNotificationContainer()
-    static let familySetupContainer = makeFamilySetupContainer()
-    static let familyFixture = makeFamilyFixture()
-    static let settingsContainer = makeSettingsContainer()
+    static func dashboardContainer(language: AppLanguage) -> ModelContainer {
+        makeDashboardContainer(language: language)
+    }
 
-    private static func makeDashboardContainer() -> ModelContainer {
+    static func emptyDashboardContainer(language: AppLanguage) -> ModelContainer {
+        makeEmptyDashboardContainer(language: language)
+    }
+
+    static func notificationContainer(language: AppLanguage) -> ModelContainer {
+        makeNotificationContainer(language: language)
+    }
+
+    static func familySetupContainer(language: AppLanguage) -> ModelContainer {
+        makeFamilySetupContainer(language: language)
+    }
+
+    static func settingsContainer(language: AppLanguage) -> ModelContainer {
+        makeSettingsContainer(language: language)
+    }
+
+    private static func makeDashboardContainer(language: AppLanguage) -> ModelContainer {
         let container = makeContainer()
         let context = container.mainContext
-        let pantry = Bag(name: "キッチン棚")
-        let emergency = Bag(name: "非常袋")
-        let trunk = Bag(name: "車載ボックス")
+        let pantry = Bag(name: localized("キッチン棚", language: language))
+        let emergency = Bag(name: localized("非常袋", language: language))
+        let trunk = Bag(name: localized("車載ボックス", language: language))
 
         let items = [
-            makeItem(name: "飲料水", quantity: 6, daysUntilExpiry: 21, bag: pantry),
-            makeItem(name: "缶詰", quantity: 8, daysUntilExpiry: 120, bag: pantry),
-            makeItem(name: "乾電池", quantity: 12, daysUntilExpiry: nil, bag: emergency),
-            makeItem(name: "アルファ米", quantity: 4, daysUntilExpiry: 8, bag: trunk)
+            makeItem(name: localized("飲料水", language: language), quantity: 6, daysUntilExpiry: 21, bag: pantry),
+            makeItem(name: localized("缶詰", language: language), quantity: 8, daysUntilExpiry: 120, bag: pantry),
+            makeItem(name: localized("乾電池", language: language), quantity: 12, daysUntilExpiry: nil, bag: emergency),
+            makeItem(name: localized("アルファ米", language: language), quantity: 4, daysUntilExpiry: 8, bag: trunk)
         ]
 
         [pantry, emergency, trunk].forEach { context.insert($0) }
@@ -1035,63 +1052,40 @@ private enum TutorialPreviewFixtures {
         return container
     }
 
-    private static func makeEmptyDashboardContainer() -> ModelContainer {
+    private static func makeEmptyDashboardContainer(language _: AppLanguage) -> ModelContainer {
         makeContainer()
     }
 
-    private static func makeNotificationContainer() -> ModelContainer {
+    private static func makeNotificationContainer(language: AppLanguage) -> ModelContainer {
         let container = makeContainer()
         let context = container.mainContext
         let settings = NotificationSettings.createDefault()
         settings.notificationHour = 9
         settings.notificationMinute = 0
         context.insert(settings)
-        context.insert(makeItem(name: "カセットボンベ", quantity: 3, daysUntilExpiry: 14, bag: nil))
+        context.insert(
+            makeItem(
+                name: localized("カセットボンベ", language: language),
+                quantity: 3,
+                daysUntilExpiry: 14,
+                bag: nil
+            )
+        )
         try? context.save()
         return container
     }
 
-    private static func makeFamilySetupContainer() -> ModelContainer {
+    private static func makeFamilySetupContainer(language _: AppLanguage) -> ModelContainer {
         makeContainer()
     }
 
-    private static func makeFamilyFixture() -> TutorialFamilyFixture {
+    private static func makeSettingsContainer(language: AppLanguage) -> ModelContainer {
         let container = makeContainer()
         let context = container.mainContext
-        let family = Family(name: "わが家")
-        family.cloudKitDatabaseScope = .privateDatabase
-        family.cloudKitShareURL = URL(string: "https://icloud.com/share/stockpile-family")
-        let pantry = Bag(name: "パントリー")
-        pantry.family = family
-
+        let family = Family(name: localized("わが家", language: language))
         let users = [
-            User(displayName: "自分", email: "me@example.com"),
-            User(displayName: "家族A", email: "family-a@example.com"),
-            User(displayName: "家族B", email: "family-b@example.com")
-        ]
-        users.forEach { $0.family = family }
-
-        let items = [
-            makeItem(name: "レトルトご飯", quantity: 5, daysUntilExpiry: 45, bag: pantry, family: family),
-            makeItem(name: "保存水", quantity: 6, daysUntilExpiry: 90, bag: pantry, family: family)
-        ]
-
-        context.insert(family)
-        context.insert(pantry)
-        users.forEach { context.insert($0) }
-        items.forEach { context.insert($0) }
-        try? context.save()
-
-        return TutorialFamilyFixture(container: container, family: family)
-    }
-
-    private static func makeSettingsContainer() -> ModelContainer {
-        let container = makeContainer()
-        let context = container.mainContext
-        let family = Family(name: "わが家")
-        let users = [
-            User(displayName: "自分", email: "me@example.com"),
-            User(displayName: "家族A", email: "family-a@example.com")
+            User(displayName: localized("自分", language: language), email: "me@example.com"),
+            User(displayName: localized("家族A", language: language), email: "family-a@example.com")
         ]
         users.forEach { $0.family = family }
 
@@ -1099,6 +1093,10 @@ private enum TutorialPreviewFixtures {
         users.forEach { context.insert($0) }
         try? context.save()
         return container
+    }
+
+    private static func localized(_ key: String, language: AppLanguage) -> String {
+        AppLocalization.bundle(for: language).localizedString(forKey: key, value: key, table: nil)
     }
 
     private static func makeContainer() -> ModelContainer {
@@ -1131,12 +1129,6 @@ private enum TutorialPreviewFixtures {
         item.family = family
         return item
     }
-}
-
-@MainActor
-private struct TutorialFamilyFixture {
-    let container: ModelContainer
-    let family: Family
 }
 
 private struct TutorialCalloutBadge: View {
