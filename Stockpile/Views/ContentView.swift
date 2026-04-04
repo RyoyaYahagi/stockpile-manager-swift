@@ -639,7 +639,7 @@ private struct FirstLaunchTutorialView: View {
             ),
             TutorialStep(
                 title: "まずは右下の + を押します",
-                message: "登録画面が開いたら、名前を入れて保存するだけで使い始められます。",
+                message: "登録画面では、名前を入れて保存すれば使い始められます。",
                 primaryTitle: "+ボタンを開く",
                 action: .addItem,
                 secondaryTitle: "今は説明だけ見る",
@@ -849,7 +849,7 @@ private struct TutorialLiveIllustrationPreview: View {
             preview(offsetY: 62, scale: 0.62) {
                 hostedPreview(container: TutorialPreviewFixtures.familySetupContainer(language: localizationController.selectedLanguage)) {
                     NavigationStack {
-                        FamilySetupView()
+                        TutorialFamilySharingPreviewView()
                     }
                 }
             } overlay: {
@@ -930,6 +930,43 @@ private struct TutorialLiveIllustrationPreview: View {
             .scrollDisabled(true)
             .preferredColorScheme(.light)
             .allowsHitTesting(false)
+    }
+}
+
+private struct TutorialFamilySharingPreviewView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("家族名")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.secondary)
+
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color(.secondarySystemGroupedBackground))
+                        .frame(height: 44)
+                        .overlay(alignment: .leading) {
+                            Text("家族名")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary.opacity(0.65))
+                                .padding(.horizontal, 14)
+                        }
+                }
+
+                Button("家族を作成") {}
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 2)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("家族セットアップ")
+        .navigationBarTitleDisplayMode(.inline)
+        .localizedRefresh()
     }
 }
 
