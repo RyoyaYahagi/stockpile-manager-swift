@@ -846,25 +846,18 @@ private struct TutorialLiveIllustrationPreview: View {
             }
 
         case .familySharing:
-            preview(offsetY: 62, scale: 0.62) {
+            preview(offsetY: -6, scale: 0.72) {
                 hostedPreview(container: TutorialPreviewFixtures.familySetupContainer(language: localizationController.selectedLanguage)) {
-                    NavigationStack {
-                        TutorialFamilySharingPreviewView()
-                    }
+                    TutorialFamilySharingPreviewView(highlightCreateFamilyButton: true)
                 }
             } overlay: {
-                ZStack {
-                    TutorialHighlightFrame(tint: .green)
-                        .frame(width: 236, height: 42)
-                        .offset(x: 0, y: -22)
-
-                    TutorialCalloutBadge(
-                        text: "ここで共有を始めます",
-                        symbol: "person.3.fill",
-                        tint: .green
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                }
+                TutorialCalloutBadge(
+                    text: "ここで共有を始めます",
+                    symbol: "person.3.fill",
+                    tint: .green
+                )
+                .offset(x: -6, y: 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
 
         case .settingsGuide:
@@ -934,9 +927,24 @@ private struct TutorialLiveIllustrationPreview: View {
 }
 
 private struct TutorialFamilySharingPreviewView: View {
+    let highlightCreateFamilyButton: Bool
+
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Text("家族セットアップ")
+                    .font(.headline.weight(.semibold))
+                Spacer()
+            }
+            .padding(.top, 16)
+            .padding(.bottom, 18)
+
             VStack(alignment: .leading, spacing: 16) {
+                Text("家族共有はiCloud共有リンクで行われます")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 VStack(alignment: .leading, spacing: 8) {
                     Text("家族名")
                         .font(.footnote.weight(.medium))
@@ -944,28 +952,53 @@ private struct TutorialFamilySharingPreviewView: View {
 
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Color(.secondarySystemGroupedBackground))
-                        .frame(height: 44)
+                        .frame(height: 42)
                         .overlay(alignment: .leading) {
                             Text("家族名")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary.opacity(0.65))
+                                .foregroundStyle(.secondary.opacity(0.7))
                                 .padding(.horizontal, 14)
                         }
+
+                    Text("家族グループの名前を入力してください（例: 山田家）")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
 
-                Button("家族を作成") {}
-                    .buttonStyle(.borderedProminent)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 2)
-
-                Spacer(minLength: 0)
+                Button {} label: {
+                    Text("家族を作成")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.blue)
+                        )
+                }
+                .buttonStyle(.plain)
+                .overlay {
+                    if highlightCreateFamilyButton {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.green.opacity(0.9), lineWidth: 4)
+                            .padding(-6)
+                            .shadow(color: Color.green.opacity(0.2), radius: 8, x: 0, y: 3)
+                    }
+                }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 18)
             .padding(.top, 18)
+            .padding(.bottom, 24)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.white)
+                    .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 4)
+            )
+            .padding(.horizontal, 18)
+
+            Spacer(minLength: 0)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("家族セットアップ")
-        .navigationBarTitleDisplayMode(.inline)
         .localizedRefresh()
     }
 }
