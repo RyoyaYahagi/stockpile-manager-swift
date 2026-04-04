@@ -846,8 +846,8 @@ private struct TutorialLiveIllustrationPreview: View {
             }
 
         case .familySharing:
-            preview(offsetY: -10, scale: 0.72) {
-                hostedPreview(container: TutorialPreviewFixtures.familySetupContainer(language: localizationController.selectedLanguage)) {
+            compactPreview {
+                localizedHostedPreview {
                     TutorialFamilySharingPreviewView(highlightCreateFamilyButton: true)
                 }
             } overlay: {
@@ -924,67 +924,124 @@ private struct TutorialLiveIllustrationPreview: View {
             .preferredColorScheme(.light)
             .allowsHitTesting(false)
     }
+
+    private func localizedHostedPreview<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let previewLocalizationController = LocalizationController(
+            initialLanguage: localizationController.selectedLanguage
+        )
+
+        return content()
+            .environment(Router())
+            .environment(previewLocalizationController)
+            .environment(PremiumAccessManager.shared)
+            .environment(\.locale, previewLocalizationController.locale)
+            .preferredColorScheme(.light)
+            .allowsHitTesting(false)
+    }
+
+    private func compactPreview<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        TutorialCompactPreview(content: content)
+    }
+
+    private func compactPreview<Content: View, Overlay: View>(
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder overlay: () -> Overlay
+    ) -> some View {
+        TutorialCompactPreview(content: content, overlay: overlay)
+    }
 }
 
 private struct TutorialFamilySharingPreviewView: View {
     let highlightCreateFamilyButton: Bool
 
     var body: some View {
-        ZStack(alignment: .top) {
+        ZStack {
             Color(.systemGroupedBackground)
 
-            VStack(spacing: 16) {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.white)
+                .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 4)
+
+            VStack(alignment: .leading, spacing: 12) {
                 Text("家族セットアップ")
                     .font(.headline.weight(.semibold))
 
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("家族名")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(.secondary)
+                Text("家族名")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
 
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(.secondarySystemGroupedBackground))
-                        .frame(height: 42)
-                        .overlay(alignment: .leading) {
-                            Text("家族名")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary.opacity(0.7))
-                                .padding(.horizontal, 14)
-                        }
-
-                    Button {} label: {
-                        Text("家族を作成")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 40)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color.blue)
-                            )
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(.secondarySystemGroupedBackground))
+                    .frame(height: 42)
+                    .overlay(alignment: .leading) {
+                        Text("家族名")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary.opacity(0.7))
+                            .padding(.horizontal, 14)
                     }
-                    .buttonStyle(.plain)
-                    .overlay {
-                        if highlightCreateFamilyButton {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(Color.green.opacity(0.9), lineWidth: 4)
-                                .padding(-6)
-                                .shadow(color: Color.green.opacity(0.2), radius: 8, x: 0, y: 3)
-                        }
+
+                Button {} label: {
+                    Text("家族を作成")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.blue)
+                        )
+                }
+                .buttonStyle(.plain)
+                .overlay {
+                    if highlightCreateFamilyButton {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.green.opacity(0.9), lineWidth: 4)
+                            .padding(-6)
+                            .shadow(color: Color.green.opacity(0.2), radius: 8, x: 0, y: 3)
                     }
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 18)
-                .background(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(.white)
-                        .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 4)
-                )
             }
-            .padding(.horizontal, 28)
-            .padding(.top, 24)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
         }
         .localizedRefresh()
+    }
+}
+
+private struct TutorialCompactPreview<Content: View, Overlay: View>: View {
+    private let content: Content
+    private let overlay: Overlay
+
+    init(
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder overlay: () -> Overlay = { EmptyView() }
+    ) {
+        self.content = content()
+        self.overlay = overlay()
+    }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.white.opacity(0.96))
+
+            content
+                .padding(14)
+
+            overlay
+                .padding(16)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 204)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+        }
     }
 }
 
