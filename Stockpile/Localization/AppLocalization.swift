@@ -8,9 +8,6 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     case simplifiedChinese = "zh-Hans"
     case traditionalChinese = "zh-Hant"
     case korean = "ko"
-    case french = "fr"
-    case german = "de"
-    case spanish = "es"
 
     static let storageKey = "settings.appLanguage"
 
@@ -39,12 +36,6 @@ enum AppLanguage: String, CaseIterable, Identifiable {
             return "繁體中文"
         case .korean:
             return "한국어"
-        case .french:
-            return "Français"
-        case .german:
-            return "Deutsch"
-        case .spanish:
-            return "Español"
         }
     }
 

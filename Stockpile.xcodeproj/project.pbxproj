@@ -44,6 +44,7 @@
 		A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000002 /* ProductSearchServiceTests.swift */; };
 		A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */; };
 		A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000004 /* PremiumAccessManagerTests.swift */; };
+		A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000005 /* AppLocalizationTests.swift */; };
 		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -95,9 +96,6 @@
 		140 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		141 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		142 /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ko; path = ko.lproj/Localizable.strings; sourceTree = "<group>"; };
-		143 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/Localizable.strings; sourceTree = "<group>"; };
-		144 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
-		145 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		146 /* CloudKitDeletionMarker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitDeletionMarker.swift; sourceTree = "<group>"; };
 		147 /* PremiumAccessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumAccessManager.swift; sourceTree = "<group>"; };
 		148 /* PremiumPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumPlanView.swift; sourceTree = "<group>"; };
@@ -106,6 +104,7 @@
 		A4B100000000000000000002 /* ProductSearchServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchServiceTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitFamilySharingServiceTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000004 /* PremiumAccessManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumAccessManagerTests.swift; sourceTree = "<group>"; };
+		A4B100000000000000000005 /* AppLocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalizationTests.swift; sourceTree = "<group>"; };
 		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockpileRelease.entitlements; sourceTree = "<group>"; };
 		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -169,6 +168,7 @@
 		A4B100000000000000000301 /* StockpileTests */ = {
 			isa = PBXGroup;
 			children = (
+				A4B100000000000000000005 /* AppLocalizationTests.swift */,
 				A4B100000000000000000004 /* PremiumAccessManagerTests.swift */,
 				A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */,
 				A4B100000000000000000002 /* ProductSearchServiceTests.swift */,
@@ -375,9 +375,6 @@
 			knownRegions = (
 				en,
 				Base,
-				de,
-				es,
-				fr,
 				ja,
 				ko,
 				"zh-Hans",
@@ -460,6 +457,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */,
 				A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */,
 				A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */,
 				A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */,
@@ -485,9 +483,6 @@
 				140 /* zh-Hans */,
 				141 /* zh-Hant */,
 				142 /* ko */,
-				143 /* fr */,
-				144 /* de */,
-				145 /* es */,
 			);
 			name = Localizable.strings;
 			sourceTree = "<group>";
