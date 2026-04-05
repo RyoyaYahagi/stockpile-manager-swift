@@ -37,6 +37,32 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertTrue(family.cloudKitHasRemoteBaseline)
     }
 
+    func testPrepareShareKeepsPrivateSharePermission() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "防災")
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordHandler = { _, _ in
+            throw CloudKitSharingError.recordNotFound
+        }
+
+        var capturedSharePermission: CKShare.ParticipantPermission?
+        backend.modifyHandler = { recordsToSave, _, _ in
+            if let share = recordsToSave.compactMap({ $0 as? CKShare }).first {
+                capturedSharePermission = share.publicPermission
+            }
+            return recordsToSave
+        }
+
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        _ = try await service.prepareShare(for: family)
+
+        XCTAssertEqual(capturedSharePermission, CKShare.ParticipantPermission.none)
+    }
+
     func testSyncFamilyStateMarksBaselineWhenRemoteSnapshotIsAvailable() async throws {
         let harness = try TestHarness()
         let family = Family(name: "ローカル")
@@ -112,6 +138,7 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
     func testSyncAcceptedShareCreatesPendingFamilyWhenSharedFamilyRecordIsNotReady() async throws {
         let harness = try TestHarness()
         let localFamily = Family(name: "ローカル家族")
+        localFamily.lastSelectedAt = Date(timeIntervalSince1970: 100)
         let localItem = Item(name: "懐中電灯", quantity: 1)
         localItem.family = localFamily
         harness.context.insert(localFamily)
@@ -150,6 +177,49 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertTrue(pendingFamily.cloudKitPendingSync)
         XCTAssertFalse(pendingFamily.cloudKitHasRemoteBaseline)
         XCTAssertEqual(try harness.context.fetch(FetchDescriptor<Item>()).count, 1)
+        XCTAssertEqual(CurrentFamilyResolver.currentFamily(from: families)?.id, localFamily.id)
+    }
+
+    func testSyncAcceptedShareMarksAcceptedFamilyAsCurrent() async throws {
+        let harness = try TestHarness()
+        let localFamily = Family(name: "ローカル家族")
+        localFamily.lastSelectedAt = Date(timeIntervalSince1970: 100)
+        let localItem = Item(name: "保存水", quantity: 6)
+        localItem.family = localFamily
+        harness.context.insert(localFamily)
+        harness.context.insert(localItem)
+        try harness.context.save()
+
+        let acceptedFamilyID = UUID()
+        let zoneID = CKRecordZone.ID(zoneName: "accepted-zone", ownerName: "owner")
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordsHandler = { recordType, requestedZoneID, scope in
+            XCTAssertEqual(scope, .sharedDatabase)
+            XCTAssertEqual(requestedZoneID, zoneID)
+            switch recordType {
+            case "Family":
+                return [Self.makeFamilyRecord(id: acceptedFamilyID, name: "共有家族", zoneID: zoneID)]
+            case "Bag", "Item", "DeletionMarker":
+                return []
+            default:
+                return []
+            }
+        }
+
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        let acceptedFamily = try await service.syncAcceptedShare(
+            zoneID: zoneID,
+            fallbackName: "共有家族",
+            resolvedFamilyID: acceptedFamilyID,
+            retryIntervalsInNanoseconds: [0]
+        )
+
+        let families = try harness.context.fetch(FetchDescriptor<Family>())
+        XCTAssertEqual(acceptedFamily.id, acceptedFamilyID)
+        XCTAssertNotNil(acceptedFamily.lastSelectedAt)
+        XCTAssertEqual(CurrentFamilyResolver.currentFamily(from: families)?.id, acceptedFamilyID)
+        XCTAssertEqual(localFamily.lastSelectedAt, Date(timeIntervalSince1970: 100))
     }
 
     func testSyncFamilyStateClearsLocalDataOnlyAfterBaselineIsEstablished() async throws {
@@ -568,6 +638,7 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
     var fetchRecordsHandler: ((String, CKRecordZone.ID, FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
     var fetchRecordHandler: ((CKRecord.ID, FamilyCloudKitDatabaseScope) throws -> CKRecord)?
     var modifyHandler: (([CKRecord], [CKRecord.ID], FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
+    var acceptHandler: ((CKShare.Metadata) throws -> CKShare)?
 
     func ensureZoneExists(_ zoneID: CKRecordZone.ID) async throws {
         ensuredZoneIDs.append(zoneID)
@@ -611,6 +682,9 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
     }
 
     func accept(metadata: CKShare.Metadata) async throws -> CKShare {
+        if let acceptHandler {
+            return try acceptHandler(metadata)
+        }
         XCTFail("accept(metadata:) should not be used in these tests")
         throw CloudKitSharingError.invalidShareMetadata
     }

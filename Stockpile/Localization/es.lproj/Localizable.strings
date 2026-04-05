@@ -209,8 +209,11 @@
 "通知を有効にする" = "Activar notificaciones";
 "設定を読み込み中..." = "Cargando ajustes...";
 "通知単位" = "Unidad de recordatorio";
+"共有リンクを再送" = "Reenviar enlace compartido";
 "先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。" = "Primero crea un enlace de iCloud y después elige cómo enviarlo.";
+"先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。離脱した相手を再参加させる場合は「共有設定を管理」から招待し直してください。" = "Primero crea un enlace de iCloud y después elige cómo enviarlo. Si alguien necesita volver a unirse tras salir, invítalo de nuevo desde “Gestionar el uso compartido”.";
 "作成済みの共有リンクを送信できます。参加者の管理や共有停止は「共有設定を管理」から行えます。" = "Puedes enviar el enlace ya creado. Gestiona a los participantes o detén el uso compartido desde “Gestionar el uso compartido”.";
+"このリンクは private share 用の共有リンクです。離脱した相手の再参加には使えない場合があるため、その場合は「共有設定を管理」から招待し直してください。" = "Este enlace es para un uso compartido privado. Si alguien no puede volver a unirse después de salir, invítalo de nuevo desde “Gestionar el uso compartido”.";
 "メンバー（%@人）" = "Miembros (%@)";
 "共有設定を管理" = "Gestionar el uso compartido";
 "共有方法" = "Método de uso compartido";

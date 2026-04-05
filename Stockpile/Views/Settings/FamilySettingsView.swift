@@ -38,7 +38,7 @@ struct FamilySettingsView: View {
     }
 
     private var shareButtonTitle: String {
-        family.cloudKitShareURL == nil ? L10n.string("共有リンクを作成") : L10n.string("共有リンクを送信")
+        family.cloudKitShareURL == nil ? L10n.string("共有リンクを作成") : L10n.string("共有リンクを再送")
     }
 
     private var canManageShare: Bool {
@@ -56,8 +56,8 @@ struct FamilySettingsView: View {
 
     private var invitationSectionFooter: String {
         family.cloudKitShareURL == nil
-            ? L10n.string("先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。")
-            : L10n.string("作成済みの共有リンクを送信できます。参加者の管理や共有停止は「共有設定を管理」から行えます。")
+            ? L10n.string("先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。離脱した相手を再参加させる場合は「共有設定を管理」から招待し直してください。")
+            : L10n.string("このリンクは private share 用の共有リンクです。離脱した相手の再参加には使えない場合があるため、その場合は「共有設定を管理」から招待し直してください。")
     }
 
     private var memberSectionTitle: String {

@@ -209,8 +209,11 @@
 "通知を有効にする" = "Benachrichtigungen aktivieren";
 "設定を読み込み中..." = "Einstellungen werden geladen...";
 "通知単位" = "Erinnerungseinheit";
+"共有リンクを再送" = "Freigabelink erneut senden";
 "先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。" = "Erstelle zuerst einen iCloud-Freigabelink und wähle dann, wie du ihn senden möchtest.";
+"先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。離脱した相手を再参加させる場合は「共有設定を管理」から招待し直してください。" = "Erstelle zuerst einen iCloud-Freigabelink und wähle dann, wie du ihn senden möchtest. Wenn jemand nach dem Verlassen erneut beitreten soll, lade die Person über „Freigabe verwalten“ erneut ein.";
 "作成済みの共有リンクを送信できます。参加者の管理や共有停止は「共有設定を管理」から行えます。" = "Du kannst den vorhandenen Freigabelink senden. Teilnehmer verwalten oder die Freigabe beenden kannst du unter „Freigabe verwalten“.";
+"このリンクは private share 用の共有リンクです。離脱した相手の再参加には使えない場合があるため、その場合は「共有設定を管理」から招待し直してください。" = "Dieser Link ist für eine private Freigabe. Wenn jemand nach dem Verlassen nicht erneut beitreten kann, lade die Person über „Freigabe verwalten“ erneut ein.";
 "メンバー（%@人）" = "Mitglieder (%@)";
 "共有設定を管理" = "Freigabe verwalten";
 "共有方法" = "Freigabemethode";

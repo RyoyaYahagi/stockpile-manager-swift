@@ -426,9 +426,9 @@ struct ContentView: View {
                 #if DEBUG
                 print("[CloudKitShare] 共有メタデータを検出し、受理フローを開始します。")
                 #endif
-                _ = try await sharingService.acceptShare(metadata: metadata)
+                let acceptedFamily = try await sharingService.acceptShare(metadata: metadata)
                 #if DEBUG
-                print("[CloudKitShare] 共有受理に成功しました。")
+                print("[CloudKitShare] 共有受理に成功しました。family=\(acceptedFamily.id.uuidString)")
                 #endif
                 showCloudKitShareSuccess(L10n.string("データが共有されました"))
             } catch {

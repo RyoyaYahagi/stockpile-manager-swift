@@ -259,6 +259,8 @@ final class CloudKitFamilySharingService {
                 zoneID: zoneID,
                 retryIntervalsInNanoseconds: retryIntervalsInNanoseconds
             )
+            family.markAsCurrent()
+            try modelContext.save()
             logger.notice("CloudKit share local sync succeeded")
             return family
         } catch {
