@@ -10,6 +10,33 @@ final class CloudKitFamilySharingService {
         static let bagRecordType = "Bag"
         static let itemRecordType = "Item"
         static let deletionMarkerRecordType = "DeletionMarker"
+        static let shareParticipantsCacheTTL: TimeInterval = 60
+    }
+
+    private actor ShareParticipantsCache {
+        private struct Entry {
+            let participants: [ShareParticipantDisplay]
+            let fetchedAt: Date
+        }
+
+        private var storage: [String: Entry] = [:]
+
+        func value(for key: String, maxAge: TimeInterval, now: Date = Date()) -> [ShareParticipantDisplay]? {
+            guard let entry = storage[key] else { return nil }
+            guard now.timeIntervalSince(entry.fetchedAt) <= maxAge else {
+                storage.removeValue(forKey: key)
+                return nil
+            }
+            return entry.participants
+        }
+
+        func store(_ participants: [ShareParticipantDisplay], for key: String, now: Date = Date()) {
+            storage[key] = Entry(participants: participants, fetchedAt: now)
+        }
+
+        func removeValue(for key: String) {
+            storage.removeValue(forKey: key)
+        }
     }
 
     private struct RemoteZoneState {
@@ -92,6 +119,7 @@ final class CloudKitFamilySharingService {
         }
     }
 
+    private static let shareParticipantsCache = ShareParticipantsCache()
     private let logger = Logger(subsystem: "com.stockpile-manager.app", category: "CloudKitSharing")
     private let modelContext: ModelContext
     private let backend: any CloudKitFamilySharingBackend
@@ -133,6 +161,7 @@ final class CloudKitFamilySharingService {
                     family.cloudKitPendingSync = false
                     family.cloudKitHasRemoteBaseline = true
                     try? modelContext.save()
+                    await cacheShareParticipants(from: existingShare, for: family)
                     return existingShare
                 }
 
@@ -161,6 +190,7 @@ final class CloudKitFamilySharingService {
             family.cloudKitPendingSync = false
             family.cloudKitHasRemoteBaseline = true
             try? modelContext.save()
+            await cacheShareParticipants(from: existingShare, for: family)
             return existingShare
         }
 
@@ -178,6 +208,7 @@ final class CloudKitFamilySharingService {
             family.cloudKitPendingSync = false
             family.cloudKitHasRemoteBaseline = true
             try? modelContext.save()
+            await cacheShareParticipants(from: savedShare, for: family)
             return savedShare
         } catch {
             logShareError(error, phase: "prepareShare.saveShare")
@@ -461,11 +492,54 @@ final class CloudKitFamilySharingService {
         )
     }
 
-    func fetchShareParticipants(for family: Family) async throws -> [ShareParticipantDisplay] {
+    func fetchShareParticipants(
+        for family: Family,
+        forceRefresh: Bool = false
+    ) async throws -> [ShareParticipantDisplay] {
         guard family.shareState != .localOnly else { return [] }
-        guard let share = try await fetchZoneWideShare(for: family) else { return [] }
+        let cacheKey = shareParticipantsCacheKey(for: family)
 
-        return share.participants.enumerated().compactMap { index, participant in
+        if !forceRefresh,
+           let cachedParticipants = await Self.shareParticipantsCache.value(
+            for: cacheKey,
+            maxAge: Constants.shareParticipantsCacheTTL
+           ) {
+            return cachedParticipants
+        }
+
+        guard let share = try await fetchZoneWideShare(for: family) else { return [] }
+        let participants = shareParticipantDisplays(from: share)
+        await Self.shareParticipantsCache.store(participants, for: cacheKey)
+        return participants
+    }
+
+    func clearShareMetadata(for family: Family) {
+        let cacheKey = shareParticipantsCacheKey(for: family)
+        family.cloudKitShareURL = nil
+        family.cloudKitZoneName = nil
+        family.cloudKitZoneOwnerName = nil
+        family.cloudKitDatabaseScope = nil
+        family.cloudKitPendingSync = false
+        family.cloudKitHasRemoteBaseline = false
+        Task {
+            await Self.shareParticipantsCache.removeValue(for: cacheKey)
+        }
+        try? modelContext.save()
+    }
+
+    func leaveFamily(_ family: Family) async throws {
+        guard family.cloudKitDatabaseScope == .sharedDatabase else { return }
+        let cacheKey = shareParticipantsCacheKey(for: family)
+        for marker in try fetchLocalDeletionMarkers(for: family) {
+            modelContext.delete(marker)
+        }
+        modelContext.delete(family)
+        try modelContext.save()
+        await Self.shareParticipantsCache.removeValue(for: cacheKey)
+    }
+
+    private func shareParticipantDisplays(from share: CKShare) -> [ShareParticipantDisplay] {
+        share.participants.enumerated().compactMap { index, participant in
             participantDisplay(from: participant, index: index)
         }
         .sorted { lhs, rhs in
@@ -474,25 +548,6 @@ final class CloudKitFamilySharingService {
             }
             return lhs.displayName.localizedStandardCompare(rhs.displayName) == .orderedAscending
         }
-    }
-
-    func leaveFamily(_ family: Family) async throws {
-        guard family.cloudKitDatabaseScope == .sharedDatabase else { return }
-        for marker in try fetchLocalDeletionMarkers(for: family) {
-            modelContext.delete(marker)
-        }
-        modelContext.delete(family)
-        try modelContext.save()
-    }
-
-    func clearShareMetadata(for family: Family) {
-        family.cloudKitShareURL = nil
-        family.cloudKitZoneName = nil
-        family.cloudKitZoneOwnerName = nil
-        family.cloudKitDatabaseScope = nil
-        family.cloudKitPendingSync = false
-        family.cloudKitHasRemoteBaseline = false
-        try? modelContext.save()
     }
 
     private func syncZoneToLocal(
@@ -707,6 +762,19 @@ final class CloudKitFamilySharingService {
 
     private func fetchZoneWideShare(for family: Family) async throws -> CKShare? {
         try await fetchExistingShare(for: family, scope: databaseScope(for: family))
+    }
+
+    private func cacheShareParticipants(from share: CKShare, for family: Family) async {
+        await Self.shareParticipantsCache.store(
+            shareParticipantDisplays(from: share),
+            for: shareParticipantsCacheKey(for: family)
+        )
+    }
+
+    private func shareParticipantsCacheKey(for family: Family) -> String {
+        let zoneID = zoneID(for: family)
+        let scope = databaseScope(for: family)
+        return "\(scope.rawValue)::\(zoneID.ownerName)::\(zoneID.zoneName)"
     }
 
     private func participantDisplay(

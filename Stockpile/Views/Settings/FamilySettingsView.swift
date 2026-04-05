@@ -337,7 +337,7 @@ struct FamilySettingsView: View {
         .sheet(isPresented: $showShareManagementSheet, onDismiss: {
             activeShare = nil
             Task {
-                await refreshParticipantDisplays()
+                await refreshParticipantDisplays(forceRefresh: true)
             }
         }) {
             if let activeShare {
@@ -355,8 +355,8 @@ struct FamilySettingsView: View {
             ShareActivitySheet(payload: payload)
         }
         .task(id: family.id) {
-            await autoSyncFamilyStateIfPossible()
             await refreshParticipantDisplays()
+            await autoSyncFamilyStateIfPossible()
         }
     }
 
@@ -543,7 +543,7 @@ struct FamilySettingsView: View {
         }
     }
 
-    private func refreshParticipantDisplays() async {
+    private func refreshParticipantDisplays(forceRefresh: Bool = false) async {
         guard usesCloudKitParticipantList else {
             participantDisplays = []
             isLoadingParticipants = false
@@ -555,7 +555,10 @@ struct FamilySettingsView: View {
 
         do {
             let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
-            participantDisplays = try await sharingService.fetchShareParticipants(for: family)
+            participantDisplays = try await sharingService.fetchShareParticipants(
+                for: family,
+                forceRefresh: forceRefresh
+            )
         } catch {
             participantDisplays = []
         }

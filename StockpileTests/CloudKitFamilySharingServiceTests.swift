@@ -402,6 +402,60 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertEqual(CurrentFamilyResolver.currentFamily(from: [sharedFamily, localFamily])?.id, localFamily.id)
     }
 
+    func testFetchShareParticipantsUsesCachedResultWithinTTL() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有家族")
+        family.cloudKitDatabaseScope = .privateDatabase
+        family.cloudKitPendingSync = false
+        family.cloudKitHasRemoteBaseline = true
+        family.cloudKitZoneName = "cache-zone"
+        family.cloudKitZoneOwnerName = CKCurrentUserDefaultName
+        family.cloudKitShareURL = URL(string: "https://example.com/share")
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordCallCount = 0
+        backend.fetchRecordHandler = { recordID, scope in
+            XCTAssertEqual(scope, .privateDatabase)
+            backend.fetchRecordCallCount += 1
+            return CKShare(recordZoneID: recordID.zoneID)
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        _ = try await service.fetchShareParticipants(for: family)
+        _ = try await service.fetchShareParticipants(for: family)
+
+        XCTAssertEqual(backend.fetchRecordCallCount, 1)
+    }
+
+    func testFetchShareParticipantsForceRefreshBypassesCache() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有家族")
+        family.cloudKitDatabaseScope = .privateDatabase
+        family.cloudKitPendingSync = false
+        family.cloudKitHasRemoteBaseline = true
+        family.cloudKitZoneName = "force-refresh-zone"
+        family.cloudKitZoneOwnerName = CKCurrentUserDefaultName
+        family.cloudKitShareURL = URL(string: "https://example.com/share")
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordCallCount = 0
+        backend.fetchRecordHandler = { recordID, scope in
+            XCTAssertEqual(scope, .privateDatabase)
+            backend.fetchRecordCallCount += 1
+            return CKShare(recordZoneID: recordID.zoneID)
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        _ = try await service.fetchShareParticipants(for: family)
+        _ = try await service.fetchShareParticipants(for: family, forceRefresh: true)
+
+        XCTAssertEqual(backend.fetchRecordCallCount, 2)
+    }
+
     private static func makeFamilyRecord(id: UUID, name: String, zoneID: CKRecordZone.ID) -> CKRecord {
         let record = CKRecord(
             recordType: "Family",
@@ -510,6 +564,7 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
     var ensuredZoneIDs: [CKRecordZone.ID] = []
     var modifyCalls: [ModifyCall] = []
     var privateFamilyFetchFailureCount = 0
+    var fetchRecordCallCount = 0
     var fetchRecordsHandler: ((String, CKRecordZone.ID, FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
     var fetchRecordHandler: ((CKRecord.ID, FamilyCloudKitDatabaseScope) throws -> CKRecord)?
     var modifyHandler: (([CKRecord], [CKRecord.ID], FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
