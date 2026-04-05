@@ -69,6 +69,7 @@ final class CloudKitFamilySharingService {
         case snapshotAvailable(Family)
         case remoteNotReady
         case remoteMissingAfterEstablished
+        case sharedAccessRevoked
     }
 
     struct RemoteRecordCounts {
@@ -464,7 +465,9 @@ final class CloudKitFamilySharingService {
                 try await syncFamilyDataToCloudKit(for: family)
             }
         case .remoteMissingAfterEstablished:
-            try clearLocalFamilyDataForMissingRemoteState(for: family)
+            try clearRevokedSharedFamilyState(for: family)
+        case .sharedAccessRevoked:
+            try clearRevokedSharedFamilyState(for: family)
         }
     }
 
@@ -723,6 +726,43 @@ final class CloudKitFamilySharingService {
         }
 
         try modelContext.save()
+        NotificationManager.shared.requestReschedule(using: modelContext)
+    }
+
+    private func clearRevokedSharedFamilyState(for family: Family) throws {
+        let scopedItems = try fetchLocalItems(for: family)
+        let scopedBags = try fetchLocalBags(for: family)
+        let deletionMarkers = try fetchLocalDeletionMarkers(for: family)
+        let cacheKey = shareParticipantsCacheKey(for: family)
+
+        for item in scopedItems {
+            modelContext.delete(item)
+        }
+
+        for bag in scopedBags {
+            modelContext.delete(bag)
+        }
+
+        for member in family.resolvedMembers {
+            modelContext.delete(member)
+        }
+
+        for marker in deletionMarkers {
+            modelContext.delete(marker)
+        }
+
+        family.cloudKitShareURL = nil
+        family.cloudKitZoneName = nil
+        family.cloudKitZoneOwnerName = nil
+        family.cloudKitDatabaseScope = nil
+        family.cloudKitPendingSync = false
+        family.cloudKitHasRemoteBaseline = false
+        family.lastSelectedAt = nil
+
+        try modelContext.save()
+        Task {
+            await Self.shareParticipantsCache.removeValue(for: cacheKey)
+        }
         NotificationManager.shared.requestReschedule(using: modelContext)
     }
 
@@ -1401,6 +1441,25 @@ final class CloudKitFamilySharingService {
         }
     }
 
+    private func isRevokedSharedAccessError(_ error: Error) -> Bool {
+        guard let ckError = error as? CKError else {
+            return false
+        }
+
+        switch ckError.code {
+        case .zoneNotFound, .userDeletedZone:
+            return true
+        case .partialFailure:
+            guard let partialErrors = ckError.partialErrorsByItemID?.values,
+                  !partialErrors.isEmpty else {
+                return false
+            }
+            return partialErrors.allSatisfy { isRevokedSharedAccessError($0) }
+        default:
+            return false
+        }
+    }
+
     private func fetchRemoteSnapshotState(for family: Family) async throws -> RemoteSnapshotState {
         do {
             let syncedFamily = try await syncZoneToLocal(
@@ -1413,8 +1472,13 @@ final class CloudKitFamilySharingService {
                 throw error
             }
 
-            if family.cloudKitDatabaseScope == .sharedDatabase, family.cloudKitHasRemoteBaseline {
-                return .remoteMissingAfterEstablished
+            if family.cloudKitDatabaseScope == .sharedDatabase {
+                if family.cloudKitHasRemoteBaseline {
+                    return .remoteMissingAfterEstablished
+                }
+                if isRevokedSharedAccessError(error) {
+                    return .sharedAccessRevoked
+                }
             }
 
             return .remoteNotReady
