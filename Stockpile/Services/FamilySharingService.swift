@@ -456,9 +456,18 @@ final class CloudKitFamilySharingService {
 
     func syncFamilyStateFromCloudKit(for family: Family) async throws {
         guard family.isCloudKitSharedFamily else { return }
+        let shouldPromotePendingSharedFamilyOnSuccess =
+            family.cloudKitDatabaseScope == .sharedDatabase
+            && family.cloudKitPendingSync
+            && family.lastSelectedAt == nil
 
         switch try await fetchRemoteSnapshotState(for: family) {
-        case .snapshotAvailable:
+        case .snapshotAvailable(let syncedFamily):
+            if shouldPromotePendingSharedFamilyOnSuccess,
+               syncedFamily.lastSelectedAt == nil {
+                syncedFamily.markAsCurrent()
+                try modelContext.save()
+            }
             return
         case .remoteNotReady:
             if family.cloudKitDatabaseScope != .sharedDatabase {
@@ -1473,12 +1482,13 @@ final class CloudKitFamilySharingService {
             }
 
             if family.cloudKitDatabaseScope == .sharedDatabase {
-                if family.cloudKitHasRemoteBaseline {
-                    return .remoteMissingAfterEstablished
+                guard family.cloudKitHasRemoteBaseline else {
+                    return .remoteNotReady
                 }
                 if isRevokedSharedAccessError(error) {
                     return .sharedAccessRevoked
                 }
+                return .remoteMissingAfterEstablished
             }
 
             return .remoteNotReady

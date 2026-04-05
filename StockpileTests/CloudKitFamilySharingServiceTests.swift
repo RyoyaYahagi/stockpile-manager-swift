@@ -275,7 +275,7 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertEqual(CurrentFamilyResolver.currentFamily(from: families)?.id, localFamily.id)
     }
 
-    func testSyncPendingSharedFamilyClearsMetadataWhenSharedZoneIsUnavailable() async throws {
+    func testSyncPendingSharedFamilyKeepsMetadataWhileSharedZoneIsStillUnavailable() async throws {
         let harness = try TestHarness()
         let localFamily = Family(name: "ローカル家族")
         localFamily.lastSelectedAt = Date(timeIntervalSince1970: 100)
@@ -288,7 +288,6 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         pendingSharedFamily.cloudKitHasRemoteBaseline = false
         pendingSharedFamily.cloudKitZoneName = "shared-zone"
         pendingSharedFamily.cloudKitZoneOwnerName = "owner"
-        pendingSharedFamily.lastSelectedAt = Date(timeIntervalSince1970: 200)
 
         harness.context.insert(localFamily)
         harness.context.insert(localItem)
@@ -306,16 +305,71 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
 
         try await service.syncFamilyStateFromCloudKit(for: pendingSharedFamily)
 
-        XCTAssertEqual(pendingSharedFamily.shareState, .localOnly)
-        XCTAssertNil(pendingSharedFamily.cloudKitDatabaseScope)
-        XCTAssertNil(pendingSharedFamily.cloudKitZoneName)
-        XCTAssertNil(pendingSharedFamily.cloudKitZoneOwnerName)
+        XCTAssertEqual(pendingSharedFamily.shareState, .preparing)
+        XCTAssertEqual(pendingSharedFamily.cloudKitDatabaseScope, .sharedDatabase)
+        XCTAssertEqual(pendingSharedFamily.cloudKitZoneName, "shared-zone")
+        XCTAssertEqual(pendingSharedFamily.cloudKitZoneOwnerName, "owner")
         XCTAssertNil(pendingSharedFamily.cloudKitShareURL)
-        XCTAssertFalse(pendingSharedFamily.cloudKitPendingSync)
+        XCTAssertTrue(pendingSharedFamily.cloudKitPendingSync)
         XCTAssertFalse(pendingSharedFamily.cloudKitHasRemoteBaseline)
         XCTAssertNil(pendingSharedFamily.lastSelectedAt)
         let families = try harness.context.fetch(FetchDescriptor<Family>())
         XCTAssertEqual(CurrentFamilyResolver.currentFamily(from: families)?.id, localFamily.id)
+    }
+
+    func testSyncPendingSharedFamilyMarksItCurrentWhenRemoteSnapshotBecomesAvailable() async throws {
+        let harness = try TestHarness()
+        let localFamily = Family(name: "ローカル家族")
+        localFamily.lastSelectedAt = Date(timeIntervalSince1970: 100)
+        let localItem = Item(name: "懐中電灯", quantity: 1)
+        localItem.family = localFamily
+
+        let pendingSharedFamily = Family(name: "共有準備中")
+        pendingSharedFamily.cloudKitDatabaseScope = .sharedDatabase
+        pendingSharedFamily.cloudKitPendingSync = true
+        pendingSharedFamily.cloudKitHasRemoteBaseline = false
+        pendingSharedFamily.cloudKitZoneName = "shared-zone"
+        pendingSharedFamily.cloudKitZoneOwnerName = "owner"
+
+        harness.context.insert(localFamily)
+        harness.context.insert(localItem)
+        harness.context.insert(pendingSharedFamily)
+        try harness.context.save()
+
+        let remoteItemID = UUID()
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordsHandler = { recordType, zoneID, scope in
+            XCTAssertEqual(scope, .sharedDatabase)
+            switch recordType {
+            case "Family":
+                return [Self.makeFamilyRecord(id: pendingSharedFamily.id, name: "共有家族", zoneID: zoneID)]
+            case "Item":
+                return [
+                    Self.makeItemRecord(
+                        id: remoteItemID,
+                        name: "保存水",
+                        familyID: pendingSharedFamily.id,
+                        bagID: nil,
+                        zoneID: zoneID
+                    )
+                ]
+            case "Bag", "DeletionMarker":
+                return []
+            default:
+                return []
+            }
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        try await service.syncFamilyStateFromCloudKit(for: pendingSharedFamily)
+
+        XCTAssertEqual(pendingSharedFamily.name, "共有家族")
+        XCTAssertFalse(pendingSharedFamily.cloudKitPendingSync)
+        XCTAssertTrue(pendingSharedFamily.cloudKitHasRemoteBaseline)
+        XCTAssertNotNil(pendingSharedFamily.lastSelectedAt)
+        XCTAssertEqual(try harness.context.fetch(FetchDescriptor<Item>()).count, 2)
+        let families = try harness.context.fetch(FetchDescriptor<Family>())
+        XCTAssertEqual(CurrentFamilyResolver.currentFamily(from: families)?.id, pendingSharedFamily.id)
     }
 
     func testSyncFamilyDataDoesNotDeleteRemoteRecordsWhenLocalIsEmpty() async throws {

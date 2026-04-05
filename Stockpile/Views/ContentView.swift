@@ -436,7 +436,7 @@ struct ContentView: View {
             }
         }
 
-        for family in families where family.cloudKitDatabaseScope == .sharedDatabase {
+        for family in sharedFamiliesForRefresh() {
             do {
                 try await sharingService.syncFamilyStateFromCloudKit(for: family)
             } catch {
@@ -446,6 +446,15 @@ struct ContentView: View {
                 )
             }
         }
+    }
+
+    private func sharedFamiliesForRefresh() -> [Family] {
+        let scopeRawValue = FamilyCloudKitDatabaseScope.sharedDatabase.rawValue
+        let descriptor = FetchDescriptor<Family>(
+            predicate: #Predicate { $0.cloudKitDatabaseScopeRawValue == scopeRawValue }
+        )
+        return (try? modelContext.fetch(descriptor))
+            ?? families.filter { $0.cloudKitDatabaseScope == .sharedDatabase }
     }
 
     private func logCloudKitShareError(_ error: Error, context: String) {
