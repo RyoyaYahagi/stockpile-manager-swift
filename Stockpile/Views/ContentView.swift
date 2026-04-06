@@ -422,11 +422,29 @@ struct ContentView: View {
         let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
 
         if let metadata = CloudKitShareRelay.consumePending() {
+            CloudKitSharingDiagnostics.log(
+                event: "共有受理開始",
+                details: [
+                    "zoneName": metadata.share.recordID.zoneID.zoneName,
+                    "ownerName": metadata.share.recordID.zoneID.ownerName,
+                    "rootRecordID": metadata.rootRecord?.recordID.recordName ?? "nil"
+                ]
+            )
             do {
                 #if DEBUG
                 print("[CloudKitShare] 共有メタデータを検出し、受理フローを開始します。")
                 #endif
                 let acceptedFamily = try await sharingService.acceptShare(metadata: metadata)
+                CloudKitSharingDiagnostics.log(
+                    event: "共有受理成功",
+                    details: [
+                        "familyID": acceptedFamily.id.uuidString,
+                        "familyName": acceptedFamily.name,
+                        "shareState": acceptedFamily.shareState.label,
+                        "scope": acceptedFamily.cloudKitDatabaseScope?.rawValue ?? "nil",
+                        "zoneIdentity": acceptedFamily.cloudKitZoneIdentity ?? "-"
+                    ]
+                )
                 #if DEBUG
                 print("[CloudKitShare] 共有受理に成功しました。family=\(acceptedFamily.id.uuidString)")
                 #endif
@@ -458,6 +476,7 @@ struct ContentView: View {
     }
 
     private func logCloudKitShareError(_ error: Error, context: String) {
+        CloudKitSharingDiagnostics.logError(context: context, error: error)
         #if DEBUG
         if let ckError = error as? CKError {
             print(

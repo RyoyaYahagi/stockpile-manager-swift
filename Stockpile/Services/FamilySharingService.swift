@@ -467,15 +467,20 @@ final class CloudKitFamilySharingService {
                syncedFamily.lastSelectedAt == nil {
                 syncedFamily.markAsCurrent()
                 try modelContext.save()
+                logDiagnostics(event: "共有家族を現在の家族へ昇格", family: syncedFamily)
             }
+            logDiagnostics(event: "共有スナップショット同期成功", family: syncedFamily)
             return
         case .remoteNotReady:
+            logDiagnostics(event: "共有スナップショット未確定", family: family)
             if family.cloudKitDatabaseScope != .sharedDatabase {
                 try await syncFamilyDataToCloudKit(for: family)
             }
         case .remoteMissingAfterEstablished:
+            logDiagnostics(event: "共有スナップショット消失を検出", family: family)
             try clearRevokedSharedFamilyState(for: family)
         case .sharedAccessRevoked:
+            logDiagnostics(event: "共有アクセス失効を検出", family: family)
             try clearRevokedSharedFamilyState(for: family)
         }
     }
@@ -666,6 +671,18 @@ final class CloudKitFamilySharingService {
             remoteDeletionMap: remoteDeletionMap
         )
 
+        logDiagnostics(
+            event: "共有ゾーン読込",
+            family: currentFamily,
+            extra: [
+                "scope": scope.rawValue,
+                "remoteFamilyRecords": remoteState.familyRecord == nil ? "0" : "1",
+                "remoteBagRecords": String(remoteState.bagRecords.count),
+                "remoteItemRecords": String(remoteState.itemRecords.count),
+                "remoteDeletionMarkers": String(remoteState.deletionMarkers.count)
+            ]
+        )
+
         try modelContext.save()
         LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
         NotificationManager.shared.requestReschedule(using: modelContext)
@@ -739,6 +756,8 @@ final class CloudKitFamilySharingService {
     }
 
     private func clearRevokedSharedFamilyState(for family: Family) throws {
+        let familyID = family.id.uuidString
+        let zoneIdentity = family.cloudKitZoneIdentity ?? "-"
         let scopedItems = try fetchLocalItems(for: family)
         let scopedBags = try fetchLocalBags(for: family)
         let deletionMarkers = try fetchLocalDeletionMarkers(for: family)
@@ -773,6 +792,13 @@ final class CloudKitFamilySharingService {
             await Self.shareParticipantsCache.removeValue(for: cacheKey)
         }
         NotificationManager.shared.requestReschedule(using: modelContext)
+        CloudKitSharingDiagnostics.log(
+            event: "共有家族のローカル状態を解除",
+            details: [
+                "familyID": familyID,
+                "zoneIdentity": zoneIdentity
+            ]
+        )
     }
 
     private func ensureCloudKitMetadata(for family: Family) {
@@ -1525,6 +1551,16 @@ final class CloudKitFamilySharingService {
         family.cloudKitPendingSync = true
         family.cloudKitHasRemoteBaseline = false
         try? modelContext.save()
+        CloudKitSharingDiagnostics.log(
+            event: "共有家族を保留状態で作成",
+            details: [
+                "familyID": family.id.uuidString,
+                "name": family.name,
+                "zoneName": zoneID.zoneName,
+                "ownerName": zoneID.ownerName,
+                "resolvedFamilyID": resolvedFamilyID?.uuidString ?? "nil"
+            ]
+        )
     }
 
     private func acceptedShareFallbackName(from metadata: CKShare.Metadata, acceptedShare: CKShare) -> String {
@@ -1546,6 +1582,166 @@ final class CloudKitFamilySharingService {
         try await backend.accept(metadata: metadata)
     }
 
+    private func logDiagnostics(
+        event: String,
+        family: Family,
+        extra: [String: String] = [:]
+    ) {
+        var details = extra
+        details["familyID"] = family.id.uuidString
+        details["familyName"] = family.name
+        details["shareState"] = family.shareState.label
+        details["scope"] = family.cloudKitDatabaseScope?.rawValue ?? "nil"
+        details["zoneIdentity"] = family.cloudKitZoneIdentity ?? "-"
+        details["pendingSync"] = family.cloudKitPendingSync ? "true" : "false"
+        details["hasRemoteBaseline"] = family.cloudKitHasRemoteBaseline ? "true" : "false"
+        details["lastSelectedAt"] = CloudKitSharingDiagnostics.formattedTimestamp(family.lastSelectedAt)
+        CloudKitSharingDiagnostics.log(event: event, details: details)
+    }
+
+}
+
+@MainActor
+enum CloudKitSharingDiagnostics {
+    private struct Entry: Codable {
+        let timestamp: Date
+        let event: String
+        let details: [String: String]
+    }
+
+    private static let storageKey = "cloudkit-sharing-diagnostics.entries"
+    private static let maximumEntryCount = 200
+    private static let timestampFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    static func log(event: String, details: [String: String] = [:]) {
+        var entries = loadEntries()
+        entries.append(Entry(timestamp: Date(), event: event, details: details))
+        if entries.count > maximumEntryCount {
+            entries.removeFirst(entries.count - maximumEntryCount)
+        }
+        saveEntries(entries)
+    }
+
+    static func logError(context: String, error: Error) {
+        var details: [String: String] = [
+            "errorType": String(describing: type(of: error)),
+            "description": error.localizedDescription
+        ]
+        if let ckError = error as? CKError {
+            details["ckCode"] = String(ckError.code.rawValue)
+        }
+        log(event: context, details: details)
+    }
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: storageKey)
+    }
+
+    static func formattedTimestamp(_ date: Date?) -> String {
+        guard let date else { return "nil" }
+        return timestampFormatter.string(from: date)
+    }
+
+    static func makeReport(modelContext: ModelContext) -> String {
+        let families = (try? modelContext.fetch(FetchDescriptor<Family>())) ?? []
+        let bags = (try? modelContext.fetch(FetchDescriptor<Bag>())) ?? []
+        let items = (try? modelContext.fetch(FetchDescriptor<Item>())) ?? []
+        let currentFamily = CurrentFamilyResolver.currentFamily(from: families)
+
+        let bagCounts = Dictionary(grouping: bags.compactMap { bag in
+            bag.family.map { ($0.id, bag) }
+        }, by: { $0.0 }).mapValues(\.count)
+        let itemCounts = Dictionary(grouping: items.compactMap { item in
+            item.family.map { ($0.id, item) }
+        }, by: { $0.0 }).mapValues(\.count)
+
+        var lines: [String] = []
+        lines.append("CloudKit共有診断レポート")
+        lines.append("生成時刻: \(formattedTimestamp(Date()))")
+        lines.append("currentFamily: \(currentFamilySummary(currentFamily))")
+        lines.append("総家族数: \(families.count)")
+        lines.append("孤立収納場所: \(bags.filter { $0.family == nil }.count)")
+        lines.append("孤立アイテム: \(items.filter { $0.family == nil }.count)")
+        lines.append("")
+        lines.append("家族一覧:")
+
+        if families.isEmpty {
+            lines.append("- 家族データなし")
+        } else {
+            for family in families.sorted(by: { familySort(lhs: $0, rhs: $1) }) {
+                lines.append(
+                    """
+                    - id=\(family.id.uuidString) \
+                    name=\(sanitized(family.name)) \
+                    shareState=\(family.shareState.label) \
+                    scope=\(family.cloudKitDatabaseScope?.rawValue ?? "nil") \
+                    zone=\(family.cloudKitZoneIdentity ?? "-") \
+                    pending=\(family.cloudKitPendingSync) \
+                    baseline=\(family.cloudKitHasRemoteBaseline) \
+                    selectedAt=\(formattedTimestamp(family.lastSelectedAt)) \
+                    members=\(family.uniqueMembers.count) \
+                    bags=\(bagCounts[family.id] ?? 0) \
+                    items=\(itemCounts[family.id] ?? 0)
+                    """
+                )
+            }
+        }
+
+        lines.append("")
+        lines.append("最近の共有イベント:")
+        let recentLines = loadEntries().suffix(40).map { entry in
+            let detailText = entry.details
+                .sorted { $0.key < $1.key }
+                .map { "\($0.key)=\(sanitized($0.value))" }
+                .joined(separator: " ")
+            if detailText.isEmpty {
+                return "- [\(formattedTimestamp(entry.timestamp))] \(entry.event)"
+            }
+            return "- [\(formattedTimestamp(entry.timestamp))] \(entry.event) \(detailText)"
+        }
+
+        if recentLines.isEmpty {
+            lines.append("- 共有イベントなし")
+        } else {
+            lines.append(contentsOf: recentLines)
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private static func currentFamilySummary(_ family: Family?) -> String {
+        guard let family else { return "nil" }
+        return "\(family.id.uuidString) \(sanitized(family.name))"
+    }
+
+    private static func familySort(lhs: Family, rhs: Family) -> Bool {
+        if lhs.lastSelectedAt != rhs.lastSelectedAt {
+            return (lhs.lastSelectedAt ?? .distantPast) > (rhs.lastSelectedAt ?? .distantPast)
+        }
+        return lhs.createdAt > rhs.createdAt
+    }
+
+    private static func sanitized(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "(empty)" : trimmed.replacingOccurrences(of: "\n", with: " ")
+    }
+
+    private static func loadEntries() -> [Entry] {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let entries = try? JSONDecoder().decode([Entry].self, from: data) else {
+            return []
+        }
+        return entries
+    }
+
+    private static func saveEntries(_ entries: [Entry]) {
+        guard let data = try? JSONEncoder().encode(entries) else { return }
+        UserDefaults.standard.set(data, forKey: storageKey)
+    }
 }
 
 @MainActor

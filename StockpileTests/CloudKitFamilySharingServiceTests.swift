@@ -641,6 +641,53 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertEqual(backend.fetchRecordCallCount, 2)
     }
 
+    func testCloudKitSharingDiagnosticsReportIncludesFamiliesAndRecentEvents() throws {
+        CloudKitSharingDiagnostics.clear()
+        let harness = try TestHarness()
+
+        let localFamily = Family(name: "ローカル家族")
+        localFamily.lastSelectedAt = Date(timeIntervalSince1970: 100)
+
+        let sharedFamily = Family(name: "共有家族")
+        sharedFamily.cloudKitDatabaseScope = .sharedDatabase
+        sharedFamily.cloudKitZoneName = "shared-zone"
+        sharedFamily.cloudKitZoneOwnerName = "owner"
+        sharedFamily.cloudKitHasRemoteBaseline = true
+
+        let bag = Bag(name: "非常袋")
+        bag.family = sharedFamily
+        let item = Item(name: "保存水", quantity: 6)
+        item.family = sharedFamily
+        item.bag = bag
+
+        harness.context.insert(localFamily)
+        harness.context.insert(sharedFamily)
+        harness.context.insert(bag)
+        harness.context.insert(item)
+        try harness.context.save()
+
+        CloudKitSharingDiagnostics.log(
+            event: "共有受理成功",
+            details: [
+                "familyID": sharedFamily.id.uuidString,
+                "zoneIdentity": sharedFamily.cloudKitZoneIdentity ?? "-"
+            ]
+        )
+
+        let report = CloudKitSharingDiagnostics.makeReport(modelContext: harness.context)
+
+        XCTAssertTrue(report.contains("CloudKit共有診断レポート"))
+        XCTAssertTrue(report.contains(localFamily.id.uuidString))
+        XCTAssertTrue(report.contains(sharedFamily.id.uuidString))
+        XCTAssertTrue(report.contains("name=共有家族"))
+        XCTAssertTrue(report.contains("zone=owner::shared-zone"))
+        XCTAssertTrue(report.contains("bags=1"))
+        XCTAssertTrue(report.contains("items=1"))
+        XCTAssertTrue(report.contains("共有受理成功"))
+
+        CloudKitSharingDiagnostics.clear()
+    }
+
     private static func makeFamilyRecord(id: UUID, name: String, zoneID: CKRecordZone.ID) -> CKRecord {
         let record = CKRecord(
             recordType: "Family",

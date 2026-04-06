@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// 設定画面
 struct SettingsView: View {
@@ -12,6 +13,7 @@ struct SettingsView: View {
     private var tutorialReplayRequestToken = 0
     @State private var cloudKitMemberCount: Int?
     @State private var isLoadingCloudKitMemberCount = false
+    @State private var diagnosticsAlertMessage: String?
     
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
@@ -75,6 +77,18 @@ struct SettingsView: View {
                 if currentFamily != nil {
                     Text("通常のデータ同期と家族共有は iCloud で行います。")
                 }
+            }
+
+            Section {
+                Button {
+                    copyCloudKitDiagnostics()
+                } label: {
+                    Label("CloudKit共有診断をコピー", systemImage: "doc.on.doc")
+                }
+            } header: {
+                Text("診断")
+            } footer: {
+                Text("家族一覧、現在選ばれている家族、CloudKit共有メタデータ、最近の共有イベントをまとめてコピーします。参加側でデータが見えない端末の確認に使えます。")
             }
             
             // 収納場所セクション
@@ -157,6 +171,18 @@ struct SettingsView: View {
         .task(id: memberCountRefreshKey) {
             await refreshCloudKitMemberCount()
         }
+        .alert("診断", isPresented: Binding(
+            get: { diagnosticsAlertMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    diagnosticsAlertMessage = nil
+                }
+            }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(diagnosticsAlertMessage ?? "")
+        }
     }
 
     @MainActor
@@ -182,6 +208,12 @@ struct SettingsView: View {
         } catch {
             cloudKitMemberCount = nil
         }
+    }
+
+    private func copyCloudKitDiagnostics() {
+        let report = CloudKitSharingDiagnostics.makeReport(modelContext: modelContext)
+        UIPasteboard.general.string = report
+        diagnosticsAlertMessage = L10n.string("CloudKit共有診断をクリップボードにコピーしました")
     }
 }
 
