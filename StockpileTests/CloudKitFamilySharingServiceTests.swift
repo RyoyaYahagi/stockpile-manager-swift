@@ -26,7 +26,7 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
 
         _ = try await service.prepareShare(for: family)
 
-        XCTAssertEqual(backend.ensuredZoneIDs.count, 1)
+        XCTAssertEqual(backend.ensuredZoneIDs.count, 2)
         XCTAssertTrue(
             backend.modifyCalls.contains { call in
                 call.scope == .privateDatabase
@@ -61,6 +61,41 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         _ = try await service.prepareShare(for: family)
 
         XCTAssertEqual(capturedSharePermission, CKShare.ParticipantPermission.none)
+    }
+
+    func testPrepareSharePerformsPostShareSyncAfterShareIsSaved() async throws {
+        CloudKitSharingDiagnostics.clear()
+        let harness = try TestHarness()
+        let family = Family(name: "防災")
+        let bag = Bag(name: "非常袋")
+        let item = Item(name: "水", quantity: 3)
+        bag.family = family
+        item.family = family
+        item.bag = bag
+        harness.context.insert(family)
+        harness.context.insert(bag)
+        harness.context.insert(item)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordHandler = { _, _ in
+            throw CloudKitSharingError.recordNotFound
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        _ = try await service.prepareShare(for: family)
+
+        let zoneSyncCalls = backend.modifyCalls.filter { call in
+            call.scope == .privateDatabase
+                && Set(call.recordTypes).isSuperset(of: ["Family", "Bag", "Item"])
+        }
+        XCTAssertEqual(zoneSyncCalls.count, 2)
+
+        let report = CloudKitSharingDiagnostics.makeReport(modelContext: harness.context)
+        XCTAssertTrue(report.contains("共有リンク準備完了"))
+        XCTAssertTrue(report.contains("remoteFamilyRecords=0"))
+
+        CloudKitSharingDiagnostics.clear()
     }
 
     func testSyncFamilyStateMarksBaselineWhenRemoteSnapshotIsAvailable() async throws {

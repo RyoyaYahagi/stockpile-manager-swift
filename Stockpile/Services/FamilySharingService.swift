@@ -187,12 +187,7 @@ final class CloudKitFamilySharingService {
         try await ensureFamilyRecordExists(for: family)
 
         if let existingShare = try await fetchExistingShare(for: family, scope: .privateDatabase) {
-            family.cloudKitShareURL = existingShare.url
-            family.cloudKitPendingSync = false
-            family.cloudKitHasRemoteBaseline = true
-            try? modelContext.save()
-            await cacheShareParticipants(from: existingShare, for: family)
-            return existingShare
+            return try await finalizePreparedShare(existingShare, for: family)
         }
 
         let share = CKShare(recordZoneID: zoneID(for: family))
@@ -205,12 +200,7 @@ final class CloudKitFamilySharingService {
                 throw CloudKitSharingError.invalidShareRecord
             }
 
-            family.cloudKitShareURL = savedShare.url
-            family.cloudKitPendingSync = false
-            family.cloudKitHasRemoteBaseline = true
-            try? modelContext.save()
-            await cacheShareParticipants(from: savedShare, for: family)
-            return savedShare
+            return try await finalizePreparedShare(savedShare, for: family)
         } catch {
             logShareError(error, phase: "prepareShare.saveShare")
             if shouldResetMetadataOnFailure,
@@ -221,6 +211,20 @@ final class CloudKitFamilySharingService {
 
             throw error
         }
+    }
+
+    private func finalizePreparedShare(_ share: CKShare, for family: Family) async throws -> CKShare {
+        family.cloudKitShareURL = share.url
+        family.cloudKitPendingSync = false
+        family.cloudKitHasRemoteBaseline = true
+        try? modelContext.save()
+        await cacheShareParticipants(from: share, for: family)
+
+        // Share 作成後にもう一度 zone へ保存し、参加者側から既存レコードが見える状態を強める。
+        try await syncFamilyDataToCloudKit(for: family)
+        try await ensureFamilyRecordExists(for: family)
+        await logRemoteCountsForDiagnostics(event: "共有リンク準備完了", family: family)
+        return share
     }
 
     @discardableResult
@@ -1612,6 +1616,11 @@ final class CloudKitFamilySharingService {
                 guard recordName.hasPrefix("family-") else { return nil }
                 return UUID(uuidString: String(recordName.dropFirst("family-".count)))
             }
+            ?? {
+                let zoneName = metadata.share.recordID.zoneID.zoneName
+                guard zoneName.hasPrefix("family-") else { return nil }
+                return UUID(uuidString: String(zoneName.dropFirst("family-".count)))
+            }()
     }
 
     private func accept(metadata: CKShare.Metadata) async throws -> CKShare {
@@ -1633,6 +1642,37 @@ final class CloudKitFamilySharingService {
         details["hasRemoteBaseline"] = family.cloudKitHasRemoteBaseline ? "true" : "false"
         details["lastSelectedAt"] = CloudKitSharingDiagnostics.formattedTimestamp(family.lastSelectedAt)
         CloudKitSharingDiagnostics.log(event: event, details: details)
+    }
+
+    private func logRemoteCountsForDiagnostics(event: String, family: Family) async {
+        let localBagCount = (try? fetchLocalBags(for: family).count) ?? 0
+        let localItemCount = (try? fetchLocalItems(for: family).count) ?? 0
+
+        do {
+            let remoteCounts = try await fetchRemoteRecordCounts(for: family)
+            logDiagnostics(
+                event: event,
+                family: family,
+                extra: [
+                    "localBags": String(localBagCount),
+                    "localItems": String(localItemCount),
+                    "remoteFamilyRecords": String(remoteCounts.familyCount),
+                    "remoteBagRecords": String(remoteCounts.bagCount),
+                    "remoteItemRecords": String(remoteCounts.itemCount)
+                ]
+            )
+        } catch {
+            logDiagnostics(
+                event: "\(event)（件数確認失敗）",
+                family: family,
+                extra: [
+                    "localBags": String(localBagCount),
+                    "localItems": String(localItemCount),
+                    "description": error.localizedDescription,
+                    "errorType": String(describing: type(of: error))
+                ]
+            )
+        }
     }
 
 }
