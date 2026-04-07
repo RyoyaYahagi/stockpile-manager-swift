@@ -1312,8 +1312,8 @@ final class CloudKitFamilySharingService {
             in: zoneID,
             scope: scope
         )
-        async let deletionMarkerRecords = fetchRecords(
-            forRecordType: Constants.deletionMarkerRecordType,
+        async let deletionMarkerRecords = fetchRecordsAllowingMissingRecordType(
+            Constants.deletionMarkerRecordType,
             in: zoneID,
             scope: scope
         )
@@ -1332,6 +1332,32 @@ final class CloudKitFamilySharingService {
             itemRecords: resolvedItemRecords,
             deletionMarkers: resolvedDeletionMarkers
         )
+    }
+
+    private func fetchRecordsAllowingMissingRecordType(
+        _ recordType: String,
+        in zoneID: CKRecordZone.ID,
+        scope: FamilyCloudKitDatabaseScope
+    ) async throws -> [CKRecord] {
+        do {
+            return try await fetchRecords(
+                forRecordType: recordType,
+                in: zoneID,
+                scope: scope
+            )
+        } catch {
+            guard CloudKitRecordTypeCompatibility.shouldTreatMissingRecordTypeAsEmptyResult(
+                recordType: recordType,
+                after: error
+            ) else {
+                throw error
+            }
+
+            logger.notice(
+                "CloudKit record type unavailable; continuing without records type=\(recordType, privacy: .public) zone=\(zoneID.zoneName, privacy: .public) scope=\(scope.rawValue, privacy: .public)"
+            )
+            return []
+        }
     }
 
     private func remoteDeletionMarkerPayload(from record: CKRecord) -> RemoteDeletionMarkerPayload? {
@@ -2253,6 +2279,47 @@ enum CloudKitRecordQueryCompatibility {
         let description = error.localizedDescription.lowercased()
         return description.contains("field 'recordname' is not marked queryable")
             || description.contains("field \"recordname\" is not marked queryable")
+    }
+}
+
+enum CloudKitRecordTypeCompatibility {
+    static func shouldTreatMissingRecordTypeAsEmptyResult(
+        recordType: String,
+        after error: Error
+    ) -> Bool {
+        if let ckError = error as? CKError,
+           ckError.code == .partialFailure,
+           let partialErrors = ckError.partialErrorsByItemID?.values,
+           !partialErrors.isEmpty {
+            return partialErrors.allSatisfy {
+                shouldTreatMissingRecordTypeAsEmptyResult(
+                    recordType: recordType,
+                    after: $0
+                )
+            }
+        }
+
+        let normalizedRecordType = recordType.lowercased()
+        return errorMessages(from: error).contains { message in
+            let normalizedMessage = message.lowercased()
+            return normalizedMessage.contains("did not find record type")
+                && normalizedMessage.contains(normalizedRecordType)
+        }
+    }
+
+    private static func errorMessages(from error: Error) -> [String] {
+        let nsError = error as NSError
+        return [
+            error.localizedDescription,
+            nsError.localizedFailureReason,
+            nsError.userInfo[NSDebugDescriptionErrorKey] as? String,
+            nsError.userInfo[NSLocalizedFailureReasonErrorKey] as? String
+        ]
+        .compactMap { message in
+            guard let message else { return nil }
+            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
     }
 }
 

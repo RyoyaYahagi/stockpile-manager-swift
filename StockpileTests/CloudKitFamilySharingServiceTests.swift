@@ -242,6 +242,95 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertTrue(CloudKitRecordQueryCompatibility.shouldFallbackToZoneChanges(after: partialFailure))
     }
 
+    func testPrepareShareIgnoresMissingDeletionMarkerRecordType() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "防災")
+        let bag = Bag(name: "非常袋")
+        let item = Item(name: "水", quantity: 3)
+        bag.family = family
+        item.family = family
+        item.bag = bag
+        harness.context.insert(family)
+        harness.context.insert(bag)
+        harness.context.insert(item)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordsHandler = { recordType, zoneID, _ in
+            if recordType == "DeletionMarker" {
+                throw Self.makeMissingRecordTypePartialFailure(
+                    recordType: recordType,
+                    zoneID: zoneID
+                )
+            }
+            return []
+        }
+        backend.fetchRecordHandler = { recordID, _ in
+            switch recordID.recordName {
+            case CKRecordNameZoneWideShare:
+                throw CloudKitSharingError.recordNotFound
+            case "family-\(family.id.uuidString)":
+                return Self.makeFamilyRecord(id: family.id, name: family.name, zoneID: recordID.zoneID)
+            case "bag-\(bag.id.uuidString)":
+                return Self.makeBagRecord(id: bag.id, name: bag.name, familyID: family.id, zoneID: recordID.zoneID)
+            case "item-\(item.id.uuidString)":
+                return Self.makeItemRecord(
+                    id: item.id,
+                    name: item.name,
+                    familyID: family.id,
+                    bagID: bag.id,
+                    zoneID: recordID.zoneID
+                )
+            default:
+                throw CloudKitSharingError.recordNotFound
+            }
+        }
+
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        _ = try await service.prepareShare(for: family)
+
+        XCTAssertFalse(family.cloudKitPendingSync)
+        XCTAssertTrue(family.cloudKitHasRemoteBaseline)
+    }
+
+    func testSyncFamilyStateIgnoresMissingDeletionMarkerRecordType() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有準備中")
+        family.cloudKitDatabaseScope = .sharedDatabase
+        family.cloudKitPendingSync = true
+        family.cloudKitZoneName = "shared-zone"
+        family.cloudKitZoneOwnerName = "owner"
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordsHandler = { recordType, zoneID, scope in
+            XCTAssertEqual(scope, .sharedDatabase)
+            switch recordType {
+            case "Family":
+                return [Self.makeFamilyRecord(id: family.id, name: "共有家族", zoneID: zoneID)]
+            case "Bag", "Item":
+                return []
+            case "DeletionMarker":
+                throw Self.makeMissingRecordTypePartialFailure(
+                    recordType: recordType,
+                    zoneID: zoneID
+                )
+            default:
+                return []
+            }
+        }
+
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        try await service.syncFamilyStateFromCloudKit(for: family)
+
+        XCTAssertEqual(family.name, "共有家族")
+        XCTAssertFalse(family.cloudKitPendingSync)
+        XCTAssertTrue(family.cloudKitHasRemoteBaseline)
+    }
+
     func testSyncFamilyStateMarksBaselineWhenRemoteSnapshotIsAvailable() async throws {
         let harness = try TestHarness()
         let family = Family(name: "ローカル")
@@ -937,6 +1026,27 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         record["targetRecordID"] = targetRecordID as CKRecordValue
         record["deletedAt"] = deletedAt as CKRecordValue
         return record
+    }
+
+    private static func makeMissingRecordTypePartialFailure(
+        recordType: String,
+        zoneID: CKRecordZone.ID
+    ) -> CKError {
+        let underlyingError = NSError(
+            domain: CKError.errorDomain,
+            code: CKError.Code.serverRejectedRequest.rawValue,
+            userInfo: [
+                NSLocalizedDescriptionKey: "Did not find record type: \(recordType)"
+            ]
+        )
+        return CKError(
+            .partialFailure,
+            userInfo: [
+                CKPartialErrorsByItemIDKey: [
+                    CKRecord.ID(recordName: "missing-\(recordType)", zoneID: zoneID): underlyingError
+                ]
+            ]
+        )
     }
 }
 
