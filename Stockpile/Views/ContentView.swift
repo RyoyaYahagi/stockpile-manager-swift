@@ -86,6 +86,7 @@ struct ContentView: View {
     @State private var tutorialDidSetUpFamily = false
     @State private var cloudKitShareSuccessMessage: String?
     @State private var cloudKitShareSuccessToken = UUID()
+    @State private var pendingSharedFamilyRefreshTask: Task<Void, Never>?
     
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
@@ -198,6 +199,10 @@ struct ContentView: View {
             Task {
                 await refreshCloudKitSharedFamilies()
             }
+        }
+        .onDisappear {
+            pendingSharedFamilyRefreshTask?.cancel()
+            pendingSharedFamilyRefreshTask = nil
         }
         .overlay(alignment: .top) {
             if let cloudKitShareSuccessMessage {
@@ -448,7 +453,11 @@ struct ContentView: View {
                 #if DEBUG
                 print("[CloudKitShare] 共有受理に成功しました。family=\(acceptedFamily.id.uuidString)")
                 #endif
-                showCloudKitShareSuccess(L10n.string("データが共有されました"))
+                showCloudKitShareSuccess(
+                    acceptedFamily.cloudKitPendingSync
+                        ? L10n.string("共有受理後の同期を再試行できます。CloudKit の共有データを同期中です。")
+                        : L10n.string("データが共有されました")
+                )
             } catch {
                 logCloudKitShareError(error, context: "共有受理")
             }
@@ -464,6 +473,8 @@ struct ContentView: View {
                 )
             }
         }
+
+        updatePendingSharedFamilyRefreshSchedule()
     }
 
     private func sharedFamiliesForRefresh() -> [Family] {
@@ -492,6 +503,47 @@ struct ContentView: View {
         withAnimation {
             cloudKitShareSuccessMessage = message
             cloudKitShareSuccessToken = UUID()
+        }
+    }
+
+    private func updatePendingSharedFamilyRefreshSchedule() {
+        let hasPendingSharedFamilies = sharedFamiliesForRefresh().contains {
+            $0.cloudKitDatabaseScope == .sharedDatabase && $0.cloudKitPendingSync
+        }
+
+        guard hasPendingSharedFamilies else {
+            pendingSharedFamilyRefreshTask?.cancel()
+            pendingSharedFamilyRefreshTask = nil
+            return
+        }
+
+        guard pendingSharedFamilyRefreshTask == nil else { return }
+
+        pendingSharedFamilyRefreshTask = Task { @MainActor in
+            defer { pendingSharedFamilyRefreshTask = nil }
+
+            let retryIntervals: [UInt64] = [
+                5_000_000_000,
+                10_000_000_000,
+                20_000_000_000,
+                30_000_000_000
+            ]
+
+            for interval in retryIntervals {
+                do {
+                    try await Task.sleep(nanoseconds: interval)
+                } catch {
+                    return
+                }
+
+                guard !Task.isCancelled else { return }
+                await refreshCloudKitSharedFamilies()
+                guard sharedFamiliesForRefresh().contains(where: {
+                    $0.cloudKitDatabaseScope == .sharedDatabase && $0.cloudKitPendingSync
+                }) else {
+                    return
+                }
+            }
         }
     }
 

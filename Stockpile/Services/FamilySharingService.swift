@@ -266,12 +266,23 @@ final class CloudKitFamilySharingService {
             return family
         } catch {
             logShareError(error, phase: "acceptShare.sync")
-            createOrUpdatePendingFamily(
+            let pendingFamily = createOrUpdatePendingFamily(
                 zoneID: zoneID,
                 fallbackName: fallbackName,
                 resolvedFamilyID: resolvedFamilyID
             )
-            throw error
+            guard shouldDeferAcceptedShareCompletion(after: error) else {
+                throw error
+            }
+            logDiagnostics(
+                event: "共有受理は成功・共有データ待機中",
+                family: pendingFamily,
+                extra: [
+                    "description": error.localizedDescription,
+                    "errorType": String(describing: type(of: error))
+                ]
+            )
+            return pendingFamily
         }
     }
 
@@ -1452,6 +1463,30 @@ final class CloudKitFamilySharingService {
         }
     }
 
+    private func shouldDeferAcceptedShareCompletion(after error: Error) -> Bool {
+        if let sharingError = error as? CloudKitSharingError,
+           sharingError == .familyRecordNotFound {
+            return true
+        }
+
+        guard let ckError = error as? CKError else {
+            return false
+        }
+
+        switch ckError.code {
+        case .zoneNotFound, .unknownItem, .networkFailure, .networkUnavailable,
+             .serviceUnavailable, .requestRateLimited, .zoneBusy:
+            return true
+        case .partialFailure:
+            if let partialErrors = ckError.partialErrorsByItemID?.values {
+                return partialErrors.contains { shouldDeferAcceptedShareCompletion(after: $0) }
+            }
+            return false
+        default:
+            return false
+        }
+    }
+
     private func isMissingRemoteStateError(_ error: Error) -> Bool {
         if let sharingError = error as? CloudKitSharingError,
            sharingError == .familyRecordNotFound {
@@ -1525,7 +1560,7 @@ final class CloudKitFamilySharingService {
         zoneID: CKRecordZone.ID,
         fallbackName: String,
         resolvedFamilyID: UUID?
-    ) {
+    ) -> Family {
         let family: Family
         if let resolvedFamilyID,
            let existing = try? modelContext.fetch(
@@ -1561,6 +1596,7 @@ final class CloudKitFamilySharingService {
                 "resolvedFamilyID": resolvedFamilyID?.uuidString ?? "nil"
             ]
         )
+        return family
     }
 
     private func acceptedShareFallbackName(from metadata: CKShare.Metadata, acceptedShare: CKShare) -> String {

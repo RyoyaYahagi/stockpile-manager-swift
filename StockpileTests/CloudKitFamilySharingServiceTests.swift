@@ -135,7 +135,7 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         )
     }
 
-    func testSyncAcceptedShareCreatesPendingFamilyWhenSharedFamilyRecordIsNotReady() async throws {
+    func testSyncAcceptedShareReturnsPendingFamilyWhenSharedFamilyRecordIsNotReady() async throws {
         let harness = try TestHarness()
         let localFamily = Family(name: "ローカル家族")
         localFamily.lastSelectedAt = Date(timeIntervalSince1970: 100)
@@ -155,17 +155,12 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
         let zoneID = CKRecordZone.ID(zoneName: "accepted-zone", ownerName: "owner")
 
-        do {
-            _ = try await service.syncAcceptedShare(
-                zoneID: zoneID,
-                fallbackName: "共有中の家族",
-                resolvedFamilyID: nil,
-                retryIntervalsInNanoseconds: [0]
-            )
-            XCTFail("Expected accepted share sync to fail while remote family record is unavailable")
-        } catch let error as CloudKitSharingError {
-            XCTAssertEqual(error, .familyRecordNotFound)
-        }
+        let acceptedFamily = try await service.syncAcceptedShare(
+            zoneID: zoneID,
+            fallbackName: "共有中の家族",
+            resolvedFamilyID: nil,
+            retryIntervalsInNanoseconds: [0]
+        )
 
         let families = try harness.context.fetch(FetchDescriptor<Family>())
         XCTAssertEqual(families.count, 2)
@@ -173,6 +168,7 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         let pendingFamily = try XCTUnwrap(
             families.first(where: { $0.cloudKitZoneName == "accepted-zone" && $0.cloudKitDatabaseScope == .sharedDatabase })
         )
+        XCTAssertEqual(acceptedFamily.id, pendingFamily.id)
         XCTAssertEqual(pendingFamily.name, "共有中の家族")
         XCTAssertTrue(pendingFamily.cloudKitPendingSync)
         XCTAssertFalse(pendingFamily.cloudKitHasRemoteBaseline)
