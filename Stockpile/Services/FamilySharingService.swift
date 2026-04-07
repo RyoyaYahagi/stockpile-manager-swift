@@ -1871,6 +1871,30 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
         in zoneID: CKRecordZone.ID,
         scope: FamilyCloudKitDatabaseScope
     ) async throws -> [CKRecord] {
+        do {
+            return try await fetchRecordsByQuery(
+                recordType: recordType,
+                in: zoneID,
+                scope: scope
+            )
+        } catch {
+            guard CloudKitRecordQueryCompatibility.shouldFallbackToZoneChanges(after: error) else {
+                throw error
+            }
+
+            return try await fetchRecordsByZoneChanges(
+                recordType: recordType,
+                in: zoneID,
+                scope: scope
+            )
+        }
+    }
+
+    private func fetchRecordsByQuery(
+        recordType: String,
+        in zoneID: CKRecordZone.ID,
+        scope: FamilyCloudKitDatabaseScope
+    ) async throws -> [CKRecord] {
         let database = database(for: scope)
         var fetchedRecords: [CKRecord] = []
         var cursor: CKQueryOperation.Cursor?
@@ -1887,6 +1911,60 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
         } while cursor != nil
 
         return fetchedRecords
+    }
+
+    private func fetchRecordsByZoneChanges(
+        recordType: String,
+        in zoneID: CKRecordZone.ID,
+        scope: FamilyCloudKitDatabaseScope
+    ) async throws -> [CKRecord] {
+        let database = database(for: scope)
+        let zoneConfiguration = CKFetchRecordZoneChangesOperation.ZoneConfiguration(
+            previousServerChangeToken: nil,
+            resultsLimit: nil,
+            desiredKeys: nil
+        )
+
+        return try await withCheckedThrowingContinuation { continuation in
+            var fetchedRecords: [CKRecord] = []
+            let operation = CKFetchRecordZoneChangesOperation(
+                recordZoneIDs: [zoneID],
+                configurationsByRecordZoneID: [zoneID: zoneConfiguration]
+            )
+            operation.fetchAllChanges = true
+
+            if #available(iOS 15.0, *) {
+                operation.recordWasChangedBlock = { _, result in
+                    if case .success(let record) = result,
+                       record.recordType == recordType {
+                        fetchedRecords.append(record)
+                    }
+                }
+                operation.fetchRecordZoneChangesResultBlock = { result in
+                    switch result {
+                    case .success:
+                        continuation.resume(returning: fetchedRecords)
+                    case .failure(let error):
+                        continuation.resume(throwing: error)
+                    }
+                }
+            } else {
+                operation.recordChangedBlock = { record in
+                    if record.recordType == recordType {
+                        fetchedRecords.append(record)
+                    }
+                }
+                operation.fetchRecordZoneChangesCompletionBlock = { error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: fetchedRecords)
+                    }
+                }
+            }
+
+            database.add(operation)
+        }
     }
 
     private func fetchQueryBatch(
@@ -2056,6 +2134,20 @@ enum CloudKitSharingError: LocalizedError, Equatable {
         case .sharePreparationFailed(let detail):
             return L10n.format("共有リンクの再準備に失敗しました。%@", detail)
         }
+    }
+}
+
+enum CloudKitRecordQueryCompatibility {
+    static func shouldFallbackToZoneChanges(after error: Error) -> Bool {
+        if let ckError = error as? CKError,
+           ckError.code == .partialFailure,
+           let partialErrors = ckError.partialErrorsByItemID?.values {
+            return partialErrors.contains { shouldFallbackToZoneChanges(after: $0) }
+        }
+
+        let description = error.localizedDescription.lowercased()
+        return description.contains("field 'recordname' is not marked queryable")
+            || description.contains("field \"recordname\" is not marked queryable")
     }
 }
 

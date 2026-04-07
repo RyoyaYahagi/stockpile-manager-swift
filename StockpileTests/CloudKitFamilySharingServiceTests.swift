@@ -98,6 +98,34 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         CloudKitSharingDiagnostics.clear()
     }
 
+    func testCloudKitRecordQueryCompatibilityFallsBackForRecordNameQueryableError() {
+        let error = NSError(
+            domain: CKError.errorDomain,
+            code: CKError.Code.serverRejectedRequest.rawValue,
+            userInfo: [
+                NSLocalizedDescriptionKey: "Field 'recordName' is not marked queryable"
+            ]
+        )
+
+        XCTAssertTrue(CloudKitRecordQueryCompatibility.shouldFallbackToZoneChanges(after: error))
+    }
+
+    func testCloudKitRecordQueryCompatibilityFallsBackForPartialFailureWrappingQueryableError() {
+        let underlyingError = NSError(
+            domain: CKError.errorDomain,
+            code: CKError.Code.serverRejectedRequest.rawValue,
+            userInfo: [
+                NSLocalizedDescriptionKey: "Field 'recordName' is not marked queryable"
+            ]
+        )
+        let partialFailure = CKError(
+            .partialFailure,
+            userInfo: [CKPartialErrorsByItemIDKey: [CKRecord.ID(recordName: "family"): underlyingError]]
+        )
+
+        XCTAssertTrue(CloudKitRecordQueryCompatibility.shouldFallbackToZoneChanges(after: partialFailure))
+    }
+
     func testSyncFamilyStateMarksBaselineWhenRemoteSnapshotIsAvailable() async throws {
         let harness = try TestHarness()
         let family = Family(name: "ローカル")
