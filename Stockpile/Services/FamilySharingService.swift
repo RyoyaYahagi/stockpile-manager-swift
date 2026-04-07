@@ -1872,29 +1872,67 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
         scope: FamilyCloudKitDatabaseScope
     ) async throws -> [CKRecord] {
         let database = database(for: scope)
+        var fetchedRecords: [CKRecord] = []
+        var cursor: CKQueryOperation.Cursor?
 
-        return try await withCheckedThrowingContinuation { continuation in
-            var fetchedRecords: [CKRecord] = []
-            let configuration = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
-            configuration.previousServerChangeToken = nil
-
-            let operation = CKFetchRecordZoneChangesOperation(
-                recordZoneIDs: [zoneID],
-                configurationsByRecordZoneID: [zoneID: configuration]
+        repeat {
+            let queryBatch = try await fetchQueryBatch(
+                recordType: recordType,
+                in: zoneID,
+                database: database,
+                cursor: cursor
             )
-            operation.recordWasChangedBlock = { _, result in
-                if case .success(let record) = result, record.recordType == recordType {
+            fetchedRecords.append(contentsOf: queryBatch.records)
+            cursor = queryBatch.cursor
+        } while cursor != nil
+
+        return fetchedRecords
+    }
+
+    private func fetchQueryBatch(
+        recordType: String,
+        in zoneID: CKRecordZone.ID,
+        database: CKDatabase,
+        cursor: CKQueryOperation.Cursor?
+    ) async throws -> (records: [CKRecord], cursor: CKQueryOperation.Cursor?) {
+        try await withCheckedThrowingContinuation { continuation in
+            var fetchedRecords: [CKRecord] = []
+            let operation: CKQueryOperation
+            if let cursor {
+                operation = CKQueryOperation(cursor: cursor)
+            } else {
+                let query = CKQuery(recordType: recordType, predicate: NSPredicate(value: true))
+                operation = CKQueryOperation(query: query)
+                operation.zoneID = zoneID
+            }
+
+            if #available(iOS 15.0, *) {
+                operation.recordMatchedBlock = { _, result in
+                    if case .success(let record) = result {
+                        fetchedRecords.append(record)
+                    }
+                }
+                operation.queryResultBlock = { result in
+                    switch result {
+                    case .success(let nextCursor):
+                        continuation.resume(returning: (fetchedRecords, nextCursor))
+                    case .failure(let error):
+                        continuation.resume(throwing: error)
+                    }
+                }
+            } else {
+                operation.recordFetchedBlock = { record in
                     fetchedRecords.append(record)
                 }
-            }
-            operation.fetchRecordZoneChangesResultBlock = { result in
-                switch result {
-                case .success:
-                    continuation.resume(returning: fetchedRecords)
-                case .failure(let error):
-                    continuation.resume(throwing: error)
+                operation.queryCompletionBlock = { nextCursor, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume(returning: (fetchedRecords, nextCursor))
+                    }
                 }
             }
+
             database.add(operation)
         }
     }
