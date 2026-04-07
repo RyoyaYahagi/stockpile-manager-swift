@@ -223,7 +223,7 @@ final class CloudKitFamilySharingService {
         // Share 作成後にもう一度 zone へ保存し、参加者側から既存レコードが見える状態を強める。
         try await syncFamilyDataToCloudKit(for: family)
         try await ensureFamilyRecordExists(for: family)
-        try await verifyOwnerShareDataUpload(for: family)
+        try await verifyCloudKitUpload(for: family)
         await logRemoteCountsForDiagnostics(event: "共有リンク準備完了", family: family)
         return share
     }
@@ -1006,8 +1006,11 @@ final class CloudKitFamilySharingService {
         try await modify(recordsToSave: [familyRecord], recordIDsToDelete: [], scope: .privateDatabase)
     }
 
-    private func verifyOwnerShareDataUpload(for family: Family) async throws {
+    func verifyCloudKitUpload(for family: Family) async throws {
+        guard family.isCloudKitSharedFamily else { return }
+
         let recordIDs = try ownerShareVerificationRecordIDs(for: family)
+        let scope = databaseScope(for: family)
         let retryIntervalsInNanoseconds: [UInt64] = [
             0,
             300_000_000,
@@ -1022,18 +1025,21 @@ final class CloudKitFamilySharingService {
 
             do {
                 for recordID in recordIDs {
-                    _ = try await fetchRecord(with: recordID, scope: .privateDatabase)
+                    _ = try await fetchRecord(with: recordID, scope: scope)
                 }
 
                 logDiagnostics(
                     event: "共有ゾーン保存検証成功",
                     family: family,
-                    extra: ["verifiedRecordNames": recordIDs.map(\.recordName).joined(separator: ",")]
+                    extra: [
+                        "scope": scope.rawValue,
+                        "verifiedRecordNames": recordIDs.map(\.recordName).joined(separator: ",")
+                    ]
                 )
                 return
             } catch {
                 lastError = error
-                guard shouldRetryOwnerShareVerification(after: error) else {
+                guard shouldRetryCloudKitUploadVerification(after: error) else {
                     throw error
                 }
             }
@@ -1043,6 +1049,7 @@ final class CloudKitFamilySharingService {
             event: "共有ゾーン保存検証失敗",
             family: family,
             extra: [
+                "scope": scope.rawValue,
                 "verifiedRecordNames": recordIDs.map(\.recordName).joined(separator: ","),
                 "description": lastError?.localizedDescription ?? L10n.string("不明なエラー"),
                 "errorType": lastError.map { String(describing: type(of: $0)) } ?? "Unknown"
@@ -1538,7 +1545,7 @@ final class CloudKitFamilySharingService {
         }
     }
 
-    private func shouldRetryOwnerShareVerification(after error: Error) -> Bool {
+    private func shouldRetryCloudKitUploadVerification(after error: Error) -> Bool {
         if let sharingError = error as? CloudKitSharingError,
            sharingError == .recordNotFound {
             return true
@@ -1554,7 +1561,7 @@ final class CloudKitFamilySharingService {
             return true
         case .partialFailure:
             if let partialErrors = ckError.partialErrorsByItemID?.values {
-                return partialErrors.contains { shouldRetryOwnerShareVerification(after: $0) }
+                return partialErrors.contains { shouldRetryCloudKitUploadVerification(after: $0) }
             }
             return false
         default:

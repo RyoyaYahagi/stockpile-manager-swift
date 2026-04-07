@@ -387,6 +387,7 @@ struct ImportJSONView: View {
             if syncToCloudKit, let targetFamily {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 try await sharingService.syncFamilyDataToCloudKit(for: targetFamily)
+                try await sharingService.verifyCloudKitUpload(for: targetFamily)
             }
 
             importResult = .success(successMessage(items.count))

@@ -166,6 +166,54 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         }
     }
 
+    func testVerifyCloudKitUploadUsesCurrentFamilyDatabaseScope() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有家族")
+        family.cloudKitDatabaseScope = .sharedDatabase
+        family.cloudKitZoneName = "shared-zone"
+        family.cloudKitZoneOwnerName = "owner"
+        family.cloudKitPendingSync = false
+
+        let bag = Bag(name: "非常袋")
+        let item = Item(name: "水", quantity: 2)
+        bag.family = family
+        item.family = family
+        item.bag = bag
+
+        harness.context.insert(family)
+        harness.context.insert(bag)
+        harness.context.insert(item)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        var fetchedScopes: [FamilyCloudKitDatabaseScope] = []
+        backend.fetchRecordHandler = { recordID, scope in
+            fetchedScopes.append(scope)
+            switch recordID.recordName {
+            case "family-\(family.id.uuidString)":
+                return Self.makeFamilyRecord(id: family.id, name: family.name, zoneID: recordID.zoneID)
+            case "bag-\(bag.id.uuidString)":
+                return Self.makeBagRecord(id: bag.id, name: bag.name, familyID: family.id, zoneID: recordID.zoneID)
+            case "item-\(item.id.uuidString)":
+                return Self.makeItemRecord(
+                    id: item.id,
+                    name: item.name,
+                    familyID: family.id,
+                    bagID: bag.id,
+                    zoneID: recordID.zoneID
+                )
+            default:
+                throw CloudKitSharingError.recordNotFound
+            }
+        }
+
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        try await service.verifyCloudKitUpload(for: family)
+
+        XCTAssertEqual(fetchedScopes, [.sharedDatabase, .sharedDatabase, .sharedDatabase])
+    }
+
     func testCloudKitRecordQueryCompatibilityFallsBackForRecordNameQueryableError() {
         let error = NSError(
             domain: CKError.errorDomain,
