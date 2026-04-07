@@ -19,8 +19,25 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         try harness.context.save()
 
         let backend = FakeCloudKitFamilySharingBackend()
-        backend.fetchRecordHandler = { _, _ in
-            throw CloudKitSharingError.recordNotFound
+        backend.fetchRecordHandler = { recordID, _ in
+            switch recordID.recordName {
+            case CKRecordNameZoneWideShare:
+                throw CloudKitSharingError.recordNotFound
+            case "family-\(family.id.uuidString)":
+                return Self.makeFamilyRecord(id: family.id, name: family.name, zoneID: recordID.zoneID)
+            case "bag-\(bag.id.uuidString)":
+                return Self.makeBagRecord(id: bag.id, name: bag.name, familyID: family.id, zoneID: recordID.zoneID)
+            case "item-\(item.id.uuidString)":
+                return Self.makeItemRecord(
+                    id: item.id,
+                    name: item.name,
+                    familyID: family.id,
+                    bagID: bag.id,
+                    zoneID: recordID.zoneID
+                )
+            default:
+                throw CloudKitSharingError.recordNotFound
+            }
         }
         let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
 
@@ -44,8 +61,15 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         try harness.context.save()
 
         let backend = FakeCloudKitFamilySharingBackend()
-        backend.fetchRecordHandler = { _, _ in
-            throw CloudKitSharingError.recordNotFound
+        backend.fetchRecordHandler = { recordID, _ in
+            switch recordID.recordName {
+            case CKRecordNameZoneWideShare:
+                throw CloudKitSharingError.recordNotFound
+            case "family-\(family.id.uuidString)":
+                return Self.makeFamilyRecord(id: family.id, name: family.name, zoneID: recordID.zoneID)
+            default:
+                throw CloudKitSharingError.recordNotFound
+            }
         }
 
         var capturedSharePermission: CKShare.ParticipantPermission?
@@ -78,8 +102,25 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         try harness.context.save()
 
         let backend = FakeCloudKitFamilySharingBackend()
-        backend.fetchRecordHandler = { _, _ in
-            throw CloudKitSharingError.recordNotFound
+        backend.fetchRecordHandler = { recordID, _ in
+            switch recordID.recordName {
+            case CKRecordNameZoneWideShare:
+                throw CloudKitSharingError.recordNotFound
+            case "family-\(family.id.uuidString)":
+                return Self.makeFamilyRecord(id: family.id, name: family.name, zoneID: recordID.zoneID)
+            case "bag-\(bag.id.uuidString)":
+                return Self.makeBagRecord(id: bag.id, name: bag.name, familyID: family.id, zoneID: recordID.zoneID)
+            case "item-\(item.id.uuidString)":
+                return Self.makeItemRecord(
+                    id: item.id,
+                    name: item.name,
+                    familyID: family.id,
+                    bagID: bag.id,
+                    zoneID: recordID.zoneID
+                )
+            default:
+                throw CloudKitSharingError.recordNotFound
+            }
         }
         let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
 
@@ -96,6 +137,33 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertTrue(report.contains("remoteFamilyRecords=0"))
 
         CloudKitSharingDiagnostics.clear()
+    }
+
+    func testPrepareShareFailsWhenOwnerUploadCannotBeVerified() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "防災")
+        let bag = Bag(name: "非常袋")
+        let item = Item(name: "水", quantity: 3)
+        bag.family = family
+        item.family = family
+        item.bag = bag
+        harness.context.insert(family)
+        harness.context.insert(bag)
+        harness.context.insert(item)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordHandler = { _, _ in
+            throw CloudKitSharingError.recordNotFound
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        await XCTAssertThrowsErrorAsync(try await service.prepareShare(for: family)) { error in
+            guard case let CloudKitSharingError.shareDataNotUploaded(detail) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertTrue(detail.contains("CloudKit上のレコードが見つかりません"))
+        }
     }
 
     func testCloudKitRecordQueryCompatibilityFallsBackForRecordNameQueryableError() {
@@ -821,6 +889,21 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         record["targetRecordID"] = targetRecordID as CKRecordValue
         record["deletedAt"] = deletedAt as CKRecordValue
         return record
+    }
+}
+
+@MainActor
+private func XCTAssertThrowsErrorAsync<T>(
+    _ expression: @autoclosure () async throws -> T,
+    _ errorHandler: (Error) -> Void,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) async {
+    do {
+        _ = try await expression()
+        XCTFail("Expected expression to throw an error", file: file, line: line)
+    } catch {
+        errorHandler(error)
     }
 }
 

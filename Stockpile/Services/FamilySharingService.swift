@@ -223,6 +223,7 @@ final class CloudKitFamilySharingService {
         // Share 作成後にもう一度 zone へ保存し、参加者側から既存レコードが見える状態を強める。
         try await syncFamilyDataToCloudKit(for: family)
         try await ensureFamilyRecordExists(for: family)
+        try await verifyOwnerShareDataUpload(for: family)
         await logRemoteCountsForDiagnostics(event: "共有リンク準備完了", family: family)
         return share
     }
@@ -1005,6 +1006,66 @@ final class CloudKitFamilySharingService {
         try await modify(recordsToSave: [familyRecord], recordIDsToDelete: [], scope: .privateDatabase)
     }
 
+    private func verifyOwnerShareDataUpload(for family: Family) async throws {
+        let recordIDs = try ownerShareVerificationRecordIDs(for: family)
+        let retryIntervalsInNanoseconds: [UInt64] = [
+            0,
+            300_000_000,
+            1_000_000_000
+        ]
+        var lastError: Error?
+
+        for interval in retryIntervalsInNanoseconds {
+            if interval > 0 {
+                try await Task.sleep(nanoseconds: interval)
+            }
+
+            do {
+                for recordID in recordIDs {
+                    _ = try await fetchRecord(with: recordID, scope: .privateDatabase)
+                }
+
+                logDiagnostics(
+                    event: "共有ゾーン保存検証成功",
+                    family: family,
+                    extra: ["verifiedRecordNames": recordIDs.map(\.recordName).joined(separator: ",")]
+                )
+                return
+            } catch {
+                lastError = error
+                guard shouldRetryOwnerShareVerification(after: error) else {
+                    throw error
+                }
+            }
+        }
+
+        logDiagnostics(
+            event: "共有ゾーン保存検証失敗",
+            family: family,
+            extra: [
+                "verifiedRecordNames": recordIDs.map(\.recordName).joined(separator: ","),
+                "description": lastError?.localizedDescription ?? L10n.string("不明なエラー"),
+                "errorType": lastError.map { String(describing: type(of: $0)) } ?? "Unknown"
+            ]
+        )
+        throw CloudKitSharingError.shareDataNotUploaded(
+            detail: makeShareErrorDetail(from: lastError ?? CloudKitSharingError.recordNotFound)
+        )
+    }
+
+    private func ownerShareVerificationRecordIDs(for family: Family) throws -> [CKRecord.ID] {
+        var recordIDs: [CKRecord.ID] = [familyRecordID(for: family)]
+
+        if let bag = try fetchLocalBags(for: family).first {
+            recordIDs.append(bagRecordID(for: bag, family: family))
+        }
+        if let item = try fetchLocalItems(for: family).first {
+            recordIDs.append(itemRecordID(for: item, family: family))
+        }
+
+        return recordIDs
+    }
+
     private func ensureZoneExists(for family: Family) async throws {
         try await backend.ensureZoneExists(zoneID(for: family))
     }
@@ -1099,7 +1160,7 @@ final class CloudKitFamilySharingService {
     private func makeFamilyRecord(from family: Family) -> CKRecord {
         let record = CKRecord(
             recordType: Constants.familyRecordType,
-            recordID: CKRecord.ID(recordName: "family-\(family.id.uuidString)", zoneID: zoneID(for: family))
+            recordID: familyRecordID(for: family)
         )
         record["id"] = family.id.uuidString as CKRecordValue
         record["name"] = family.name as CKRecordValue
@@ -1109,10 +1170,9 @@ final class CloudKitFamilySharingService {
     }
 
     private func makeBagRecord(from bag: Bag, family: Family) -> CKRecord {
-        let zoneID = zoneID(for: family)
         let record = CKRecord(
             recordType: Constants.bagRecordType,
-            recordID: CKRecord.ID(recordName: "bag-\(bag.id.uuidString)", zoneID: zoneID)
+            recordID: bagRecordID(for: bag, family: family)
         )
         record["id"] = bag.id.uuidString as CKRecordValue
         record["name"] = bag.name as CKRecordValue
@@ -1125,10 +1185,9 @@ final class CloudKitFamilySharingService {
     }
 
     private func makeItemRecord(from item: Item, family: Family) -> CKRecord {
-        let zoneID = zoneID(for: family)
         let record = CKRecord(
             recordType: Constants.itemRecordType,
-            recordID: CKRecord.ID(recordName: "item-\(item.id.uuidString)", zoneID: zoneID)
+            recordID: itemRecordID(for: item, family: family)
         )
         record["id"] = item.id.uuidString as CKRecordValue
         record["name"] = item.name as CKRecordValue
@@ -1186,6 +1245,18 @@ final class CloudKitFamilySharingService {
             recordName: "\(recordNamePrefix)-\(marker.targetRecordID)",
             zoneID: zoneID(for: family)
         )
+    }
+
+    private func familyRecordID(for family: Family) -> CKRecord.ID {
+        CKRecord.ID(recordName: "family-\(family.id.uuidString)", zoneID: zoneID(for: family))
+    }
+
+    private func bagRecordID(for bag: Bag, family: Family) -> CKRecord.ID {
+        CKRecord.ID(recordName: "bag-\(bag.id.uuidString)", zoneID: zoneID(for: family))
+    }
+
+    private func itemRecordID(for item: Item, family: Family) -> CKRecord.ID {
+        CKRecord.ID(recordName: "item-\(item.id.uuidString)", zoneID: zoneID(for: family))
     }
 
     private func shouldUploadRecord(
@@ -1460,6 +1531,30 @@ final class CloudKitFamilySharingService {
         case .partialFailure:
             if let partialErrors = ckError.partialErrorsByItemID?.values {
                 return partialErrors.contains { shouldRetryAcceptedShareSync(after: $0) }
+            }
+            return false
+        default:
+            return false
+        }
+    }
+
+    private func shouldRetryOwnerShareVerification(after error: Error) -> Bool {
+        if let sharingError = error as? CloudKitSharingError,
+           sharingError == .recordNotFound {
+            return true
+        }
+
+        guard let ckError = error as? CKError else {
+            return false
+        }
+
+        switch ckError.code {
+        case .zoneNotFound, .unknownItem, .networkFailure, .networkUnavailable,
+             .serviceUnavailable, .requestRateLimited, .zoneBusy:
+            return true
+        case .partialFailure:
+            if let partialErrors = ckError.partialErrorsByItemID?.values {
+                return partialErrors.contains { shouldRetryOwnerShareVerification(after: $0) }
             }
             return false
         default:
@@ -2119,6 +2214,7 @@ enum CloudKitSharingError: LocalizedError, Equatable {
     case invalidShareMetadata
     case familyRecordNotFound
     case recordNotFound
+    case shareDataNotUploaded(detail: String)
     case sharePreparationFailed(detail: String)
 
     var errorDescription: String? {
@@ -2131,6 +2227,8 @@ enum CloudKitSharingError: LocalizedError, Equatable {
             return L10n.string("共有された家族データが見つかりません。")
         case .recordNotFound:
             return L10n.string("CloudKit上のレコードが見つかりません。")
+        case .shareDataNotUploaded(let detail):
+            return L10n.format("CloudKit上に共有データを保存できませんでした。%@", detail)
         case .sharePreparationFailed(let detail):
             return L10n.format("共有リンクの再準備に失敗しました。%@", detail)
         }
