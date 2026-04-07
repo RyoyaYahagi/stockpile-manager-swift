@@ -164,6 +164,9 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
             }
             XCTAssertTrue(detail.contains("CloudKit上のレコードが見つかりません"))
         }
+
+        XCTAssertTrue(family.cloudKitPendingSync)
+        XCTAssertFalse(family.cloudKitHasRemoteBaseline)
     }
 
     func testVerifyCloudKitUploadUsesCurrentFamilyDatabaseScope() async throws {

@@ -158,12 +158,12 @@ final class CloudKitFamilySharingService {
 
                 if index < retryIntervalsInNanoseconds.count - 1,
                    let existingShare = try await fetchExistingShareAfterTransientFailure(for: family) {
-                    family.cloudKitShareURL = existingShare.url
-                    family.cloudKitPendingSync = false
-                    family.cloudKitHasRemoteBaseline = true
-                    try? modelContext.save()
-                    await cacheShareParticipants(from: existingShare, for: family)
-                    return existingShare
+                    do {
+                        return try await finalizePreparedShare(existingShare, for: family)
+                    } catch {
+                        lastError = error
+                        logShareError(error, phase: "prepareShare.recoveredExistingShare[\(index)]")
+                    }
                 }
 
                 guard shouldRetrySharePreparation(after: error),
@@ -214,18 +214,36 @@ final class CloudKitFamilySharingService {
     }
 
     private func finalizePreparedShare(_ share: CKShare, for family: Family) async throws -> CKShare {
-        family.cloudKitShareURL = share.url
-        family.cloudKitPendingSync = false
-        family.cloudKitHasRemoteBaseline = true
-        try? modelContext.save()
+        updatePreparedShareState(
+            for: family,
+            shareURL: share.url,
+            pendingSync: true,
+            hasRemoteBaseline: false
+        )
         await cacheShareParticipants(from: share, for: family)
 
-        // Share 作成後にもう一度 zone へ保存し、参加者側から既存レコードが見える状態を強める。
-        try await syncFamilyDataToCloudKit(for: family)
-        try await ensureFamilyRecordExists(for: family)
-        try await verifyCloudKitUpload(for: family)
-        await logRemoteCountsForDiagnostics(event: "共有リンク準備完了", family: family)
-        return share
+        do {
+            // Share 作成後にもう一度 zone へ保存し、参加者側から既存レコードが見える状態を強める。
+            try await syncFamilyDataToCloudKit(for: family)
+            try await ensureFamilyRecordExists(for: family)
+            try await verifyCloudKitUpload(for: family)
+            updatePreparedShareState(
+                for: family,
+                shareURL: share.url,
+                pendingSync: false,
+                hasRemoteBaseline: true
+            )
+            await logRemoteCountsForDiagnostics(event: "共有リンク準備完了", family: family)
+            return share
+        } catch {
+            updatePreparedShareState(
+                for: family,
+                shareURL: share.url,
+                pendingSync: true,
+                hasRemoteBaseline: false
+            )
+            throw error
+        }
     }
 
     @discardableResult
@@ -831,6 +849,18 @@ final class CloudKitFamilySharingService {
             family.cloudKitPendingSync = true
         }
         // メタデータをローカルDBに永続化（isCloudKitSharedFamily が正しく評価されるよう保証）
+        try? modelContext.save()
+    }
+
+    private func updatePreparedShareState(
+        for family: Family,
+        shareURL: URL?,
+        pendingSync: Bool,
+        hasRemoteBaseline: Bool
+    ) {
+        family.cloudKitShareURL = shareURL
+        family.cloudKitPendingSync = pendingSync
+        family.cloudKitHasRemoteBaseline = hasRemoteBaseline
         try? modelContext.save()
     }
 
