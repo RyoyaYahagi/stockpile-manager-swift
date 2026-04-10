@@ -1,0 +1,36 @@
+{
+  "identifier" : "0C62A548-15AC-4818-9A65-39A92AFB2A5F",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "300",
+      "familyShareable" : false,
+      "internalID" : "0AEBD41A-3C11-42AF-9D2E-B6A2EB827634",
+      "localizations" : [
+        {
+          "description" : "収納場所・通知・OCR・バーコード検索の制限を解除します。",
+          "displayName" : "Stockpile Premium",
+          "locale" : "ja_JP"
+        },
+        {
+          "description" : "Unlocks limits on storage spaces, notifications, OCR, and barcode search.",
+          "displayName" : "Stockpile Premium",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.stockpile-manager.app.premium.lifetime",
+      "referenceName" : "Stockpile Premium",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6F2F1D5C-A344-49A3-B6F2-8BA0959CF97A",
+    "_developerTeamID" : "2L6CD9CNHL",
+    "_lastSynchronizedDate" : 0
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

@@ -4,20 +4,27 @@ import SwiftData
 struct ItemDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     @Bindable var item: Item
     
     @State private var showDeleteConfirmation = false
+
+    private var currentFamily: Family? {
+        CurrentFamilyResolver.currentFamily(from: families)
+    }
     
     var body: some View {
+        let expiryStatus = item.expiryStatus
+        
         List {
             // 期限セクション
             Section {
                 HStack {
                     Label("期限状態", systemImage: "clock")
                     Spacer()
-                    ExpiryBadge(status: item.expiryStatus)
-                    Text(item.expiryStatus.label)
-                        .foregroundStyle(expiryColor)
+                    ExpiryBadge(status: expiryStatus)
+                    Text(expiryStatus.label)
+                        .foregroundStyle(expiryColor(for: expiryStatus))
                 }
                 
                 if let expiryDate = item.expiryDate {
@@ -32,7 +39,7 @@ struct ItemDetailView: View {
                         Label("残り日数", systemImage: "hourglass")
                         Spacer()
                         Text(item.expiryDisplayText)
-                            .foregroundStyle(expiryColor)
+                            .foregroundStyle(expiryColor(for: expiryStatus))
                     }
                 }
             } header: {
@@ -46,6 +53,15 @@ struct ItemDetailView: View {
                     Spacer()
                     Text("\(item.quantity)")
                         .foregroundStyle(.secondary)
+                }
+
+                if let janCode = item.janCode, !janCode.isEmpty {
+                    HStack {
+                        Label("JANコード", systemImage: "barcode")
+                        Spacer()
+                        Text(janCode)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 
                 if let bag = item.bag {
@@ -78,7 +94,7 @@ struct ItemDetailView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             // アクション
             Section {
                 Button {
@@ -96,24 +112,63 @@ struct ItemDetailView: View {
         }
         .navigationTitle(item.name)
         .navigationBarTitleDisplayMode(.large)
-        .confirmationDialog(
-            "この備蓄品を削除しますか？",
-            isPresented: $showDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
+        .alert("この備蓄品を削除しますか？", isPresented: $showDeleteConfirmation) {
             Button("削除", role: .destructive) {
-                modelContext.delete(item)
-                Task {
-                    await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
+                let deletedItemInfo = DeletedItemInfo(
+                    id: item.id,
+                    name: item.name,
+                    janCode: item.janCode,
+                    quantity: item.quantity,
+                    expiryDate: item.expiryDate,
+                    locationNote: item.locationNote,
+                    bagId: item.bag?.id
+                )
+                do {
+                    let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                    try sharingService.deleteItemLocally(item, in: currentFamily)
+                } catch {
+                    #if DEBUG
+                    print("ローカル削除に失敗: \(error)")
+                    #endif
+                    return
+                }
+                do {
+                    try modelContext.save()
+                } catch {
+                    #if DEBUG
+                    print("ローカル保存に失敗: \(error)")
+                    #endif
+                    return
+                }
+                NotificationManager.shared.requestReschedule(using: modelContext)
+                if let family = currentFamily {
+                    Task {
+                        do {
+                            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                            try await sharingService.syncFamilyDataToCloudKit(for: family)
+                        } catch {
+                            #if DEBUG
+                            print("CloudKit同期に失敗: \(error)")
+                            #endif
+                        }
+                    }
                 }
                 router.pop()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    NotificationCenter.default.post(
+                        name: .didDeleteItems,
+                        object: [deletedItemInfo]
+                    )
+                }
             }
             Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("削除した備蓄品は元に戻せません。")
         }
     }
     
-    private var expiryColor: Color {
-        switch item.expiryStatus {
+    private func expiryColor(for status: ExpiryStatus) -> Color {
+        switch status {
         case .expired: return .red
         case .imminent: return .orange
         case .approaching: return .yellow
@@ -128,5 +183,5 @@ struct ItemDetailView: View {
         ItemDetailView(item: Item(name: "缶詰", quantity: 3, expiryDate: Date().addingTimeInterval(86400 * 5)))
     }
     .environment(Router())
-    .modelContainer(for: [Item.self], inMemory: true)
+    .modelContainer(for: [Family.self, Item.self], inMemory: true)
 }

@@ -23,23 +23,40 @@
 		014 /* BagListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114 /* BagListView.swift */; };
 		015 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115 /* SettingsView.swift */; };
 		016 /* FamilySetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116 /* FamilySetupView.swift */; };
-		017 /* InviteCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 117 /* InviteCodeView.swift */; };
 		018 /* ImportJSONView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118 /* ImportJSONView.swift */; };
 		019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 119 /* Assets.xcassets */; };
 		020 /* StorageLocationPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120 /* StorageLocationPicker.swift */; };
-		021 /* QRCodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121 /* QRCodeGenerator.swift */; };
-		022 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 122 /* QRScannerView.swift */; };
 		023 /* NotificationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123 /* NotificationSettings.swift */; };
 		024 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124 /* NotificationManager.swift */; };
 		025 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 125 /* NotificationSettingsView.swift */; };
 		026 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126 /* BarcodeScannerView.swift */; };
 		027 /* ProductSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 127 /* ProductSearchService.swift */; };
 		028 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128 /* APIConfig.swift */; };
-		029 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 129 /* Secrets.plist */; };
-		030 /* CloudKitSharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130 /* CloudKitSharingService.swift */; };
 		031 /* FamilySharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131 /* FamilySharingService.swift */; };
 		032 /* FamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132 /* FamilySettingsView.swift */; };
+		034 /* CloudKitShareSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 134 /* CloudKitShareSceneDelegate.swift */; };
+		035 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135 /* AppLocalization.swift */; };
+		036 /* LanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136 /* LanguageSettingsView.swift */; };
+		037 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 137 /* Localizable.strings */; };
+		038 /* CloudKitDeletionMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146 /* CloudKitDeletionMarker.swift */; };
+		039 /* PremiumAccessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 147 /* PremiumAccessManager.swift */; };
+		040 /* PremiumPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 148 /* PremiumPlanView.swift */; };
+		A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000002 /* ProductSearchServiceTests.swift */; };
+		A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */; };
+		A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000004 /* PremiumAccessManagerTests.swift */; };
+		A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000005 /* AppLocalizationTests.swift */; };
+		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A4B100000000000000000501 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 600 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 400;
+			remoteInfo = Stockpile;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		100 /* Stockpile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Stockpile.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -59,27 +76,49 @@
 		114 /* BagListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BagListView.swift; sourceTree = "<group>"; };
 		115 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		116 /* FamilySetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySetupView.swift; sourceTree = "<group>"; };
-		117 /* InviteCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCodeView.swift; sourceTree = "<group>"; };
 		118 /* ImportJSONView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportJSONView.swift; sourceTree = "<group>"; };
 		119 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		120 /* StorageLocationPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLocationPicker.swift; sourceTree = "<group>"; };
-		121 /* QRCodeGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeGenerator.swift; sourceTree = "<group>"; };
-		122 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
 		123 /* NotificationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettings.swift; sourceTree = "<group>"; };
 		124 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		125 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		126 /* BarcodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
 		127 /* ProductSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchService.swift; sourceTree = "<group>"; };
 		128 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
-		129 /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Secrets.plist; sourceTree = "<group>"; };
-		130 /* CloudKitSharingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitSharingService.swift; sourceTree = "<group>"; };
 		131 /* FamilySharingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySharingService.swift; sourceTree = "<group>"; };
 		132 /* FamilySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySettingsView.swift; sourceTree = "<group>"; };
 		133 /* Stockpile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Stockpile.entitlements; sourceTree = "<group>"; };
+		134 /* CloudKitShareSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitShareSceneDelegate.swift; sourceTree = "<group>"; };
+		135 /* AppLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalization.swift; sourceTree = "<group>"; };
+		136 /* LanguageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageSettingsView.swift; sourceTree = "<group>"; };
+		138 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		139 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
+		140 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		141 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		142 /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ko; path = ko.lproj/Localizable.strings; sourceTree = "<group>"; };
+		146 /* CloudKitDeletionMarker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitDeletionMarker.swift; sourceTree = "<group>"; };
+		147 /* PremiumAccessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumAccessManager.swift; sourceTree = "<group>"; };
+		148 /* PremiumPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumPlanView.swift; sourceTree = "<group>"; };
+		149 /* StockpilePremium.storekit */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = StockpilePremium.storekit; sourceTree = "<group>"; };
+		A4B100000000000000000001 /* StockpileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StockpileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A4B100000000000000000002 /* ProductSearchServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchServiceTests.swift; sourceTree = "<group>"; };
+		A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitFamilySharingServiceTests.swift; sourceTree = "<group>"; };
+		A4B100000000000000000004 /* PremiumAccessManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumAccessManagerTests.swift; sourceTree = "<group>"; };
+		A4B100000000000000000005 /* AppLocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalizationTests.swift; sourceTree = "<group>"; };
+		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockpileRelease.entitlements; sourceTree = "<group>"; };
+		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		200 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A4B100000000000000000201 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -93,6 +132,7 @@
 			isa = PBXGroup;
 			children = (
 				301 /* Stockpile */,
+				A4B100000000000000000301 /* StockpileTests */,
 				302 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -100,15 +140,18 @@
 		301 /* Stockpile */ = {
 			isa = PBXGroup;
 			children = (
+				A3325EAE2F40023100E83F43 /* Info.plist */,
+				A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */,
 				303 /* App */,
 				304 /* Models */,
+				315 /* Localization */,
 				305 /* Views */,
 				306 /* Utilities */,
 				313 /* Services */,
 				314 /* Config */,
 				119 /* Assets.xcassets */,
-				129 /* Secrets.plist */,
 				133 /* Stockpile.entitlements */,
+				A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */,
 			);
 			path = Stockpile;
 			sourceTree = "<group>";
@@ -117,14 +160,27 @@
 			isa = PBXGroup;
 			children = (
 				100 /* Stockpile.app */,
+				A4B100000000000000000001 /* StockpileTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A4B100000000000000000301 /* StockpileTests */ = {
+			isa = PBXGroup;
+			children = (
+				A4B100000000000000000005 /* AppLocalizationTests.swift */,
+				A4B100000000000000000004 /* PremiumAccessManagerTests.swift */,
+				A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */,
+				A4B100000000000000000002 /* ProductSearchServiceTests.swift */,
+			);
+			path = StockpileTests;
 			sourceTree = "<group>";
 		};
 		303 /* App */ = {
 			isa = PBXGroup;
 			children = (
 				101 /* StockpileApp.swift */,
+				134 /* CloudKitShareSceneDelegate.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -136,6 +192,7 @@
 				104 /* User.swift */,
 				105 /* Bag.swift */,
 				106 /* Item.swift */,
+				146 /* CloudKitDeletionMarker.swift */,
 				123 /* NotificationSettings.swift */,
 			);
 			path = Models;
@@ -159,7 +216,6 @@
 			isa = PBXGroup;
 			children = (
 				107 /* Router.swift */,
-				121 /* QRCodeGenerator.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -194,9 +250,11 @@
 			isa = PBXGroup;
 			children = (
 				115 /* SettingsView.swift */,
+				136 /* LanguageSettingsView.swift */,
 				132 /* FamilySettingsView.swift */,
 				118 /* ImportJSONView.swift */,
 				125 /* NotificationSettingsView.swift */,
+				148 /* PremiumPlanView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -214,9 +272,7 @@
 			children = (
 				112 /* ExpiryBadge.swift */,
 				113 /* OCRCameraView.swift */,
-				117 /* InviteCodeView.swift */,
 				120 /* StorageLocationPicker.swift */,
-				122 /* QRScannerView.swift */,
 				126 /* BarcodeScannerView.swift */,
 			);
 			path = Components;
@@ -227,8 +283,8 @@
 			children = (
 				124 /* NotificationManager.swift */,
 				127 /* ProductSearchService.swift */,
-				130 /* CloudKitSharingService.swift */,
 				131 /* FamilySharingService.swift */,
+				147 /* PremiumAccessManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -237,8 +293,18 @@
 			isa = PBXGroup;
 			children = (
 				128 /* APIConfig.swift */,
+				149 /* StockpilePremium.storekit */,
 			);
 			path = Config;
+			sourceTree = "<group>";
+		};
+		315 /* Localization */ = {
+			isa = PBXGroup;
+			children = (
+				135 /* AppLocalization.swift */,
+				137 /* Localizable.strings */,
+			);
+			path = Localization;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -257,9 +323,31 @@
 			dependencies = (
 			);
 			name = Stockpile;
+			packageProductDependencies = (
+			);
 			productName = Stockpile;
 			productReference = 100 /* Stockpile.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A4B100000000000000000401 /* StockpileTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A4B100000000000000000601 /* Build configuration list for PBXNativeTarget "StockpileTests" */;
+			buildPhases = (
+				A4B100000000000000000203 /* Sources */,
+				A4B100000000000000000201 /* Frameworks */,
+				A4B100000000000000000202 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A4B100000000000000000502 /* PBXTargetDependency */,
+			);
+			name = StockpileTests;
+			packageProductDependencies = (
+			);
+			productName = StockpileTests;
+			productReference = A4B100000000000000000001 /* StockpileTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -274,6 +362,10 @@
 					400 = {
 						CreatedOnToolsVersion = 16.0;
 					};
+					A4B100000000000000000401 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = 400;
+					};
 				};
 			};
 			buildConfigurationList = 601 /* Build configuration list for PBXProject "Stockpile" */;
@@ -284,13 +376,19 @@
 				en,
 				Base,
 				ja,
+				ko,
+				"zh-Hans",
+				"zh-Hant",
 			);
 			mainGroup = 300;
+			packageReferences = (
+			);
 			productRefGroup = 302 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				400 /* Stockpile */,
+				A4B100000000000000000401 /* StockpileTests */,
 			);
 		};
 /* End PBXProject section */
@@ -301,7 +399,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				019 /* Assets.xcassets in Resources */,
-				029 /* Secrets.plist in Resources */,
+				037 /* Localizable.strings in Resources */,
+				A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A4B100000000000000000202 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -313,6 +419,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				001 /* StockpileApp.swift in Sources */,
+				034 /* CloudKitShareSceneDelegate.swift in Sources */,
 				002 /* ContentView.swift in Sources */,
 				003 /* Family.swift in Sources */,
 				004 /* User.swift in Sources */,
@@ -328,24 +435,59 @@
 				014 /* BagListView.swift in Sources */,
 				015 /* SettingsView.swift in Sources */,
 				016 /* FamilySetupView.swift in Sources */,
-				017 /* InviteCodeView.swift in Sources */,
 				018 /* ImportJSONView.swift in Sources */,
 				020 /* StorageLocationPicker.swift in Sources */,
-				021 /* QRCodeGenerator.swift in Sources */,
-				022 /* QRScannerView.swift in Sources */,
 				023 /* NotificationSettings.swift in Sources */,
 				024 /* NotificationManager.swift in Sources */,
 				025 /* NotificationSettingsView.swift in Sources */,
 				026 /* BarcodeScannerView.swift in Sources */,
 				027 /* ProductSearchService.swift in Sources */,
 				028 /* APIConfig.swift in Sources */,
-				030 /* CloudKitSharingService.swift in Sources */,
 				031 /* FamilySharingService.swift in Sources */,
 				032 /* FamilySettingsView.swift in Sources */,
+				035 /* AppLocalization.swift in Sources */,
+				036 /* LanguageSettingsView.swift in Sources */,
+				038 /* CloudKitDeletionMarker.swift in Sources */,
+				039 /* PremiumAccessManager.swift in Sources */,
+				040 /* PremiumPlanView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A4B100000000000000000203 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */,
+				A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */,
+				A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */,
+				A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A4B100000000000000000502 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 400 /* Stockpile */;
+			targetProxy = A4B100000000000000000501 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		137 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				138 /* en */,
+				139 /* ja */,
+				140 /* zh-Hans */,
+				141 /* zh-Hant */,
+				142 /* ko */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		700 /* Debug */ = {
@@ -480,13 +622,17 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = Stockpile/Stockpile.entitlements;
-				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 20260407210611;
+				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Stockpile/Info.plist;
 				INFOPLIST_KEY_CKSharingSupported = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "賞味期限を読み取るためにカメラを使用します";
+				INFOPLIST_KEY_NSCameraUsageDescription = "バーコードの読み取りと賞味期限ラベルの文字認識にカメラを使用します。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -497,8 +643,9 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yappa-stockpile.app";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.stockpile-manager.app";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -510,13 +657,17 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = NO;
+				CODE_SIGN_ENTITLEMENTS = Stockpile/StockpileRelease.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGN_ENTITLEMENTS = Stockpile/Stockpile.entitlements;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 20260407210611;
+				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Stockpile/Info.plist;
 				INFOPLIST_KEY_CKSharingSupported = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "賞味期限を読み取るためにカメラを使用します";
+				INFOPLIST_KEY_NSCameraUsageDescription = "バーコードの読み取りと賞味期限ラベルの文字認識にカメラを使用します。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -527,11 +678,70 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.yappa-stockpile.app";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.stockpile-manager.app";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A4B100000000000000000701 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 20260407210611;
+				DEVELOPMENT_TEAM = 2L6CD9CNHL;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					"XCTest",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.stockpile-manager.appTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stockpile.app/Stockpile";
+			};
+			name = Debug;
+		};
+		A4B100000000000000000702 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 20260407210611;
+				DEVELOPMENT_TEAM = 2L6CD9CNHL;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					"XCTest",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.stockpile-manager.appTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stockpile.app/Stockpile";
 			};
 			name = Release;
 		};
@@ -556,7 +766,17 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		A4B100000000000000000601 /* Build configuration list for PBXNativeTarget "StockpileTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A4B100000000000000000701 /* Debug */,
+				A4B100000000000000000702 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
 	};
 	rootObject = 600 /* Project object */;
 }

@@ -4,12 +4,12 @@ import SwiftData
 /// ユーザーモデル
 @Model
 final class User {
-    @Attribute(.unique) var id: UUID
-    var displayName: String
+    var id: UUID = UUID()
+    var displayName: String = ""
     var email: String?
     var lineUserId: String?
     var appleUserId: String?
-    var createdAt: Date
+    var createdAt: Date = Date()
     
     var family: Family?
     

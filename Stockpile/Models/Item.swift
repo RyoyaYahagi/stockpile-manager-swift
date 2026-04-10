@@ -21,11 +21,11 @@ enum ExpiryStatus: Comparable {
     
     var label: String {
         switch self {
-        case .expired: return "期限切れ"
-        case .imminent: return "期限間近"
-        case .approaching: return "まもなく期限"
-        case .safe: return "安全"
-        case .noExpiry: return "期限なし"
+        case .expired: return L10n.string("期限切れ")
+        case .imminent: return L10n.string("期限間近")
+        case .approaching: return L10n.string("まもなく期限")
+        case .safe: return L10n.string("安全")
+        case .noExpiry: return L10n.string("期限なし")
         }
     }
 }
@@ -33,27 +33,31 @@ enum ExpiryStatus: Comparable {
 /// 備蓄品モデル
 @Model
 final class Item {
-    @Attribute(.unique) var id: UUID
-    var name: String
-    var quantity: Int
+    var id: UUID = UUID()
+    var name: String = ""
+    var janCode: String?
+    var quantity: Int = 1
     var expiryDate: Date?
     var locationNote: String?
-    var notified30: Bool
-    var notified7: Bool
-    var notified1: Bool
-    var createdAt: Date
+    var notified30: Bool = false
+    var notified7: Bool = false
+    var notified1: Bool = false
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date.distantPast
     
     var family: Family?
     var bag: Bag?
     
     init(
         name: String,
+        janCode: String? = nil,
         quantity: Int = 1,
         expiryDate: Date? = nil,
         locationNote: String? = nil
     ) {
         self.id = UUID()
         self.name = name
+        self.janCode = janCode
         self.quantity = quantity
         self.expiryDate = expiryDate
         self.locationNote = locationNote
@@ -61,26 +65,14 @@ final class Item {
         self.notified7 = false
         self.notified1 = false
         self.createdAt = Date()
+        self.updatedAt = createdAt
     }
     
     /// 期限状態を計算
     var expiryStatus: ExpiryStatus {
-        guard let expiryDate = expiryDate else {
+        guard let days = daysUntilExpiry else {
             return .noExpiry
         }
-        
-        let calendar = Calendar.current
-        
-        // 今日と期限日の日付成分のみで比較（時刻を無視）
-        let todayComponents = calendar.dateComponents([.year, .month, .day], from: Date())
-        let expiryComponents = calendar.dateComponents([.year, .month, .day], from: expiryDate)
-        
-        guard let today = calendar.date(from: todayComponents),
-              let normalizedExpiry = calendar.date(from: expiryComponents) else {
-            return .noExpiry
-        }
-        
-        let days = calendar.dateComponents([.day], from: today, to: normalizedExpiry).day ?? 0
         
         if days < 0 {
             return .expired
@@ -96,33 +88,39 @@ final class Item {
     /// 期限までの日数を取得
     var daysUntilExpiry: Int? {
         guard let expiryDate = expiryDate else { return nil }
-        
-        let calendar = Calendar.current
-        
-        // 今日と期限日の日付成分のみで計算（時刻を無視）
-        let todayComponents = calendar.dateComponents([.year, .month, .day], from: Date())
-        let expiryComponents = calendar.dateComponents([.year, .month, .day], from: expiryDate)
-        
-        guard let today = calendar.date(from: todayComponents),
-              let normalizedExpiry = calendar.date(from: expiryComponents) else {
-            return nil
-        }
-        
-        return calendar.dateComponents([.day], from: today, to: normalizedExpiry).day
+        return Self.calculateDaysUntilExpiry(for: expiryDate)
     }
     
     /// 期限の表示用文字列
     var expiryDisplayText: String {
         guard let days = daysUntilExpiry else {
-            return "期限なし"
+            return L10n.string("期限なし")
         }
         
         if days < 0 {
-            return "\(abs(days))日超過"
+            return L10n.format("%@日超過", String(abs(days)))
         } else if days == 0 {
-            return "本日期限"
+            return L10n.string("本日期限")
         } else {
-            return "あと\(days)日"
+            return L10n.format("あと%@日", String(days))
         }
+    }
+    
+    private static func calculateDaysUntilExpiry(
+        for expiryDate: Date,
+        from referenceDate: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Int {
+        let today = calendar.startOfDay(for: referenceDate)
+        let normalizedExpiry = calendar.startOfDay(for: expiryDate)
+        return calendar.dateComponents([.day], from: today, to: normalizedExpiry).day ?? 0
+    }
+
+    func markUpdated(at date: Date = Date()) {
+        updatedAt = date
+    }
+
+    var syncTimestamp: Date {
+        updatedAt == .distantPast ? createdAt : updatedAt
     }
 }

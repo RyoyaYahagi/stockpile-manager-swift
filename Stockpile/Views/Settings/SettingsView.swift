@@ -1,27 +1,58 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// 設定画面
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
+    @Environment(LocalizationController.self) private var localizationController
     
-    @Query private var families: [Family]
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
+    @AppStorage("app.tutorial.replayRequestToken")
+    private var tutorialReplayRequestToken = 0
+    @State private var cloudKitMemberCount: Int?
+    @State private var isLoadingCloudKitMemberCount = false
+    @State private var diagnosticsAlertMessage: String?
     
     private var currentFamily: Family? {
-        families.first
+        CurrentFamilyResolver.currentFamily(from: families)
+    }
+
+    private var memberCountRefreshKey: String {
+        guard let family = currentFamily else { return "none" }
+        let scope = family.cloudKitDatabaseScope?.rawValue ?? "local"
+        let shareURL = family.cloudKitShareURL?.absoluteString ?? "no-share"
+        return "\(family.id.uuidString)|\(scope)|\(shareURL)|\(family.cloudKitPendingSync)"
+    }
+
+    private var displayedMemberCountText: String {
+        guard let family = currentFamily else { return L10n.string("同期中") }
+        guard family.shareState != .localOnly else {
+            return L10n.format("%@人", String(family.uniqueMembers.count))
+        }
+        guard let cloudKitMemberCount else {
+            return L10n.string("同期中")
+        }
+        return L10n.format("%@人", String(cloudKitMemberCount))
+    }
+
+    private var selectedAppLanguage: AppLanguage {
+        localizationController.selectedLanguage
     }
     
     var body: some View {
+        let refreshToken = localizationController.uiRefreshToken
+
         List {
             // 家族セクション
             Section {
                 if let family = currentFamily {
                     NavigationLink(value: Destination.familySettings(family)) {
                         HStack {
-                            Label("家族名", systemImage: "person.3")
+                            Label("家族共有設定", systemImage: "person.3")
                             Spacer()
-                            Text(family.name)
+                            Text(family.displayNameForCurrentState)
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -30,7 +61,7 @@ struct SettingsView: View {
                     HStack {
                         Label("メンバー", systemImage: "person.2")
                         Spacer()
-                        Text("\(family.members.count)人")
+                        Text(displayedMemberCountText)
                             .foregroundStyle(.secondary)
                     }
                 } else {
@@ -44,8 +75,20 @@ struct SettingsView: View {
                 Text("家族")
             } footer: {
                 if currentFamily != nil {
-                    Text("家族設定から招待コードの発行と共有を行えます。")
+                    Text("通常のデータ同期と家族共有は iCloud で行います。")
                 }
+            }
+
+            Section {
+                Button {
+                    copyCloudKitDiagnostics()
+                } label: {
+                    Label("CloudKit共有診断をコピー", systemImage: "doc.on.doc")
+                }
+            } header: {
+                Text("診断")
+            } footer: {
+                Text("家族一覧、現在選ばれている家族、CloudKit共有メタデータ、最近の共有イベントをまとめてコピーします。参加側でデータが見えない端末の確認に使えます。")
             }
             
             // 収納場所セクション
@@ -65,18 +108,51 @@ struct SettingsView: View {
             } header: {
                 Text("通知")
             }
+
+            Section {
+                NavigationLink {
+                    LanguageSettingsView()
+                } label: {
+                    HStack {
+                        Label("言語", systemImage: "globe")
+                        Spacer()
+                        Text(selectedAppLanguage.displayName)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("表示")
+            }
+
+            // ガイドセクション
+            Section {
+                Button {
+                    tutorialReplayRequestToken += 1
+                    router.popToRoot()
+                } label: {
+                    Label("はじめての使い方を見る", systemImage: "questionmark.circle")
+                }
+            } header: {
+                Text("ガイド")
+            }
             
             // データセクション
             Section {
                 Button {
+                    router.present(.exportJSON)
+                } label: {
+                    Label("バックアップを書き出す", systemImage: "square.and.arrow.up")
+                }
+
+                Button {
                     router.present(.importJSON)
                 } label: {
-                    Label("JSONインポート", systemImage: "square.and.arrow.down")
+                    Label("バックアップから復元", systemImage: "square.and.arrow.down")
                 }
             } header: {
                 Text("データ")
             }
-            
+
             // アプリ情報
             Section {
                 HStack {
@@ -90,6 +166,54 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("設定")
+        .id(refreshToken)
+        .localizedRefresh()
+        .task(id: memberCountRefreshKey) {
+            await refreshCloudKitMemberCount()
+        }
+        .alert("診断", isPresented: Binding(
+            get: { diagnosticsAlertMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    diagnosticsAlertMessage = nil
+                }
+            }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(diagnosticsAlertMessage ?? "")
+        }
+    }
+
+    @MainActor
+    private func refreshCloudKitMemberCount() async {
+        guard let family = currentFamily else {
+            cloudKitMemberCount = nil
+            isLoadingCloudKitMemberCount = false
+            return
+        }
+
+        guard family.shareState != .localOnly else {
+            cloudKitMemberCount = nil
+            isLoadingCloudKitMemberCount = false
+            return
+        }
+
+        isLoadingCloudKitMemberCount = true
+        defer { isLoadingCloudKitMemberCount = false }
+
+        do {
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            cloudKitMemberCount = try await sharingService.fetchShareParticipants(for: family).count
+        } catch {
+            cloudKitMemberCount = nil
+        }
+    }
+
+    private func copyCloudKitDiagnostics() {
+        let report = CloudKitSharingDiagnostics.makeReport(modelContext: modelContext)
+        UIPasteboard.general.string = report
+        diagnosticsAlertMessage = L10n.string("CloudKit共有診断をクリップボードにコピーしました")
     }
 }
 

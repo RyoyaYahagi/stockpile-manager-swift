@@ -4,7 +4,10 @@ import AudioToolbox
 
 /// バーコード（JAN）スキャナービュー
 struct BarcodeScannerView: View {
+    private static let yahooAttributionURL = URL(string: "https://developer.yahoo.co.jp/sitemap/")!
+
     @Environment(\.dismiss) private var dismiss
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
     @State private var scannedCode: String?
     @State private var searchState: SearchState = .idle
     @State private var productInfo: ProductInfo?
@@ -76,12 +79,21 @@ struct BarcodeScannerView: View {
                         }
                         
                         // 手動入力ボタン
-                        Button {
-                            showManualEntry = true
-                        } label: {
-                            Label("手動でJANコードを入力", systemImage: "keyboard")
-                                .font(.footnote)
-                                .foregroundStyle(.white.opacity(0.8))
+                        VStack(spacing: 8) {
+                            Button {
+                                showManualEntry = true
+                            } label: {
+                                Label("手動でJANコードを入力", systemImage: "keyboard")
+                                    .font(.footnote)
+                                    .foregroundStyle(.white.opacity(0.8))
+                            }
+                            if let quotaText = barcodeQuotaText {
+                                Text(quotaText)
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.8))
+                            }
+
+                            yahooAttributionView
                         }
                         .padding(.bottom, 40)
                     }
@@ -122,7 +134,7 @@ struct BarcodeScannerView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showManualEntry) {
+            .navigationDestination(isPresented: $showManualEntry) {
                 ManualJANEntryView(code: $manualCode) { enteredCode in
                     Task {
                         await searchProduct(janCode: enteredCode)
@@ -140,6 +152,7 @@ struct BarcodeScannerView: View {
                 }
             }
         }
+        .premiumPaywallSheet()
     }
     
     // MARK: - 検索結果カード
@@ -149,13 +162,19 @@ struct BarcodeScannerView: View {
             HStack(spacing: 12) {
                 // 商品画像
                 if let imageURL = product.imageURL {
-                    AsyncImage(url: imageURL) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.3))
+                    AsyncImage(url: imageURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                        case .empty, .failure:
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.3))
+                        @unknown default:
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.3))
+                        }
                     }
                     .frame(width: 60, height: 60)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -172,7 +191,7 @@ struct BarcodeScannerView: View {
                             .foregroundStyle(.secondary)
                     }
                     
-                    Text(product.source.rawValue + "で検索")
+                    Text(L10n.format("%@で検索", product.source.localizedDisplayName))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -205,7 +224,7 @@ struct BarcodeScannerView: View {
                 .font(.headline)
             
             if let code = scannedCode ?? (manualCode.isEmpty ? nil : manualCode) {
-                Text("JANコード: \(code)")
+                Text(L10n.format("JANコード: %@", code))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -236,11 +255,19 @@ struct BarcodeScannerView: View {
             Text(message)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
             
-            Button("再スキャン") {
-                resetState()
+            HStack(spacing: 12) {
+                Button("手動で入力") {
+                    showManualEntry = true
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button("再スキャン") {
+                    resetState()
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
         }
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -269,17 +296,69 @@ struct BarcodeScannerView: View {
     }
     
     private func searchProduct(janCode: String) async {
+        let trimmedCode = janCode.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard premiumAccessManager.canUseBarcodeSearch() else {
+            searchState = .error(L10n.string("今日のバーコード検索無料枠を使い切りました。"))
+            premiumAccessManager.presentPaywall(for: .barcodeQuota) {
+                Task {
+                    await self.searchProduct(janCode: trimmedCode)
+                }
+            }
+            return
+        }
+
+        productInfo = nil
         searchState = .searching
         
         do {
-            let product = try await ProductSearchService.shared.search(janCode: janCode)
+            let product = try await ProductSearchService.shared.search(janCode: trimmedCode)
             productInfo = product
             searchState = .found
+            _ = premiumAccessManager.recordBarcodeUsageIfNeeded()
         } catch ProductSearchError.notFound {
             searchState = .notFound
+            _ = premiumAccessManager.recordBarcodeUsageIfNeeded()
         } catch {
-            searchState = .error(error.localizedDescription)
+            searchState = .error(userFacingMessage(for: error))
         }
+    }
+
+    private var barcodeQuotaText: String? {
+        guard let remaining = premiumAccessManager.remainingBarcodeQuota else { return nil }
+        return L10n.format("無料版はあと%@回バーコード検索できます。", String(remaining))
+    }
+
+    private var yahooAttributionView: some View {
+        Link("Webサービス by Yahoo! JAPAN", destination: Self.yahooAttributionURL)
+            .font(.footnote)
+            .padding(.top, 4)
+    }
+
+    private func userFacingMessage(for error: Error) -> String {
+        if let productSearchError = error as? ProductSearchError,
+           let message = productSearchError.errorDescription {
+            return message
+        }
+
+        let description = (error as NSError).localizedDescription
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if looksLikeHTML(description) || description.contains("{\"error\"") {
+            return L10n.string("商品検索を一時的に利用できません。しばらくして再試行してください。")
+        }
+
+        return description.isEmpty
+            ? L10n.string("商品検索を一時的に利用できません。しばらくして再試行してください。")
+            : description
+    }
+
+    private func looksLikeHTML(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        return lowered.contains("<html")
+            || lowered.contains("<body")
+            || lowered.contains("<head")
+            || lowered.contains("<!doctype html")
     }
     
     private func resetState() {
@@ -429,6 +508,7 @@ class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOutputObj
 
 struct ManualJANEntryView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
     @Binding var code: String
     let onSubmit: (String) -> Void
     
@@ -446,7 +526,7 @@ struct ManualJANEntryView: View {
                 } header: {
                     Text("JANコード")
                 } footer: {
-                    Text("商品パッケージのバーコード下に記載されている数字を入力してください")
+                    Text(manualEntryFooterText)
                 }
             }
             .navigationTitle("JANコード入力")
@@ -469,10 +549,21 @@ struct ManualJANEntryView: View {
         }
         .presentationDetents([.medium])
     }
+
+    private var manualEntryFooterText: String {
+        guard let remaining = premiumAccessManager.remainingBarcodeQuota else {
+            return L10n.string("商品パッケージのバーコード下に記載されている数字を入力してください")
+        }
+
+        return L10n.format(
+            "商品パッケージのバーコード下に記載されている数字を入力してください\n無料版はあと%@回バーコード検索できます。",
+            String(remaining)
+        )
+    }
 }
 
 #Preview {
-    BarcodeScannerView { product in
-        print("Selected: \(product.name)")
+    BarcodeScannerView { _ in
     }
+    .environment(PremiumAccessManager.shared)
 }

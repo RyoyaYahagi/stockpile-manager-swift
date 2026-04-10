@@ -1,12 +1,99 @@
 import SwiftUI
 import SwiftData
 
+enum SearchNormalizer {
+    static func normalizedForms(for text: String) -> [String] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        var results = Set<String>()
+        let base = normalize(trimmed)
+        if !base.isEmpty {
+            results.insert(base)
+        }
+
+        let hiragana = toHiragana(trimmed)
+        let hiraganaNormalized = normalize(hiragana)
+        if !hiraganaNormalized.isEmpty {
+            results.insert(hiraganaNormalized)
+        }
+
+        let latin = toLatinReading(trimmed)
+        let latinNormalized = normalize(latin)
+        if !latinNormalized.isEmpty {
+            results.insert(latinNormalized)
+        }
+
+        return Array(results)
+    }
+
+    static func matches(_ source: String, queryForms: [String]) -> Bool {
+        guard !queryForms.isEmpty else { return true }
+
+        let sourceForms = normalizedForms(for: source)
+        guard !sourceForms.isEmpty else { return false }
+
+        return queryForms.contains { query in
+            sourceForms.contains { $0.contains(query) }
+        }
+    }
+
+    private static func normalize(_ text: String) -> String {
+        text
+            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: AppLanguage.currentLocale)
+            .replacingOccurrences(of: "[\\p{P}\\p{S}\\p{Z}]", with: "", options: .regularExpression)
+    }
+
+    private static func toHiragana(_ text: String) -> String {
+        let mutable = NSMutableString(string: text)
+        CFStringTransform(mutable, nil, kCFStringTransformHiraganaKatakana, true)
+        return mutable as String
+    }
+
+    private static func toLatinReading(_ text: String) -> String {
+        let cfText = text as CFString
+        let length = CFStringGetLength(cfText)
+        let range = CFRange(location: 0, length: length)
+        let locale = AppLanguage.currentLocale as CFLocale
+        let tokenizer = CFStringTokenizerCreate(
+            kCFAllocatorDefault,
+            cfText,
+            range,
+            kCFStringTokenizerUnitWordBoundary,
+            locale
+        )
+
+        var parts: [String] = []
+        var tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer)
+        while tokenType.rawValue != 0 {
+            if let latin = CFStringTokenizerCopyCurrentTokenAttribute(
+                tokenizer,
+                kCFStringTokenizerAttributeLatinTranscription
+            ) as? String {
+                parts.append(latin)
+            } else {
+                let tokenRange = CFStringTokenizerGetCurrentTokenRange(tokenizer)
+                let token = CFStringCreateWithSubstring(kCFAllocatorDefault, cfText, tokenRange) as String
+                parts.append(token)
+            }
+            tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer)
+        }
+
+        return parts.isEmpty ? text : parts.joined(separator: " ")
+    }
+}
+
+extension Notification.Name {
+    static let didDeleteItems = Notification.Name("didDeleteItems")
+}
+
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
     
     @Query(sort: \Item.expiryDate) private var items: [Item]
     @Query private var bags: [Bag]
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var selectedBagId: UUID?
     @State private var selectedItems: Set<UUID> = []
@@ -16,10 +103,11 @@ struct DashboardView: View {
     @State private var showDeleteConfirmation = false
     @State private var showMoveSheet = false
     @State private var showCopySheet = false
-    @State private var deletedItemInfo: DeletedItemInfo?
+    @State private var deletedItemInfoList: [DeletedItemInfo] = []
     @State private var showUndoSnackbar = false
     @State private var undoWorkItem: DispatchWorkItem?
     @State private var selectedExpiryFilter: ExpiryFilter = .all
+    @State private var autoSyncedFamilyID: UUID?
     
     enum ExpiryFilter {
         case all
@@ -27,62 +115,132 @@ struct DashboardView: View {
         case imminent
     }
     
-    private var filteredItems: [Item] {
-        var result = items
+    private struct DashboardData {
+        let filteredItems: [Item]
+        let expiredCount: Int
+        let imminentCount: Int
+    }
+
+    private var currentFamily: Family? {
+        CurrentFamilyResolver.currentFamily(from: families)
+    }
+
+    private var scopedItems: [Item] {
+        guard let family = currentFamily else {
+            return deduplicatedItems(items.filter { $0.family == nil })
+        }
+        let familyItems = deduplicatedItems(items.filter { $0.family?.id == family.id })
+        if !familyItems.isEmpty || family.prefersStrictCloudKitScoping {
+            return familyItems
+        }
+        return deduplicatedItems(items.filter { $0.family == nil })
+    }
+
+    private var scopedBags: [Bag] {
+        guard let family = currentFamily else {
+            return deduplicatedBags(bags.filter { $0.family == nil })
+        }
+        let familyBags = deduplicatedBags(bags.filter { $0.family?.id == family.id })
+        if !familyBags.isEmpty || family.prefersStrictCloudKitScoping {
+            return familyBags
+        }
+        return deduplicatedBags(bags.filter { $0.family == nil })
+    }
+
+    private func deduplicatedItems(_ source: [Item]) -> [Item] {
+        var seen = Set<UUID>()
+        return source.filter { seen.insert($0.id).inserted }
+    }
+
+    private func deduplicatedBags(_ source: [Bag]) -> [Bag] {
+        var seen = Set<UUID>()
+        return source.filter { seen.insert($0.id).inserted }
+    }
+    
+    private var dashboardData: DashboardData {
+        let normalizedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let queryForms = SearchNormalizer.normalizedForms(for: normalizedSearchText)
+        let hasSearchText = !queryForms.isEmpty
         
-        // 収納場所フィルタ
-        if let bagId = selectedBagId {
-            result = result.filter { $0.bag?.id == bagId }
+        var filtered: [Item] = []
+        var expiredCount = 0
+        var imminentCount = 0
+        
+        for item in scopedItems {
+            let status = item.expiryStatus
+            
+            if status == .expired {
+                expiredCount += 1
+            }
+            if status == .imminent {
+                imminentCount += 1
+            }
+            
+            if let bagId = selectedBagId, item.bag?.id != bagId {
+                continue
+            }
+            
+            if hasSearchText, !SearchNormalizer.matches(item.name, queryForms: queryForms) {
+                continue
+            }
+            
+            switch selectedExpiryFilter {
+            case .expired:
+                guard status == .expired else { continue }
+            case .imminent:
+                guard status == .expired || status == .imminent else { continue }
+            case .all:
+                break
+            }
+            
+            filtered.append(item)
         }
         
-        // 検索フィルタ
-        if !searchText.isEmpty {
-            result = result.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-        }
-        
-        // 期限状態フィルタ
-        switch selectedExpiryFilter {
-        case .expired:
-            result = result.filter { $0.expiryStatus == .expired }
-        case .imminent:
-            result = result.filter { $0.expiryStatus == .expired || $0.expiryStatus == .imminent }
-        case .all:
-            break
-        }
-        
-        // 賞味期限が早い順にソート（期限なしは最後）
-        result.sort { item1, item2 in
+        filtered.sort { item1, item2 in
             switch (item1.expiryDate, item2.expiryDate) {
-            case (nil, nil): return false // 両方nil -> 順序維持
-            case (nil, _): return false   // item1がnil -> 後ろへ
-            case (_, nil): return true    // item2がnil -> item1を前へ
-            case let (date1?, date2?): return date1 < date2 // 日付比較
+            case (nil, nil): return false
+            case (nil, _): return false
+            case (_, nil): return true
+            case let (date1?, date2?): return date1 < date2
             }
         }
         
-        return result
-    }
-    
-    private var expiredCount: Int {
-        items.filter { $0.expiryStatus == .expired }.count
-    }
-    
-    private var imminentCount: Int {
-        items.filter { $0.expiryStatus == .imminent }.count
+        return DashboardData(
+            filteredItems: filtered,
+            expiredCount: expiredCount,
+            imminentCount: imminentCount
+        )
     }
     
     private var selectedBagName: String {
         guard let bagId = selectedBagId,
-              let bag = bags.first(where: { $0.id == bagId }) else {
-            return "すべて"
+              let bag = scopedBags.first(where: { $0.id == bagId }) else {
+            return L10n.string("すべて")
         }
         return bag.name
     }
+
+    private var deletedItemsMessage: String {
+        if deletedItemInfoList.count == 1, let first = deletedItemInfoList.first {
+            return L10n.format("「%@」を削除しました", first.name)
+        }
+        return L10n.format("%@件の備蓄品を削除しました", String(deletedItemInfoList.count))
+    }
+
+    private var bulkDeleteConfirmationTitle: String {
+        L10n.format("%@件のアイテムを削除しますか？", String(selectedItems.count))
+    }
+
+    private func filteredItemsSectionTitle(count: Int) -> String {
+        L10n.format("備蓄品（%@）", String(count))
+    }
     
     var body: some View {
+        let data = dashboardData
+        
         List(selection: isSelectionMode ? $selectedItems : nil) {
             // サマリーセクション
-            if !items.isEmpty {
+            if !scopedItems.isEmpty {
                 Section {
                     HStack(spacing: 16) {
                         Button {
@@ -92,7 +250,7 @@ struct DashboardView: View {
                         } label: {
                             SummaryCard(
                                 title: "期限切れ",
-                                count: expiredCount,
+                                count: data.expiredCount,
                                 color: .red,
                                 isSelected: selectedExpiryFilter == .expired
                             )
@@ -106,7 +264,7 @@ struct DashboardView: View {
                         } label: {
                             SummaryCard(
                                 title: "期限間近",
-                                count: imminentCount,
+                                count: data.imminentCount,
                                 color: .orange,
                                 isSelected: selectedExpiryFilter == .imminent
                             )
@@ -120,7 +278,7 @@ struct DashboardView: View {
                         } label: {
                             SummaryCard(
                                 title: "合計",
-                                count: items.count,
+                                count: scopedItems.count,
                                 color: .blue,
                                 isSelected: selectedExpiryFilter == .all
                             )
@@ -133,7 +291,7 @@ struct DashboardView: View {
             }
             
             // 収納場所フィルタ
-            if !bags.isEmpty && !isSelectionMode {
+            if !scopedBags.isEmpty && !isSelectionMode {
                 Section {
                     Button {
                         showStorageLocationPicker = true
@@ -155,14 +313,14 @@ struct DashboardView: View {
             
             // アイテム一覧
             Section {
-                if filteredItems.isEmpty {
+                if data.filteredItems.isEmpty {
                     ContentUnavailableView(
                         "備蓄品がありません",
                         systemImage: "tray",
-                        description: Text("右下の+ボタンで備蓄品を追加しましょう")
+                        description: Text("まずは右下の+から、1件登録してみましょう")
                     )
                 } else {
-                    ForEach(filteredItems) { item in
+                    ForEach(data.filteredItems) { item in
                         ItemRow(item: item)
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -216,8 +374,8 @@ struct DashboardView: View {
                     }
                 }
             } header: {
-                if !filteredItems.isEmpty {
-                    Text("備蓄品 (\(filteredItems.count))")
+                if !data.filteredItems.isEmpty {
+                    Text(filteredItemsSectionTitle(count: data.filteredItems.count))
                 }
             }
         }
@@ -228,6 +386,7 @@ struct DashboardView: View {
         }
         .navigationTitle("備蓄品管理")
         .navigationBarTitleDisplayMode(.inline)
+        .localizedRefresh()
         .searchable(text: $searchText, prompt: "品名で検索")
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -251,8 +410,8 @@ struct DashboardView: View {
             }
             
             ToolbarItem(placement: .topBarTrailing) {
-                if !items.isEmpty {
-                    Button(isSelectionMode ? "完了" : "選択") {
+                if !scopedItems.isEmpty {
+                    Button(isSelectionMode ? LocalizedStringKey("完了") : LocalizedStringKey("選択")) {
                         withAnimation {
                             isSelectionMode.toggle()
                             if !isSelectionMode {
@@ -291,6 +450,15 @@ struct DashboardView: View {
                 }
             }
         }
+        .task(id: currentFamily?.id) {
+            await autoSyncFromCloudKitIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didDeleteItems)) { notification in
+            guard let deletedItems = notification.object as? [DeletedItemInfo],
+                  !deletedItems.isEmpty else { return }
+            deletedItemInfoList = deletedItems
+            showUndoSnackbarWithTimeout()
+        }
         .overlay(alignment: .bottomTrailing) {
             if !isSelectionMode {
                 Button {
@@ -307,11 +475,11 @@ struct DashboardView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if showUndoSnackbar, let info = deletedItemInfo {
+            if showUndoSnackbar, !deletedItemInfoList.isEmpty {
                 UndoSnackbar(
-                    message: "「\(info.name)」を削除しました",
+                    message: deletedItemsMessage,
                     onUndo: {
-                        undoDelete(info)
+                        undoDelete(deletedItemInfoList)
                     },
                     onDismiss: {
                         dismissUndoSnackbar()
@@ -324,15 +492,15 @@ struct DashboardView: View {
         }
         .sheet(isPresented: $showStorageLocationPicker) {
             StorageLocationPicker(
-                bags: bags,
+                bags: scopedBags,
                 selectedBagId: $selectedBagId
             )
         }
         .sheet(isPresented: $showMoveSheet) {
             BulkMoveSheet(
-                bags: bags,
+                bags: scopedBags,
                 selectedItems: selectedItems,
-                items: items,
+                items: scopedItems,
                 onMove: { bagId in
                     moveSelectedItems(to: bagId)
                 }
@@ -340,16 +508,16 @@ struct DashboardView: View {
         }
         .sheet(isPresented: $showCopySheet) {
             BulkCopySheet(
-                bags: bags,
+                bags: scopedBags,
                 selectedItems: selectedItems,
-                items: items,
+                items: scopedItems,
                 onCopy: { bagId in
                     copySelectedItems(to: bagId)
                 }
             )
         }
         .alert(
-            "\(selectedItems.count)件のアイテムを削除しますか？",
+            bulkDeleteConfirmationTitle,
             isPresented: $showDeleteConfirmation
         ) {
             Button("削除", role: .destructive) {
@@ -360,19 +528,18 @@ struct DashboardView: View {
     }
     
     private func deleteItem(_ item: Item) {
-        // Undo用に情報を保存
-        deletedItemInfo = DeletedItemInfo(
-            name: item.name,
-            quantity: item.quantity,
-            expiryDate: item.expiryDate,
-            locationNote: item.locationNote,
-            bagId: item.bag?.id
-        )
-        
-        modelContext.delete(item)
-        Task {
-            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
+        deletedItemInfoList = [snapshotForUndo(from: item)]
+
+        do {
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            try sharingService.deleteItemLocally(item, in: currentFamily)
+        } catch {
+            #if DEBUG
+            print("ローカル削除に失敗: \(error)")
+            #endif
+            return
         }
+        persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
         
         // スナックバーを表示
         showUndoSnackbarWithTimeout()
@@ -394,21 +561,38 @@ struct DashboardView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: workItem)
     }
     
-    private func undoDelete(_ info: DeletedItemInfo) {
-        // アイテムを復元
-        let newItem = Item(
-            name: info.name,
-            quantity: info.quantity,
-            expiryDate: info.expiryDate,
-            locationNote: info.locationNote
-        )
-        if let bagId = info.bagId {
-            newItem.bag = bags.first { $0.id == bagId }
+    private func undoDelete(_ infoList: [DeletedItemInfo]) {
+        let restoredAt = Date()
+        for info in infoList {
+            let newItem = Item(
+                name: info.name,
+                janCode: info.janCode,
+                quantity: info.quantity,
+                expiryDate: info.expiryDate,
+                locationNote: info.locationNote
+            )
+            newItem.id = info.id
+            newItem.markUpdated(at: restoredAt)
+            if let bagId = info.bagId {
+                newItem.bag = scopedBags.first { $0.id == bagId }
+            }
+            newItem.family = currentFamily
+            modelContext.insert(newItem)
         }
-        modelContext.insert(newItem)
-        Task {
-            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
+
+        if let family = currentFamily {
+            do {
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                for info in infoList {
+                    try sharingService.removeDeletionMarkerIfNeeded(forItemID: info.id, family: family)
+                }
+            } catch {
+                #if DEBUG
+                print("削除マーカーの取り消しに失敗: \(error)")
+                #endif
+            }
         }
+        persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
         
         dismissUndoSnackbar()
     }
@@ -421,7 +605,7 @@ struct DashboardView: View {
         }
         // 少し遅延して情報をクリア
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            deletedItemInfo = nil
+            deletedItemInfoList = []
         }
     }
     
@@ -435,49 +619,115 @@ struct DashboardView: View {
     }
     
     private func deleteSelectedItems() {
-        for item in items where selectedItems.contains(item.id) {
-            modelContext.delete(item)
+        deletedItemInfoList = scopedItems
+            .filter { selectedItems.contains($0.id) }
+            .map { snapshotForUndo(from: $0) }
+
+        do {
+            let itemsToDelete = scopedItems.filter { selectedItems.contains($0.id) }
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            try sharingService.deleteItemsLocally(itemsToDelete, in: currentFamily)
+        } catch {
+            #if DEBUG
+            print("ローカル削除に失敗: \(error)")
+            #endif
+            return
         }
-        Task {
-            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
+        persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
+        if !deletedItemInfoList.isEmpty {
+            showUndoSnackbarWithTimeout()
         }
         selectedItems.removeAll()
         isSelectionMode = false
     }
     
     private func moveSelectedItems(to bagId: UUID?) {
-        let targetBag = bags.first { $0.id == bagId }
-        for item in items where selectedItems.contains(item.id) {
+        let targetBag = scopedBags.first { $0.id == bagId }
+        for item in scopedItems where selectedItems.contains(item.id) {
             item.bag = targetBag
+            item.markUpdated()
         }
+        persistAndSyncFamilyDataIfPossible()
         selectedItems.removeAll()
         isSelectionMode = false
     }
     
     private func copySelectedItems(to bagId: UUID?) {
-        let targetBag = bags.first { $0.id == bagId }
-        for item in items where selectedItems.contains(item.id) {
+        let targetBag = scopedBags.first { $0.id == bagId }
+        for item in scopedItems where selectedItems.contains(item.id) {
             let newItem = Item(
                 name: item.name,
+                janCode: item.janCode,
                 quantity: item.quantity,
                 expiryDate: item.expiryDate,
                 locationNote: item.locationNote
             )
             newItem.bag = targetBag
+            newItem.family = currentFamily
             modelContext.insert(newItem)
         }
-        Task {
-            await NotificationManager.shared.rescheduleAllNotifications(using: modelContext)
-        }
+        persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: true)
         selectedItems.removeAll()
         isSelectionMode = false
+    }
+
+    private func persistAndSyncFamilyDataIfPossible(needsNotificationReschedule: Bool = false) {
+        do {
+            try modelContext.save()
+        } catch {
+            #if DEBUG
+            print("ローカル保存に失敗: \(error)")
+            #endif
+            return
+        }
+
+        if needsNotificationReschedule {
+            NotificationManager.shared.requestReschedule(using: modelContext)
+        }
+
+        guard let family = currentFamily else { return }
+        Task {
+            do {
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                try await sharingService.syncFamilyDataToCloudKit(for: family)
+            } catch {
+                #if DEBUG
+                print("CloudKit同期に失敗: \(error)")
+                #endif
+            }
+        }
+    }
+
+    private func autoSyncFromCloudKitIfNeeded() async {
+        guard let family = currentFamily else { return }
+        guard autoSyncedFamilyID != family.id else { return }
+        autoSyncedFamilyID = family.id
+
+        do {
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            try await sharingService.syncFamilyStateFromCloudKit(for: family)
+        } catch {
+            // 自動同期の失敗はUI操作を妨げない
+        }
+    }
+
+    private func snapshotForUndo(from item: Item) -> DeletedItemInfo {
+        DeletedItemInfo(
+            id: item.id,
+            name: item.name,
+            janCode: item.janCode,
+            quantity: item.quantity,
+            expiryDate: item.expiryDate,
+            locationNote: item.locationNote,
+            bagId: item.bag?.id
+        )
     }
 }
 
 // MARK: - Supporting Views
 
 struct SummaryCard: View {
-    let title: String
+    let title: LocalizedStringKey
     let count: Int
     let color: Color
     var isSelected: Bool = false
@@ -502,7 +752,7 @@ struct SummaryCard: View {
 }
 
 struct FilterChip: View {
-    let title: String
+    let title: LocalizedStringKey
     let isSelected: Bool
     let action: () -> Void
     
@@ -527,6 +777,10 @@ struct BulkMoveSheet: View {
     let selectedItems: Set<UUID>
     let items: [Item]
     let onMove: (UUID?) -> Void
+
+    private var titleText: String {
+        L10n.format("%@件を移動", String(selectedItems.count))
+    }
     
     var body: some View {
         NavigationStack {
@@ -551,8 +805,9 @@ struct BulkMoveSheet: View {
                     }
                 }
             }
-            .navigationTitle("\(selectedItems.count)件を移動")
+            .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
+            .localizedRefresh()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") {
@@ -571,6 +826,10 @@ struct BulkCopySheet: View {
     let selectedItems: Set<UUID>
     let items: [Item]
     let onCopy: (UUID?) -> Void
+
+    private var titleText: String {
+        L10n.format("%@件をコピー", String(selectedItems.count))
+    }
     
     var body: some View {
         NavigationStack {
@@ -595,8 +854,9 @@ struct BulkCopySheet: View {
                     }
                 }
             }
-            .navigationTitle("\(selectedItems.count)件をコピー")
+            .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
+            .localizedRefresh()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") {
@@ -612,7 +872,9 @@ struct BulkCopySheet: View {
 // MARK: - Undo Snackbar
 
 struct DeletedItemInfo {
+    let id: UUID
     let name: String
+    let janCode: String?
     let quantity: Int
     let expiryDate: Date?
     let locationNote: String?

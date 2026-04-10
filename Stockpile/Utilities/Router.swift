@@ -20,18 +20,16 @@ final class Router {
         case addItem(bagId: UUID? = nil)
         case editItem(Item)
         case addBag
-        case inviteCode(String)
         case importJSON
-        case qrScanner
+        case exportJSON
         
         var id: String {
             switch self {
             case .addItem: return "addItem"
             case .editItem(let item): return "editItem-\(item.id)"
             case .addBag: return "addBag"
-            case .inviteCode: return "inviteCode"
             case .importJSON: return "importJSON"
-            case .qrScanner: return "qrScanner"
+            case .exportJSON: return "exportJSON"
             }
         }
     }

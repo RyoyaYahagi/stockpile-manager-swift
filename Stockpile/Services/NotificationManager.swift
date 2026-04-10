@@ -5,30 +5,7 @@ import SwiftData
 /// 通知アイテムと種類のペア
 private struct NotificationItem {
     let item: Item
-    let type: NotificationType
-}
-
-/// 通知種類
-private enum NotificationType: String {
-    case days30 = "30days"
-    case days7 = "7days"
-    case onday = "onday"
-    
-    var displayText: String {
-        switch self {
-        case .days30: return "30日前"
-        case .days7: return "7日前"
-        case .onday: return "本日"
-        }
-    }
-    
-    var order: Int {
-        switch self {
-        case .onday: return 0
-        case .days7: return 1
-        case .days30: return 2
-        }
-    }
+    let rule: NotificationTimingRule
 }
 
 /// 通知管理サービス
@@ -37,6 +14,9 @@ final class NotificationManager: ObservableObject {
     static let shared = NotificationManager()
     
     @Published private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
+    private var pendingRescheduleWorkItem: DispatchWorkItem?
+    private let rescheduleDebounceInterval: TimeInterval = 0.25
+    private let immediateFallbackInterval: TimeInterval = 60
     
     private init() {
         Task {
@@ -54,7 +34,7 @@ final class NotificationManager: ObservableObject {
             await refreshAuthorizationStatus()
             return granted
         } catch {
-            print("Notification authorization error: \(error)")
+            debugLog("Notification authorization error: \(error)")
             return false
         }
     }
@@ -64,14 +44,54 @@ final class NotificationManager: ObservableObject {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         authorizationStatus = settings.authorizationStatus
     }
+
+    /// 現在の通知システム設定を取得
+    func currentNotificationSettings() async -> UNNotificationSettings {
+        await UNUserNotificationCenter.current().notificationSettings()
+    }
+    
+    /// 通知スケジュールに必要な権限を確認（未決定ならリクエスト）
+    private func ensureAuthorizationForScheduling() async -> Bool {
+        await refreshAuthorizationStatus()
+        if authorizationStatus == .notDetermined {
+            _ = await requestAuthorization()
+        }
+        
+        switch authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return true
+        default:
+            return false
+        }
+    }
     
     // MARK: - Scheduling (Grouped by Date)
     
+    /// 再スケジュール要求をデバウンスして実行
+    func requestReschedule(using modelContext: ModelContext) {
+        enqueueReschedule { [weak self] in
+            guard let self else { return }
+            await self.rescheduleAllNotifications(using: modelContext)
+        }
+    }
+    
+    /// 再スケジュール要求をデバウンスして実行（設定画面用）
+    func requestReschedule(items: [Item], settings: NotificationSettings) {
+        enqueueReschedule { [weak self] in
+            guard let self else { return }
+            await self.rescheduleAllNotifications(items: items, settings: settings)
+        }
+    }
+    
     /// すべてのアイテムの通知を再スケジュール（日付でグループ化）
     func rescheduleAllNotifications(items: [Item], settings: NotificationSettings) async {
+        cancelPendingReschedule()
         cancelAllNotifications()
         
         guard settings.isEnabled else { return }
+        guard await ensureAuthorizationForScheduling() else { return }
+        let timingRules = settings.notificationTimingRules
+        guard !timingRules.isEmpty else { return }
         
         var calendar = Calendar.current
         calendar.timeZone = TimeZone.current
@@ -96,48 +116,36 @@ final class NotificationManager: ObservableObject {
             // 過去の期限はスキップ
             guard daysUntilExpiry >= 0 else { continue }
             
-            // 30日前通知: 残り30日以下で、まだ通知日が来ていない場合は今日通知
-            if settings.notify30DaysBefore && daysUntilExpiry <= 30 && daysUntilExpiry > 7 {
-                // 残り30日以下なので今日通知
-                groupedNotifications[today, default: []].append(
-                    NotificationItem(item: item, type: .days30)
-                )
-            } else if settings.notify30DaysBefore && daysUntilExpiry > 30 {
-                // まだ30日以上あるので、30日前の日にスケジュール
-                if let notifyDate = calendar.date(byAdding: .day, value: -30, to: normalizedExpiryDate) {
-                    groupedNotifications[notifyDate, default: []].append(
-                        NotificationItem(item: item, type: .days30)
-                    )
+            let scheduledRules = timingRules
+                .compactMap { rule -> (rule: NotificationTimingRule, thresholdDate: Date)? in
+                    guard let thresholdDate = notificationThresholdDate(
+                        for: rule,
+                        expiryDate: normalizedExpiryDate,
+                        calendar: calendar
+                    ) else {
+                        return nil
+                    }
+                    return (rule: rule, thresholdDate: thresholdDate)
                 }
-            }
-            
-            // 7日前通知: 残り7日以下で、まだ通知日が来ていない場合は今日通知
-            if settings.notify7DaysBefore && daysUntilExpiry <= 7 && daysUntilExpiry > 0 {
-                // 残り7日以下なので今日通知
-                groupedNotifications[today, default: []].append(
-                    NotificationItem(item: item, type: .days7)
-                )
-            } else if settings.notify7DaysBefore && daysUntilExpiry > 7 {
-                // まだ7日以上あるので、7日前の日にスケジュール
-                if let notifyDate = calendar.date(byAdding: .day, value: -7, to: normalizedExpiryDate) {
-                    groupedNotifications[notifyDate, default: []].append(
-                        NotificationItem(item: item, type: .days7)
-                    )
+                .sorted { $0.thresholdDate < $1.thresholdDate }
+
+            for (index, scheduledRule) in scheduledRules.enumerated() {
+                let nextThresholdDate = scheduledRules.dropFirst(index + 1).first?.thresholdDate
+                guard let notifyDate = scheduledNotificationDate(
+                    for: scheduledRule.rule,
+                    thresholdDate: scheduledRule.thresholdDate,
+                    nextThresholdDate: nextThresholdDate,
+                    today: today,
+                    expiryDate: normalizedExpiryDate
+                ) else {
+                    continue
                 }
-            }
-            
-            // 当日通知
-            if settings.notifyOnDay && daysUntilExpiry == 0 {
-                groupedNotifications[today, default: []].append(
-                    NotificationItem(item: item, type: .onday)
-                )
-            } else if settings.notifyOnDay && daysUntilExpiry > 0 {
-                groupedNotifications[normalizedExpiryDate, default: []].append(
-                    NotificationItem(item: item, type: .onday)
+
+                groupedNotifications[notifyDate, default: []].append(
+                    NotificationItem(item: item, rule: scheduledRule.rule)
                 )
             }
         }
-
         
         // グループ化された通知をスケジュール
         for (notifyDate, notificationItems) in groupedNotifications {
@@ -148,11 +156,14 @@ final class NotificationManager: ObservableObject {
             )
         }
         
-        print("📋 Scheduled \(groupedNotifications.count) grouped notifications")
+        #if DEBUG
+        debugLog("📋 Scheduled \(groupedNotifications.count) grouped notifications")
+        #endif
     }
     
     /// SwiftDataストアから設定とアイテムを再取得して通知を再スケジュール
     func rescheduleAllNotifications(using modelContext: ModelContext) async {
+        cancelPendingReschedule()
         let settingsDescriptor = FetchDescriptor<NotificationSettings>(
             sortBy: [SortDescriptor(\.createdAt)]
         )
@@ -160,9 +171,15 @@ final class NotificationManager: ObservableObject {
         let settings: NotificationSettings
         if let existing = try? modelContext.fetch(settingsDescriptor).first {
             settings = existing
+            if settings.migrateLegacyTimingRulesIfNeeded() {
+                try? modelContext.save()
+            }
         } else {
-            let created = NotificationSettings.createDefault()
+            let created = NotificationSettings.createDefault(
+                isPremium: PremiumAccessManager.shared.hasPremiumAccess
+            )
             modelContext.insert(created)
+            try? modelContext.save()
             settings = created
         }
         
@@ -180,6 +197,9 @@ final class NotificationManager: ObservableObject {
     ) async {
         let content = UNMutableNotificationContent()
         content.sound = .default
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .timeSensitive
+        }
         
         // 通知タイトルとメッセージを生成
         let (title, body) = generateNotificationContent(notificationItems: notificationItems)
@@ -204,22 +224,31 @@ final class NotificationManager: ObservableObject {
         
         // 実際の通知発火日時を計算
         guard let scheduledDate = calendar.date(from: dateComponents) else {
-            print("⚠️ Failed to create scheduled date")
+            debugLog("⚠️ Failed to create scheduled date")
             return
         }
         
         let now = Date()
         
-        // 過去の日時は通知しない
-        guard scheduledDate > now else {
-            print("⚠️ Skipped grouped notification - \(formatDate(scheduledDate)) is in the past")
+        let trigger: UNNotificationTrigger
+        let effectiveScheduledDate: Date
+        if scheduledDate > now {
+            trigger = UNCalendarNotificationTrigger(
+                dateMatching: dateComponents,
+                repeats: false
+            )
+            effectiveScheduledDate = scheduledDate
+        } else if calendar.isDate(date, inSameDayAs: now) {
+            // 追加直後などで当日通知時刻を過ぎていた場合、通知を取りこぼさないよう近い将来にフォールバックする
+            trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: immediateFallbackInterval,
+                repeats: false
+            )
+            effectiveScheduledDate = now.addingTimeInterval(immediateFallbackInterval)
+        } else {
+            debugLog("⚠️ Skipped grouped notification - \(formatDate(scheduledDate)) is in the past")
             return
         }
-        
-        let trigger = UNCalendarNotificationTrigger(
-            dateMatching: dateComponents,
-            repeats: false
-        )
         
         // 日付でユニークなidentifierを生成
         let dateFormatter = DateFormatter()
@@ -234,9 +263,9 @@ final class NotificationManager: ObservableObject {
         
         do {
             try await UNUserNotificationCenter.current().add(request)
-            print("✅ Scheduled grouped: \(notificationItems.count)件 at \(formatDate(scheduledDate))")
+            debugLog("✅ Scheduled grouped: \(notificationItems.count)件 at \(formatDate(effectiveScheduledDate))")
         } catch {
-            print("❌ Failed to schedule grouped notification: \(error)")
+            debugLog("❌ Failed to schedule grouped notification: \(error)")
         }
     }
     
@@ -245,29 +274,29 @@ final class NotificationManager: ObservableObject {
         let totalCount = notificationItems.count
         
         // 種類ごとにグループ化
-        var byType: [NotificationType: [Item]] = [:]
+        var byRule: [NotificationTimingRule: [Item]] = [:]
         for ni in notificationItems {
-            byType[ni.type, default: []].append(ni.item)
+            byRule[ni.rule, default: []].append(ni.item)
         }
         
         if totalCount == 1 {
             let ni = notificationItems[0]
             return (
-                title: "備蓄品の期限通知",
-                body: "「\(ni.item.name)」の期限が\(ni.type.displayText)に迫っています"
+                title: L10n.string("備蓄品の期限通知"),
+                body: singleNotificationMessage(for: ni.item.name, rule: ni.rule)
             )
         } else {
-            let title = "備蓄品の期限通知（\(totalCount)件）"
+            let title = L10n.format("備蓄品の期限通知（%@件）", String(totalCount))
             
             // 種類順にソートして表示
-            let sortedTypes = byType.keys.sorted { $0.order < $1.order }
+            let sortedRules = sortNotificationRules(Array(byRule.keys))
             var parts: [String] = []
             
-            for type in sortedTypes {
-                guard let items = byType[type] else { continue }
+            for rule in sortedRules {
+                guard let items = byRule[rule] else { continue }
                 let names = items.prefix(2).map { $0.name }.joined(separator: "、")
-                let suffix = items.count > 2 ? "他" : ""
-                parts.append("\(type.displayText): \(names)\(suffix)")
+                let suffix = items.count > 2 ? L10n.string("他") : ""
+                parts.append(L10n.format("%@: %@%@", notificationDisplayText(for: rule), names, suffix))
             }
             
             let body = parts.joined(separator: " / ")
@@ -288,7 +317,10 @@ final class NotificationManager: ObservableObject {
     /// 単一アイテムの通知をスケジュール（追加・編集時用）
     func scheduleNotifications(for item: Item, settings: NotificationSettings) async {
         guard settings.isEnabled else { return }
+        guard await ensureAuthorizationForScheduling() else { return }
         guard let expiryDate = item.expiryDate else { return }
+        let timingRules = settings.notificationTimingRules
+        guard !timingRules.isEmpty else { return }
         
         // 既存の通知をキャンセル
         await cancelNotifications(for: item)
@@ -307,44 +339,41 @@ final class NotificationManager: ObservableObject {
         // 日数差を計算（時刻の影響を排除）
         let daysUntilExpiry = calendar.dateComponents([.day], from: today, to: normalizedExpiryDate).day ?? 0
         
-        print("📋 Scheduling notifications for \(item.name):")
-        print("   - Expiry date: \(formatDate(normalizedExpiryDate))")
-        print("   - Days until expiry: \(daysUntilExpiry)")
+        debugLog("📋 Scheduling notifications for \(item.name):")
+        debugLog("   - Expiry date: \(formatDate(normalizedExpiryDate))")
+        debugLog("   - Days until expiry: \(daysUntilExpiry)")
         
-        // 30日前通知
-        if settings.notify30DaysBefore {
-            if let notifyDate = calendar.date(byAdding: .day, value: -30, to: normalizedExpiryDate) {
-                await scheduleSingleNotification(
-                    for: item,
-                    at: notifyDate,
-                    settings: settings,
-                    suffix: "30days",
-                    message: "「\(item.name)」の期限が30日後に迫っています"
-                )
+        let scheduledRules = timingRules
+            .compactMap { rule -> (rule: NotificationTimingRule, thresholdDate: Date)? in
+                guard let thresholdDate = notificationThresholdDate(
+                    for: rule,
+                    expiryDate: normalizedExpiryDate,
+                    calendar: calendar
+                ) else {
+                    return nil
+                }
+                return (rule: rule, thresholdDate: thresholdDate)
             }
-        }
-        
-        // 7日前通知
-        if settings.notify7DaysBefore {
-            if let notifyDate = calendar.date(byAdding: .day, value: -7, to: normalizedExpiryDate) {
-                await scheduleSingleNotification(
-                    for: item,
-                    at: notifyDate,
-                    settings: settings,
-                    suffix: "7days",
-                    message: "「\(item.name)」の期限が7日後に迫っています"
-                )
+            .sorted { $0.thresholdDate < $1.thresholdDate }
+
+        for (index, scheduledRule) in scheduledRules.enumerated() {
+            let nextThresholdDate = scheduledRules.dropFirst(index + 1).first?.thresholdDate
+            guard let notifyDate = scheduledNotificationDate(
+                for: scheduledRule.rule,
+                thresholdDate: scheduledRule.thresholdDate,
+                nextThresholdDate: nextThresholdDate,
+                today: today,
+                expiryDate: normalizedExpiryDate
+            ) else {
+                continue
             }
-        }
-        
-        // 当日通知
-        if settings.notifyOnDay {
+
             await scheduleSingleNotification(
                 for: item,
-                at: normalizedExpiryDate,
+                at: notifyDate,
                 settings: settings,
-                suffix: "onday",
-                message: "「\(item.name)」の期限は本日です"
+                suffix: scheduledRule.rule.serializedValue,
+                message: singleNotificationMessage(for: item.name, rule: scheduledRule.rule)
             )
         }
     }
@@ -358,9 +387,12 @@ final class NotificationManager: ObservableObject {
         message: String
     ) async {
         let content = UNMutableNotificationContent()
-        content.title = "備蓄品の期限通知"
+        content.title = L10n.string("備蓄品の期限通知")
         content.body = message
         content.sound = .default
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .timeSensitive
+        }
         content.userInfo = ["itemId": item.id.uuidString]
         
         // 通知時刻を設定
@@ -373,26 +405,34 @@ final class NotificationManager: ObservableObject {
         
         // 実際の通知発火日時を計算
         guard let scheduledDate = calendar.date(from: dateComponents) else {
+            #if DEBUG
             print("⚠️ Failed to create scheduled date for \(item.name)")
+            #endif
             return
         }
         
         let now = Date()
-        print("📅 Notification check for \(item.name) (\(suffix)):")
-        print("   - Scheduled: \(formatDate(scheduledDate))")
-        print("   - Current:   \(formatDate(now))")
-        print("   - Is future: \(scheduledDate > now)")
         
-        // 過去の日時は通知しない
-        guard scheduledDate > now else {
+        let trigger: UNNotificationTrigger
+        let effectiveScheduledDate: Date
+        if scheduledDate > now {
+            trigger = UNCalendarNotificationTrigger(
+                dateMatching: dateComponents,
+                repeats: false
+            )
+            effectiveScheduledDate = scheduledDate
+        } else if calendar.isDate(date, inSameDayAs: now) {
+            trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: immediateFallbackInterval,
+                repeats: false
+            )
+            effectiveScheduledDate = now.addingTimeInterval(immediateFallbackInterval)
+        } else {
+            #if DEBUG
             print("⚠️ Skipped: \(item.name) (\(suffix)) - \(formatDate(scheduledDate)) is in the past")
+            #endif
             return
         }
-        
-        let trigger = UNCalendarNotificationTrigger(
-            dateMatching: dateComponents,
-            repeats: false
-        )
         
         let identifier = "\(item.id.uuidString)-\(suffix)"
         
@@ -407,19 +447,22 @@ final class NotificationManager: ObservableObject {
         
         do {
             try await UNUserNotificationCenter.current().add(request)
-            print("✅ Scheduled: \(item.name) (\(suffix)) at \(formatDate(scheduledDate))")
+            #if DEBUG
+            print("✅ Scheduled: \(item.name) (\(suffix)) at \(formatDate(effectiveScheduledDate))")
+            #endif
         } catch {
+            #if DEBUG
             print("❌ Failed to schedule notification: \(error)")
+            #endif
         }
     }
     
     /// アイテムの通知をキャンセル
     func cancelNotifications(for item: Item) async {
-        let identifiers = [
-            "\(item.id.uuidString)-30days",
-            "\(item.id.uuidString)-7days",
-            "\(item.id.uuidString)-onday"
-        ]
+        let prefix = "\(item.id.uuidString)-"
+        let pendingIdentifiers = await pendingNotificationIdentifiers()
+        let identifiers = pendingIdentifiers
+            .filter { $0.hasPrefix(prefix) }
         UNUserNotificationCenter.current()
             .removePendingNotificationRequests(withIdentifiers: identifiers)
     }
@@ -428,11 +471,116 @@ final class NotificationManager: ObservableObject {
     func cancelAllNotifications() {
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
     }
+
+    private func debugLog(_ message: @autoclosure () -> String) {
+#if DEBUG
+        print(message())
+#endif
+    }
     
-    // MARK: - Debug
+    private func enqueueReschedule(_ operation: @escaping @MainActor () async -> Void) {
+        pendingRescheduleWorkItem?.cancel()
+        
+        let workItem = DispatchWorkItem {
+            Task { @MainActor in
+                await operation()
+            }
+        }
+        pendingRescheduleWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + rescheduleDebounceInterval,
+            execute: workItem
+        )
+    }
     
-    /// スケジュール済み通知を取得（デバッグ用）
-    func getPendingNotifications() async -> [UNNotificationRequest] {
-        await UNUserNotificationCenter.current().pendingNotificationRequests()
+    private func cancelPendingReschedule() {
+        pendingRescheduleWorkItem?.cancel()
+        pendingRescheduleWorkItem = nil
+    }
+
+    private func notificationThresholdDate(
+        for rule: NotificationTimingRule,
+        expiryDate: Date,
+        calendar: Calendar
+    ) -> Date? {
+        let normalizedRule = rule.normalizedRule
+        if normalizedRule.unit == .day && normalizedRule.amount == 0 {
+            return expiryDate
+        }
+
+        switch normalizedRule.unit {
+        case .day:
+            return calendar.date(
+                byAdding: .day,
+                value: -normalizedRule.amount,
+                to: expiryDate
+            )
+        case .week:
+            return calendar.date(
+                byAdding: .day,
+                value: -(normalizedRule.amount * 7),
+                to: expiryDate
+            )
+        case .month:
+            return calendar.date(
+                byAdding: .month,
+                value: -normalizedRule.amount,
+                to: expiryDate
+            )
+        }
+    }
+
+    private func scheduledNotificationDate(
+        for rule: NotificationTimingRule,
+        thresholdDate: Date,
+        nextThresholdDate: Date?,
+        today: Date,
+        expiryDate: Date
+    ) -> Date? {
+        if today < thresholdDate {
+            return thresholdDate
+        }
+
+        if let nextThresholdDate {
+            if today < nextThresholdDate {
+                return today
+            }
+            return nil
+        }
+
+        let normalizedRule = rule.normalizedRule
+        if normalizedRule.unit == .day && normalizedRule.amount == 0 {
+            return today == expiryDate ? today : nil
+        }
+        return today <= expiryDate ? today : nil
+    }
+
+    private func notificationDisplayText(for rule: NotificationTimingRule) -> String {
+        rule.displayText
+    }
+
+    private func singleNotificationMessage(for itemName: String, rule: NotificationTimingRule) -> String {
+        let normalizedRule = rule.normalizedRule
+        if normalizedRule.unit == .day && normalizedRule.amount == 0 {
+            return L10n.format("「%@」の期限は本日です", itemName)
+        }
+        return L10n.format("「%@」の期限が近づいています（%@のお知らせ）", itemName, normalizedRule.displayText)
+    }
+
+    private func sortNotificationRules(_ rules: [NotificationTimingRule]) -> [NotificationTimingRule] {
+        rules.sorted {
+            if $0.sortWeight == $1.sortWeight {
+                return $0.unit.approximateDays < $1.unit.approximateDays
+            }
+            return $0.sortWeight < $1.sortWeight
+        }
+    }
+
+    private func pendingNotificationIdentifiers() async -> [String] {
+        await withCheckedContinuation { continuation in
+            UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+                continuation.resume(returning: requests.map(\.identifier))
+            }
+        }
     }
 }

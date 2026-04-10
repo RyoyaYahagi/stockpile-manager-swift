@@ -1,5 +1,6 @@
 # Secrets
 Secrets.plist
+GoogleService-Info.plist
 
 # Xcode
 *.xcuserstate
@@ -12,6 +13,11 @@ DerivedData/
 .DS_Store
 *.swp
 *~
+
+# Node / Vercel
+node_modules/
+.vercel/
+backend/vercel-rakuten-proxy/.env*
 
 # Swift Package Manager
 .build/

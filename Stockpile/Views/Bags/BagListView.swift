@@ -5,22 +5,40 @@ import SwiftData
 struct BagListView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
     
     @Query private var bags: [Bag]
+    @Query private var items: [Item]
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var showAddSheet = false
     @State private var deletedBagInfo: DeletedBagInfo?
     @State private var showUndoSnackbar = false
     @State private var undoWorkItem: DispatchWorkItem?
+
+    private var currentFamily: Family? {
+        CurrentFamilyResolver.currentFamily(from: families)
+    }
+
+    private var scopedBags: [Bag] {
+        guard let family = currentFamily else {
+            return bags.filter { $0.family == nil }
+        }
+        let familyBags = bags.filter { $0.family?.id == family.id }
+        if !familyBags.isEmpty || family.prefersStrictCloudKitScoping {
+            return familyBags
+        }
+        return bags.filter { $0.family == nil }
+    }
     
     /// アイテム数が多い順にソート（よく使う収納場所を上に）
     private var sortedBags: [Bag] {
-        bags.sorted { $0.items.count > $1.items.count }
+        scopedBags.sorted { $0.resolvedItems.count > $1.resolvedItems.count }
     }
     
     var body: some View {
         List {
-            if bags.isEmpty {
+            if scopedBags.isEmpty {
                 ContentUnavailableView(
                     "収納場所がありません",
                     systemImage: "bag",
@@ -40,10 +58,11 @@ struct BagListView: View {
             }
         }
         .navigationTitle("収納場所")
+        .localizedRefresh()
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showAddSheet = true
+                    presentAddBagFlow()
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -55,7 +74,7 @@ struct BagListView: View {
         .overlay(alignment: .bottom) {
             if showUndoSnackbar, let info = deletedBagInfo {
                 BagUndoSnackbar(
-                    message: "「\(info.name)」を削除しました",
+                    message: L10n.format("「%@」を削除しました", info.name),
                     onUndo: {
                         undoDelete(info)
                     },
@@ -72,10 +91,18 @@ struct BagListView: View {
     
     private func deleteBag(_ bag: Bag) {
         // Undo用に情報を保存
-        deletedBagInfo = DeletedBagInfo(name: bag.name)
-        
-        // 紐づくアイテムは未分類になる（deleteRule: .nullify）
-        modelContext.delete(bag)
+        deletedBagInfo = DeletedBagInfo(id: bag.id, name: bag.name, itemIDs: bag.resolvedItems.map(\.id))
+
+        do {
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            try sharingService.deleteBagLocally(bag, in: currentFamily)
+        } catch {
+            #if DEBUG
+            print("ローカル削除に失敗: \(error)")
+            #endif
+            return
+        }
+        persistAndSyncFamilyIfPossible()
         
         // スナックバーを表示
         showUndoSnackbarWithTimeout()
@@ -97,7 +124,27 @@ struct BagListView: View {
     
     private func undoDelete(_ info: DeletedBagInfo) {
         let newBag = Bag(name: info.name)
+        newBag.id = info.id
+        newBag.markUpdated()
+        newBag.family = currentFamily
         modelContext.insert(newBag)
+
+        for item in items where info.itemIDs.contains(item.id) {
+            item.bag = newBag
+            item.markUpdated()
+        }
+
+        if let family = currentFamily {
+            do {
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                try sharingService.removeDeletionMarkerIfNeeded(forBagID: info.id, family: family)
+            } catch {
+                #if DEBUG
+                print("削除マーカーの取り消しに失敗: \(error)")
+                #endif
+            }
+        }
+        persistAndSyncFamilyIfPossible()
         dismissUndoSnackbar()
     }
     
@@ -109,6 +156,39 @@ struct BagListView: View {
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             deletedBagInfo = nil
+        }
+    }
+
+    private func persistAndSyncFamilyIfPossible() {
+        do {
+            try modelContext.save()
+        } catch {
+            #if DEBUG
+            print("ローカル保存に失敗: \(error)")
+            #endif
+        }
+
+        guard let family = currentFamily else { return }
+        Task {
+            do {
+                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                try await sharingService.syncFamilyDataToCloudKit(for: family)
+            } catch {
+                #if DEBUG
+                print("CloudKit同期に失敗: \(error)")
+                #endif
+            }
+        }
+    }
+
+    private func presentAddBagFlow() {
+        if premiumAccessManager.canAddBag(currentCount: scopedBags.count) {
+            showAddSheet = true
+            return
+        }
+
+        premiumAccessManager.presentPaywall(for: .bagLimit) {
+            self.showAddSheet = true
         }
     }
 }
@@ -126,7 +206,7 @@ struct BagRow: View {
                 Text(bag.name)
                     .font(.body)
                 
-                Text("\(bag.items.count)個のアイテム")
+                Text(L10n.format("%@個のアイテム", String(bag.resolvedItems.count)))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -139,11 +219,30 @@ struct BagRow: View {
 struct BagFormSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(PremiumAccessManager.self) private var premiumAccessManager
+    @Query private var bags: [Bag]
+    @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var name = ""
+    @State private var isSaving = false
     
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var currentFamily: Family? {
+        CurrentFamilyResolver.currentFamily(from: families)
+    }
+
+    private var scopedBags: [Bag] {
+        guard let family = currentFamily else {
+            return bags.filter { $0.family == nil }
+        }
+        let familyBags = bags.filter { $0.family?.id == family.id }
+        if !familyBags.isEmpty || family.prefersStrictCloudKitScoping {
+            return familyBags
+        }
+        return bags.filter { $0.family == nil }
     }
     
     var body: some View {
@@ -159,6 +258,7 @@ struct BagFormSheet: View {
             }
             .navigationTitle("収納場所を追加")
             .navigationBarTitleDisplayMode(.inline)
+            .localizedRefresh()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") {
@@ -167,23 +267,76 @@ struct BagFormSheet: View {
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("追加") {
-                        let bag = Bag(name: name.trimmingCharacters(in: .whitespacesAndNewlines))
-                        modelContext.insert(bag)
-                        dismiss()
+                    Button {
+                        addBag()
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                        } else {
+                            Text("追加")
+                        }
                     }
-                    .disabled(!isValid)
+                    .disabled(!isValid || isSaving)
                 }
             }
         }
+        .premiumPaywallSheet()
         .presentationDetents([.medium])
+    }
+
+    private func addBag() {
+        guard !isSaving else { return }
+
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+
+        guard premiumAccessManager.canAddBag(currentCount: scopedBags.count) else {
+            premiumAccessManager.presentPaywall(for: .bagLimit) {
+                self.addBag()
+            }
+            return
+        }
+
+        isSaving = true
+
+        let bag = Bag(name: trimmedName)
+        let family = currentFamily
+        bag.family = family
+        modelContext.insert(bag)
+
+        do {
+            try modelContext.save()
+        } catch {
+            isSaving = false
+            #if DEBUG
+            print("ローカル保存に失敗: \(error)")
+            #endif
+            return
+        }
+
+        if let family {
+            Task {
+                do {
+                    let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                    try await sharingService.syncFamilyDataToCloudKit(for: family)
+                } catch {
+                    #if DEBUG
+                    print("CloudKit同期に失敗: \(error)")
+                    #endif
+                }
+            }
+        }
+
+        dismiss()
     }
 }
 
 // MARK: - Undo Snackbar
 
 struct DeletedBagInfo {
+    let id: UUID
     let name: String
+    let itemIDs: [UUID]
 }
 
 struct BagUndoSnackbar: View {
@@ -224,5 +377,6 @@ struct BagUndoSnackbar: View {
         BagListView()
     }
     .environment(Router())
-    .modelContainer(for: [Bag.self, Item.self], inMemory: true)
+    .environment(PremiumAccessManager.shared)
+    .modelContainer(for: [Family.self, Bag.self, Item.self], inMemory: true)
 }

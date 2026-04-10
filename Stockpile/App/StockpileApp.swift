@@ -2,7 +2,6 @@ import SwiftUI
 import SwiftData
 import UIKit
 import UserNotifications
-import CloudKit
 
 final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
     func application(
@@ -24,35 +23,36 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         completionHandler()
     }
     
-    /// CloudKit共有リンク受諾時に呼ばれる
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .badge, .sound]
+    }
+
     func application(
         _ application: UIApplication,
-        userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata
-    ) {
-        Task {
-            do {
-                let sharingService = CloudKitSharingService()
-                try await sharingService.acceptShare(metadata: cloudKitShareMetadata)
-                
-                await MainActor.run {
-                    NotificationCenter.default.post(
-                        name: .didAcceptCloudKitShare,
-                        object: nil,
-                        userInfo: ["metadata": cloudKitShareMetadata]
-                    )
-                }
-            } catch {
-                print("CloudKit共有の受諾に失敗: \(error)")
-            }
-        }
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(
+            name: nil,
+            sessionRole: connectingSceneSession.role
+        )
+        configuration.delegateClass = CloudKitShareSceneDelegate.self
+        return configuration
     }
 }
 
 @main
 struct StockpileApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var localizationController = LocalizationController()
+    @State private var premiumAccessManager = PremiumAccessManager.shared
     
     private let sharedModelContainer: ModelContainer = {
+        prepareProtectedApplicationSupportDirectory()
+        
         let configuration = ModelConfiguration(cloudKitDatabase: .none)
         
         do {
@@ -61,6 +61,7 @@ struct StockpileApp: App {
                 User.self,
                 Bag.self,
                 Item.self,
+                CloudKitDeletionMarker.self,
                 NotificationSettings.self,
                 configurations: configuration
             )
@@ -68,11 +69,37 @@ struct StockpileApp: App {
             fatalError("Failed to create ModelContainer: \(error)")
         }
     }()
-    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(localizationController)
+                .environment(premiumAccessManager)
+                .environment(\.locale, localizationController.locale)
         }
         .modelContainer(sharedModelContainer)
+    }
+
+    private static func prepareProtectedApplicationSupportDirectory() {
+        guard let appSupportURL = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            return
+        }
+
+        do {
+            try FileManager.default.createDirectory(
+                at: appSupportURL,
+                withIntermediateDirectories: true
+            )
+            try FileManager.default.setAttributes(
+                [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                ofItemAtPath: appSupportURL.path
+            )
+        } catch {
+            #if DEBUG
+            print("⚠️ Application Support directory preparation failed: \(error)")
+            #endif
+        }
     }
 }
