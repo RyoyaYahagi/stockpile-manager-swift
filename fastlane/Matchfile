@@ -1,0 +1,14 @@
+storage_mode("git")
+type("appstore")
+
+apple_team_id = ENV["APPLE_TEAM_ID"].to_s.strip
+apple_team_id = "2L6CD9CNHL" if apple_team_id.empty?
+team_id(apple_team_id)
+
+app_identifier(["com.stockpile-manager.app"])
+
+unless ENV["MATCH_GIT_URL"].to_s.strip.empty?
+  git_url(ENV["MATCH_GIT_URL"])
+end
+
+readonly(ENV["MATCH_READONLY"].to_s.strip.downcase == "true")

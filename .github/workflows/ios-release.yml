@@ -1,0 +1,59 @@
+name: iOS Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: "実行する fastlane レーン"
+        required: true
+        default: beta
+        type: choice
+        options:
+          - beta
+          - release
+      build_number:
+        description: "任意の build number。空なら GitHub run number を使用"
+        required: false
+        type: string
+      submit_for_review:
+        description: "release 実行時に審査提出する"
+        required: true
+        default: false
+        type: boolean
+      automatic_release:
+        description: "release 実行時に審査通過後すぐ公開する"
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    env:
+      CI: "true"
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+      ASC_KEY_CONTENT_BASE64: ${{ secrets.ASC_KEY_CONTENT_BASE64 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
+      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      MATCH_READONLY: "true"
+      BUILD_NUMBER: ${{ inputs.build_number }}
+      APPSTORE_SUBMIT_FOR_REVIEW: ${{ inputs.submit_for_review }}
+      APPSTORE_AUTOMATIC_RELEASE: ${{ inputs.automatic_release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Run fastlane
+        run: bundle exec fastlane ios ${{ inputs.lane }}

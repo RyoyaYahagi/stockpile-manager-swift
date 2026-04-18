@@ -1,0 +1,176 @@
+default_platform(:ios)
+
+PROJECT_PATH = ENV.fetch("IOS_PROJECT_PATH", "Stockpile.xcodeproj")
+SCHEME = ENV.fetch("IOS_SCHEME", "Stockpile")
+APP_IDENTIFIER = ENV.fetch("IOS_APP_IDENTIFIER", "com.stockpile-manager.app")
+DEFAULT_TEAM_ID = begin
+  team_id = ENV["APPLE_TEAM_ID"].to_s.strip
+  team_id.empty? ? "2L6CD9CNHL" : team_id
+end
+
+def env_boolean(key, default: false)
+  value = ENV[key].to_s.strip
+  return default if value.empty?
+
+  %w[1 true yes on].include?(value.downcase)
+end
+
+def api_key_for_app_store_connect!
+  missing = %w[ASC_KEY_ID ASC_ISSUER_ID].select do |key|
+    ENV[key].to_s.strip.empty?
+  end
+  unless missing.empty?
+    UI.user_error!("Missing App Store Connect API key settings: #{missing.join(', ')}")
+  end
+
+  options = {
+    key_id: ENV["ASC_KEY_ID"],
+    issuer_id: ENV["ASC_ISSUER_ID"],
+    in_house: false
+  }
+
+  key_content = ENV["ASC_KEY_CONTENT"].to_s.strip
+  key_filepath = ENV["ASC_KEY_FILEPATH"].to_s.strip
+
+  if !key_content.empty?
+    options[:key_content] = key_content
+    options[:is_key_content_base64] = env_boolean("ASC_KEY_CONTENT_BASE64", default: false)
+  elsif !key_filepath.empty?
+    options[:key_filepath] = key_filepath
+  else
+    UI.user_error!("Set ASC_KEY_CONTENT or ASC_KEY_FILEPATH before running release lanes.")
+  end
+
+  app_store_connect_api_key(**options)
+end
+
+def match_configured?
+  !ENV["MATCH_GIT_URL"].to_s.strip.empty?
+end
+
+def configure_ci_environment
+  setup_ci if ENV["CI"]
+end
+
+def sync_release_signing
+  unless match_configured?
+    UI.important("MATCH_GIT_URL is not set. Falling back to the project's automatic signing.")
+    return
+  end
+
+  match(
+    type: "appstore",
+    app_identifier: [APP_IDENTIFIER],
+    git_url: ENV["MATCH_GIT_URL"],
+    team_id: DEFAULT_TEAM_ID,
+    readonly: env_boolean("MATCH_READONLY", default: !ENV["CI"].to_s.strip.empty?),
+    shallow_clone: true
+  )
+end
+
+def apply_versioning
+  version_number = ENV["VERSION_NUMBER"].to_s.strip
+  unless version_number.empty?
+    increment_version_number(
+      xcodeproj: PROJECT_PATH,
+      version_number: version_number
+    )
+  end
+
+  build_number = ENV["BUILD_NUMBER"].to_s.strip
+  build_number = ENV["GITHUB_RUN_NUMBER"].to_s.strip if build_number.empty?
+
+  unless build_number.empty?
+    increment_build_number(
+      xcodeproj: PROJECT_PATH,
+      build_number: build_number
+    )
+  end
+end
+
+def export_options_for_release
+  return {} unless match_configured?
+
+  {
+    provisioningProfiles: {
+      APP_IDENTIFIER => "match AppStore #{APP_IDENTIFIER}"
+    }
+  }
+end
+
+def build_release_artifacts
+  build_app(
+    project: PROJECT_PATH,
+    scheme: SCHEME,
+    configuration: "Release",
+    clean: true,
+    export_method: "app-store",
+    export_options: export_options_for_release,
+    output_directory: "build",
+    output_name: "#{SCHEME}.ipa"
+  )
+end
+
+def csv_values(value)
+  value.to_s.split(",").map(&:strip).reject(&:empty?)
+end
+
+platform :ios do
+  desc "Archive an App Store build without uploading"
+  lane :build do
+    configure_ci_environment
+    sync_release_signing
+    apply_versioning
+    build_release_artifacts
+  end
+
+  desc "Build and upload the app to TestFlight"
+  lane :beta do |options|
+    api_key = api_key_for_app_store_connect!
+
+    configure_ci_environment
+    sync_release_signing
+    apply_versioning
+    build_release_artifacts
+
+    upload_options = {
+      api_key: api_key,
+      skip_waiting_for_build_processing: options[:skip_waiting_for_build_processing].nil? ? env_boolean("TESTFLIGHT_SKIP_WAITING_FOR_BUILD_PROCESSING", default: true) : options[:skip_waiting_for_build_processing]
+    }
+
+    changelog = options[:changelog] || ENV["TESTFLIGHT_CHANGELOG"]
+    upload_options[:changelog] = changelog unless changelog.to_s.strip.empty?
+
+    groups = csv_values(ENV["TESTFLIGHT_GROUPS"])
+    upload_options[:groups] = groups unless groups.empty?
+
+    distribute_external = if options.key?(:distribute_external)
+      options[:distribute_external]
+    else
+      env_boolean("TESTFLIGHT_DISTRIBUTE_EXTERNAL", default: false)
+    end
+    upload_options[:distribute_external] = distribute_external
+
+    upload_to_testflight(**upload_options)
+  end
+
+  desc "Build and upload the app to App Store Connect"
+  lane :release do |options|
+    api_key = api_key_for_app_store_connect!
+
+    configure_ci_environment
+    sync_release_signing
+    apply_versioning
+    build_release_artifacts
+
+    upload_to_app_store(
+      api_key: api_key,
+      skip_metadata: options.key?(:skip_metadata) ? options[:skip_metadata] : env_boolean("APPSTORE_SKIP_METADATA", default: true),
+      skip_screenshots: options.key?(:skip_screenshots) ? options[:skip_screenshots] : env_boolean("APPSTORE_SKIP_SCREENSHOTS", default: true),
+      submit_for_review: options.key?(:submit_for_review) ? options[:submit_for_review] : env_boolean("APPSTORE_SUBMIT_FOR_REVIEW", default: false),
+      automatic_release: options.key?(:automatic_release) ? options[:automatic_release] : env_boolean("APPSTORE_AUTOMATIC_RELEASE", default: false),
+      phased_release: options.key?(:phased_release) ? options[:phased_release] : env_boolean("APPSTORE_PHASED_RELEASE", default: false),
+      force: true
+    )
+  end
+end

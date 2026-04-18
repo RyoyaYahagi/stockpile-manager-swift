@@ -1,0 +1,9 @@
+app_identifier(ENV.fetch("IOS_APP_IDENTIFIER", "com.stockpile-manager.app"))
+
+apple_team_id = ENV["APPLE_TEAM_ID"].to_s.strip
+apple_team_id = "2L6CD9CNHL" if apple_team_id.empty?
+team_id(apple_team_id)
+
+unless ENV["ASC_TEAM_ID"].to_s.strip.empty?
+  itc_team_id(ENV["ASC_TEAM_ID"])
+end

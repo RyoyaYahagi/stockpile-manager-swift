@@ -8,6 +8,15 @@ xcuserdata/
 DerivedData/
 *.xcscmblueprint
 *.xccheckout
+build/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
+.env.fastlane
+.env.fastlane.local
 
 # macOS
 .DS_Store
