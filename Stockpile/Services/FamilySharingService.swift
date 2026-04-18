@@ -5,6 +5,12 @@ import OSLog
 
 @MainActor
 final class CloudKitFamilySharingService {
+    enum SharePreparationVerificationPolicy {
+        case automatic
+        case strict
+        case allowPendingUpload
+    }
+
     private enum Constants {
         static let familyRecordType = "Family"
         static let bagRecordType = "Bag"
@@ -124,13 +130,16 @@ final class CloudKitFamilySharingService {
     private let logger = Logger(subsystem: "com.stockpile-manager.app", category: "CloudKitSharing")
     private let modelContext: ModelContext
     private let backend: any CloudKitFamilySharingBackend
+    private let sharePreparationVerificationPolicy: SharePreparationVerificationPolicy
 
     init(
         modelContext: ModelContext,
-        backend: any CloudKitFamilySharingBackend = DefaultCloudKitFamilySharingBackend(container: .default())
+        backend: any CloudKitFamilySharingBackend = DefaultCloudKitFamilySharingBackend(container: .default()),
+        sharePreparationVerificationPolicy: SharePreparationVerificationPolicy = .automatic
     ) {
         self.modelContext = modelContext
         self.backend = backend
+        self.sharePreparationVerificationPolicy = sharePreparationVerificationPolicy
     }
 
     func prepareShare(for family: Family) async throws -> CKShare {
@@ -214,13 +223,14 @@ final class CloudKitFamilySharingService {
     }
 
     private func finalizePreparedShare(_ share: CKShare, for family: Family) async throws -> CKShare {
+        let preparedShare = try await hydrateShareURLIfNeeded(share, for: family)
         updatePreparedShareState(
             for: family,
-            shareURL: share.url,
+            shareURL: preparedShare.url,
             pendingSync: true,
             hasRemoteBaseline: false
         )
-        await cacheShareParticipants(from: share, for: family)
+        await cacheShareParticipants(from: preparedShare, for: family)
 
         do {
             // Share 作成後にもう一度 zone へ保存し、参加者側から既存レコードが見える状態を強める。
@@ -229,21 +239,53 @@ final class CloudKitFamilySharingService {
             try await verifyCloudKitUpload(for: family)
             updatePreparedShareState(
                 for: family,
-                shareURL: share.url,
+                shareURL: preparedShare.url,
                 pendingSync: false,
                 hasRemoteBaseline: true
             )
             await logRemoteCountsForDiagnostics(event: "共有リンク準備完了", family: family)
-            return share
+            return preparedShare
         } catch {
             updatePreparedShareState(
                 for: family,
-                shareURL: share.url,
+                shareURL: preparedShare.url,
                 pendingSync: true,
                 hasRemoteBaseline: false
             )
+            if shouldAllowDeferredSharePreparation(after: error) {
+                logDiagnostics(
+                    event: "共有リンクを検証待ちで返却",
+                    family: family,
+                    extra: [
+                        "description": error.localizedDescription,
+                        "shareURLAvailable": preparedShare.url == nil ? "false" : "true"
+                    ]
+                )
+                return preparedShare
+            }
             throw error
         }
+    }
+
+    private func hydrateShareURLIfNeeded(_ share: CKShare, for family: Family) async throws -> CKShare {
+        guard share.url == nil else { return share }
+
+        let retryIntervalsInNanoseconds: [UInt64] = [
+            250_000_000,
+            1_000_000_000,
+            2_000_000_000
+        ]
+
+        for interval in retryIntervalsInNanoseconds {
+            try await Task.sleep(nanoseconds: interval)
+            if let existingShare = try await fetchExistingShare(for: family, scope: .privateDatabase),
+               existingShare.url != nil {
+                logger.notice("Recovered CKShare URL after delayed fetch")
+                return existingShare
+            }
+        }
+
+        return share
     }
 
     @discardableResult
@@ -982,6 +1024,35 @@ final class CloudKitFamilySharingService {
             return CloudKitSharingError.sharePreparationFailed(detail: makeShareErrorDetail(from: error))
         }
         return error
+    }
+
+    private func shouldAllowDeferredSharePreparation(after error: Error) -> Bool {
+        guard resolvedSharePreparationVerificationPolicy == .allowPendingUpload else {
+            return false
+        }
+
+        if let sharingError = error as? CloudKitSharingError,
+           case .shareDataNotUploaded = sharingError {
+            return true
+        }
+
+        return shouldRetrySharePreparation(after: error)
+            || shouldRetryCloudKitUploadVerification(after: error)
+    }
+
+    private var resolvedSharePreparationVerificationPolicy: SharePreparationVerificationPolicy {
+        switch sharePreparationVerificationPolicy {
+        case .automatic:
+            return Self.isRunningInSimulatorApp ? .allowPendingUpload : .strict
+        case .strict, .allowPendingUpload:
+            return sharePreparationVerificationPolicy
+        }
+    }
+
+    private static var isRunningInSimulatorApp: Bool {
+        let environment = ProcessInfo.processInfo.environment
+        return environment["SIMULATOR_UDID"] != nil
+            && environment["XCTestConfigurationFilePath"] == nil
     }
 
     private func fetchExistingShareAfterTransientFailure(for family: Family) async throws -> CKShare? {

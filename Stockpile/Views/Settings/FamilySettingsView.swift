@@ -421,12 +421,7 @@ struct FamilySettingsView: View {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 activeShare = try await sharingService.prepareShare(for: family)
                 isStartingShare = false
-                guard let shareURL = activeShare?.url ?? family.cloudKitShareURL else {
-                    shareError = L10n.string("共有リンクの取得に失敗しました")
-                    showShareError = true
-                    return
-                }
-                presentShareActivity(for: shareURL)
+                presentPreparedShare()
                 await refreshParticipantDisplays()
             } catch {
                 isStartingShare = false
@@ -452,6 +447,21 @@ struct FamilySettingsView: View {
                 showShareError = true
             }
         }
+    }
+
+    private func presentPreparedShare() {
+        if let shareURL = activeShare?.url ?? family.cloudKitShareURL {
+            presentShareActivity(for: shareURL)
+            return
+        }
+
+        if activeShare != nil {
+            showShareManagementSheet = true
+            return
+        }
+
+        shareError = L10n.string("共有リンクの取得に失敗しました")
+        showShareError = true
     }
 
     private func presentShareActivity(for shareURL: URL) {
