@@ -187,6 +187,7 @@ struct ItemFormSheet: View {
                     Button("キャンセル") {
                         dismiss()
                     }
+                    .keyboardShortcut(.cancelAction)
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
@@ -194,6 +195,7 @@ struct ItemFormSheet: View {
                         save()
                     }
                     .disabled(!isValid || isSaving)
+                    .keyboardShortcut(.defaultAction)
                 }
             }
             .sheet(isPresented: $showOCRCamera) {
