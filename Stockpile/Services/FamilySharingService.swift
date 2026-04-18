@@ -323,6 +323,7 @@ final class CloudKitFamilySharingService {
 
     @available(iOS 18.0, *)
     private func prepareOneTimeInvitationURL(for family: Family, share: CKShare) async throws -> URL {
+        let existingParticipantIDs = Set(share.participants.compactMap(\.participantID))
         let participant = CKShare.Participant.oneTimeURLParticipant()
         participant.permission = .readWrite
         share.addParticipant(participant)
@@ -331,7 +332,12 @@ final class CloudKitFamilySharingService {
         let savedShare = (savedRecord as? CKShare) ?? share
         await cacheShareParticipants(from: savedShare, for: family)
 
-        if let invitationURL = oneTimeInvitationURL(from: savedShare, participantID: participant.participantID) {
+        if let participantID = invitationParticipantID(
+            in: savedShare,
+            existingParticipantIDs: existingParticipantIDs,
+            fallbackParticipantID: participant.participantID
+        ),
+           let invitationURL = oneTimeInvitationURL(from: savedShare, participantID: participantID) {
             updatePreparedShareState(
                 for: family,
                 shareURL: invitationURL,
@@ -343,7 +349,12 @@ final class CloudKitFamilySharingService {
         }
 
         if let refetchedShare = try await fetchZoneWideShare(for: family),
-           let invitationURL = oneTimeInvitationURL(from: refetchedShare, participantID: participant.participantID) {
+           let participantID = invitationParticipantID(
+               in: refetchedShare,
+               existingParticipantIDs: existingParticipantIDs,
+               fallbackParticipantID: participant.participantID
+           ),
+           let invitationURL = oneTimeInvitationURL(from: refetchedShare, participantID: participantID) {
             updatePreparedShareState(
                 for: family,
                 shareURL: invitationURL,
@@ -355,6 +366,22 @@ final class CloudKitFamilySharingService {
         }
 
         throw CloudKitSharingError.invitationURLUnavailable
+    }
+
+    @available(iOS 18.0, *)
+    private func invitationParticipantID(
+        in share: CKShare,
+        existingParticipantIDs: Set<String>,
+        fallbackParticipantID: String?
+    ) -> String? {
+        if let fallbackParticipantID,
+           !existingParticipantIDs.contains(fallbackParticipantID) {
+            return fallbackParticipantID
+        }
+
+        return share.participants
+            .compactMap(\.participantID)
+            .first(where: { !existingParticipantIDs.contains($0) })
     }
 
     @available(iOS 18.0, *)
