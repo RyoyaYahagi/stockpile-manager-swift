@@ -58,7 +58,7 @@
 
 ```bash
 bundle install
-cp .env.fastlane.example .env.fastlane
+cp .env.fastlane.example .env
 bundle exec fastlane ios beta
 ```
 
