@@ -773,10 +773,12 @@ final class CloudKitFamilySharingService {
         )
 
         let remoteFamilyTimestamp = remoteRecordTimestamp(familyRecord)
+        let remoteFamilyCreatedAt = (familyRecord["createdAt"] as? Date) ?? remoteFamilyTimestamp
         let shouldAdoptRemoteFamilyMetadata = !currentFamily.cloudKitHasRemoteBaseline
             || currentFamily.syncTimestamp <= remoteFamilyTimestamp
         if shouldAdoptRemoteFamilyMetadata {
             currentFamily.name = familyName?.isEmpty == false ? familyName! : currentFamily.name
+            currentFamily.createdAt = remoteFamilyCreatedAt
             currentFamily.updatedAt = remoteFamilyTimestamp
         }
         currentFamily.cloudKitZoneName = zoneID.zoneName
@@ -794,44 +796,61 @@ final class CloudKitFamilySharingService {
             uniqueKeysWithValues: try fetchLocalBags(for: currentFamily).map { ($0.id, $0) }
         )
 
-        let validBagRecords = remoteState.bagRecords.compactMap { bagRecord -> (UUID, String, Date)? in
+        let validBagRecords = remoteState.bagRecords.compactMap { bagRecord -> (UUID, String, Date, Date)? in
             guard let bagID = uuidValue(from: bagRecord["id"]),
                   let bagName = normalizedNonEmptyString(bagRecord["name"] as? String) else { return nil }
-            return (bagID, bagName, remoteRecordTimestamp(bagRecord))
+            let remoteCreatedAt = (bagRecord["createdAt"] as? Date) ?? remoteRecordTimestamp(bagRecord)
+            return (bagID, bagName, remoteCreatedAt, remoteRecordTimestamp(bagRecord))
         }
 
-        for (bagID, bagName, remoteUpdatedAt) in validBagRecords {
-            let bag = bagMap[bagID] ?? {
+        for (bagID, bagName, remoteCreatedAt, remoteUpdatedAt) in validBagRecords {
+            let existingBag = bagMap[bagID]
+            let bag = existingBag ?? {
                 let newBag = Bag(name: bagName)
                 newBag.id = bagID
                 modelContext.insert(newBag)
                 return newBag
             }()
 
-            if bag.syncTimestamp <= remoteUpdatedAt {
+            if shouldAdoptRemoteRecord(
+                existingTimestamp: bag.syncTimestamp,
+                existingCreatedAt: bag.createdAt,
+                existingUpdatedAt: bag.updatedAt,
+                remoteUpdatedAt: remoteUpdatedAt,
+                isExistingRecord: existingBag != nil
+            ) {
                 bag.name = bagName
+                bag.createdAt = remoteCreatedAt
                 bag.updatedAt = remoteUpdatedAt
             }
             bag.family = currentFamily
             bagMap[bagID] = bag
         }
 
-        let validItemRecords = remoteState.itemRecords.compactMap { itemRecord -> (CKRecord, UUID, String, Date)? in
+        let validItemRecords = remoteState.itemRecords.compactMap { itemRecord -> (CKRecord, UUID, String, Date, Date)? in
             guard let itemID = uuidValue(from: itemRecord["id"]),
                   let itemName = normalizedNonEmptyString(itemRecord["name"] as? String) else { return nil }
-            return (itemRecord, itemID, itemName, remoteRecordTimestamp(itemRecord))
+            let remoteCreatedAt = (itemRecord["createdAt"] as? Date) ?? remoteRecordTimestamp(itemRecord)
+            return (itemRecord, itemID, itemName, remoteCreatedAt, remoteRecordTimestamp(itemRecord))
         }
-        for (itemRecord, itemID, itemName, remoteUpdatedAt) in validItemRecords {
+        for (itemRecord, itemID, itemName, remoteCreatedAt, remoteUpdatedAt) in validItemRecords {
 
             let descriptor = FetchDescriptor<Item>(predicate: #Predicate { $0.id == itemID })
-            let item = try modelContext.fetch(descriptor).first ?? {
+            let existingItem = try modelContext.fetch(descriptor).first
+            let item = existingItem ?? {
                 let newItem = Item(name: itemName)
                 newItem.id = itemID
                 modelContext.insert(newItem)
                 return newItem
             }()
 
-            if item.syncTimestamp <= remoteUpdatedAt {
+            if shouldAdoptRemoteRecord(
+                existingTimestamp: item.syncTimestamp,
+                existingCreatedAt: item.createdAt,
+                existingUpdatedAt: item.updatedAt,
+                remoteUpdatedAt: remoteUpdatedAt,
+                isExistingRecord: existingItem != nil
+            ) {
                 item.name = itemName
                 item.janCode = normalizedOptionalString(itemRecord["janCode"] as? String)
                 item.quantity = intValue(from: itemRecord["quantity"]) ?? item.quantity
@@ -840,6 +859,7 @@ final class CloudKitFamilySharingService {
                 item.notified30 = (itemRecord["notified30"] as? NSNumber)?.boolValue ?? item.notified30
                 item.notified7 = (itemRecord["notified7"] as? NSNumber)?.boolValue ?? item.notified7
                 item.notified1 = (itemRecord["notified1"] as? NSNumber)?.boolValue ?? item.notified1
+                item.createdAt = remoteCreatedAt
                 item.updatedAt = remoteUpdatedAt
                 if let bagID = uuidValue(from: itemRecord["bagID"]) {
                     item.bag = bagMap[bagID]
@@ -1547,6 +1567,24 @@ final class CloudKitFamilySharingService {
         (record["updatedAt"] as? Date)
             ?? (record["createdAt"] as? Date)
             ?? .distantPast
+    }
+
+    private func shouldAdoptRemoteRecord(
+        existingTimestamp: Date,
+        existingCreatedAt: Date,
+        existingUpdatedAt: Date,
+        remoteUpdatedAt: Date,
+        isExistingRecord: Bool
+    ) -> Bool {
+        guard isExistingRecord else { return true }
+        if existingTimestamp <= remoteUpdatedAt {
+            return true
+        }
+
+        // Shared placeholder records created during the first import can end up with
+        // local "now" timestamps before the remote payload is applied. Allow the
+        // remote snapshot to heal that state on the next sync.
+        return existingCreatedAt == existingUpdatedAt && existingCreatedAt > remoteUpdatedAt
     }
 
     private func markerKey(for marker: CloudKitDeletionMarker) -> String {

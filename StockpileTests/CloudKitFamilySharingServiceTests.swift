@@ -412,6 +412,70 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertTrue(family.cloudKitHasRemoteBaseline)
     }
 
+    func testSyncFamilyStateRepairsPlaceholderSharedItemUsingRemoteExpiryDate() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有家族")
+        family.cloudKitDatabaseScope = .sharedDatabase
+        family.cloudKitPendingSync = false
+        family.cloudKitHasRemoteBaseline = true
+        family.cloudKitZoneName = "shared-zone"
+        family.cloudKitZoneOwnerName = "owner"
+
+        let remoteItemID = UUID()
+        let placeholderCreatedAt = Date(timeIntervalSince1970: 1_000)
+        let placeholderItem = Item(name: "保存水", quantity: 1)
+        placeholderItem.id = remoteItemID
+        placeholderItem.family = family
+        placeholderItem.createdAt = placeholderCreatedAt
+        placeholderItem.updatedAt = placeholderCreatedAt
+        placeholderItem.expiryDate = nil
+
+        harness.context.insert(family)
+        harness.context.insert(placeholderItem)
+        try harness.context.save()
+
+        let remoteCreatedAt = Date(timeIntervalSince1970: 30)
+        let remoteExpiryDate = Date(timeIntervalSince1970: 60)
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordsHandler = { recordType, zoneID, scope in
+            XCTAssertEqual(scope, .sharedDatabase)
+            switch recordType {
+            case "Family":
+                return [Self.makeFamilyRecord(id: family.id, name: "共有家族", zoneID: zoneID)]
+            case "Item":
+                return [
+                    Self.makeItemRecord(
+                        id: remoteItemID,
+                        name: "保存水",
+                        familyID: family.id,
+                        bagID: nil,
+                        zoneID: zoneID,
+                        quantity: 6,
+                        expiryDate: remoteExpiryDate,
+                        createdAt: remoteCreatedAt,
+                        updatedAt: remoteCreatedAt
+                    )
+                ]
+            case "Bag", "DeletionMarker":
+                return []
+            default:
+                return []
+            }
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        try await service.syncFamilyStateFromCloudKit(for: family)
+
+        let items = try harness.context.fetch(FetchDescriptor<Item>())
+        XCTAssertEqual(items.count, 1)
+        let repairedItem = try XCTUnwrap(items.first)
+        XCTAssertEqual(repairedItem.id, remoteItemID)
+        XCTAssertEqual(repairedItem.quantity, 6)
+        XCTAssertEqual(repairedItem.expiryDate, remoteExpiryDate)
+        XCTAssertEqual(repairedItem.createdAt, remoteCreatedAt)
+        XCTAssertEqual(repairedItem.updatedAt, remoteCreatedAt)
+    }
+
     func testSyncFamilyStateDoesNotDeleteLocalDataWhenOwnerRemoteIsNotReady() async throws {
         let harness = try TestHarness()
         let family = Family(name: "家族")
@@ -1039,19 +1103,25 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         name: String,
         familyID: UUID,
         bagID: UUID?,
-        zoneID: CKRecordZone.ID
+        zoneID: CKRecordZone.ID,
+        quantity: Int = 1,
+        expiryDate: Date? = nil,
+        createdAt: Date = Date(timeIntervalSince1970: 30),
+        updatedAt: Date? = nil
     ) -> CKRecord {
         let record = CKRecord(
             recordType: "Item",
             recordID: CKRecord.ID(recordName: "item-\(id.uuidString)", zoneID: zoneID)
         )
-        let createdAt = Date(timeIntervalSince1970: 30)
         record["id"] = id.uuidString as CKRecordValue
         record["name"] = name as CKRecordValue
         record["familyID"] = familyID.uuidString as CKRecordValue
-        record["quantity"] = 1 as CKRecordValue
+        record["quantity"] = quantity as CKRecordValue
+        if let expiryDate {
+            record["expiryDate"] = expiryDate as CKRecordValue
+        }
         record["createdAt"] = createdAt as CKRecordValue
-        record["updatedAt"] = createdAt as CKRecordValue
+        record["updatedAt"] = (updatedAt ?? createdAt) as CKRecordValue
         if let bagID {
             record["bagID"] = bagID.uuidString as CKRecordValue
         }
