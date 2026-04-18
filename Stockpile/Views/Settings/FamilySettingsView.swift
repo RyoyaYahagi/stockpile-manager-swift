@@ -384,11 +384,7 @@ struct FamilySettingsView: View {
             return
         }
 
-        if let shareURL = family.cloudKitShareURL {
-            presentShareActivity(for: shareURL)
-        } else {
-            prepareShareLinkAndPresentActivity()
-        }
+        prepareShareLinkAndPresentActivity()
     }
 
     private var requiresFamilyNameBeforeSharing: Bool {
@@ -420,8 +416,12 @@ struct FamilySettingsView: View {
             do {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 activeShare = try await sharingService.prepareShare(for: family)
+                let invitationURL = try await sharingService.prepareInvitationURL(
+                    for: family,
+                    preparedShare: activeShare
+                )
                 isStartingShare = false
-                presentPreparedShare()
+                presentPreparedShare(invitationURL: invitationURL)
                 await refreshParticipantDisplays()
             } catch {
                 isStartingShare = false
@@ -449,8 +449,8 @@ struct FamilySettingsView: View {
         }
     }
 
-    private func presentPreparedShare() {
-        if let shareURL = activeShare?.url ?? family.cloudKitShareURL {
+    private func presentPreparedShare(invitationURL: URL? = nil) {
+        if let shareURL = invitationURL ?? activeShare?.url ?? family.cloudKitShareURL {
             presentShareActivity(for: shareURL)
             return
         }

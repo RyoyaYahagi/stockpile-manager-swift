@@ -149,6 +149,11 @@
 "CloudKit上のレコードが見つかりません。" = "The CloudKit record could not be found.";
 "CloudKit共有メタデータの読み取りに失敗しました。" = "Failed to read CloudKit share metadata.";
 "CloudKit共有レコードの作成に失敗しました。" = "Failed to create the CloudKit share record.";
+"iCloud にサインインしてから、もう一度お試しください。" = "Please sign in to iCloud and try again.";
+"iCloud にサインインしてから、もう一度お試しください。シミュレーターでは設定アプリで Apple Account にログインする必要があります。" = "Please sign in to iCloud and try again. In Simulator, sign in to your Apple Account in the Settings app.";
+"iCloud アカウントの状態を確認できませんでした。しばらくしてからもう一度お試しください。" = "We couldn't verify your iCloud account status. Please try again shortly.";
+"このデバイスでは iCloud 共有を利用できません。" = "iCloud sharing isn't available on this device.";
+"招待用の共有リンクを作成できませんでした。" = "Couldn't create an invitation share link.";
 "Stockpile の家族共有リンクです。" = "This is a Stockpile family sharing link.";
 "Yahoo" = "Yahoo";
 "APIキーが設定されていません" = "API key is not configured.";

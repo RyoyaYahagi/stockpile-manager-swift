@@ -169,6 +169,24 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertFalse(family.cloudKitHasRemoteBaseline)
     }
 
+    func testPrepareShareFailsWithActionableMessageWhenICloudAccountIsMissing() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "防災")
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.accountStatusValue = .noAccount
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        await XCTAssertThrowsErrorAsync(try await service.prepareShare(for: family)) { error in
+            guard case let CloudKitSharingError.authenticatedAccountRequired(isSimulator) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertFalse(isSimulator)
+        }
+    }
+
     func testPrepareShareCanReturnPendingShareWhenVerificationIsDeferred() async throws {
         let harness = try TestHarness()
         let family = Family(name: "防災")
@@ -1129,10 +1147,19 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
     var modifyCalls: [ModifyCall] = []
     var privateFamilyFetchFailureCount = 0
     var fetchRecordCallCount = 0
+    var accountStatusValue: CKAccountStatus = .available
+    var accountStatusError: Error?
     var fetchRecordsHandler: ((String, CKRecordZone.ID, FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
     var fetchRecordHandler: ((CKRecord.ID, FamilyCloudKitDatabaseScope) throws -> CKRecord)?
     var modifyHandler: (([CKRecord], [CKRecord.ID], FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
     var acceptHandler: ((CKShare.Metadata) throws -> CKShare)?
+
+    func accountStatus() async throws -> CKAccountStatus {
+        if let accountStatusError {
+            throw accountStatusError
+        }
+        return accountStatusValue
+    }
 
     func ensureZoneExists(_ zoneID: CKRecordZone.ID) async throws {
         ensuredZoneIDs.append(zoneID)

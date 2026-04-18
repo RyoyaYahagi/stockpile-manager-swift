@@ -143,6 +143,7 @@ final class CloudKitFamilySharingService {
     }
 
     func prepareShare(for family: Family) async throws -> CKShare {
+        try await ensureCloudKitAccountAvailable()
         let retryIntervalsInNanoseconds: [UInt64] = [
             0,
             750_000_000,
@@ -185,6 +186,38 @@ final class CloudKitFamilySharingService {
         throw normalizeSharePreparationError(
             lastError ?? CloudKitSharingError.sharePreparationFailed(detail: L10n.string("不明なエラー"))
         )
+    }
+
+    func prepareInvitationURL(
+        for family: Family,
+        preparedShare: CKShare? = nil
+    ) async throws -> URL {
+        let share = if let preparedShare {
+            preparedShare
+        } else {
+            try await prepareShare(for: family)
+        }
+
+        if #available(iOS 18.0, *) {
+            do {
+                return try await prepareOneTimeInvitationURL(for: family, share: share)
+            } catch {
+                logShareError(error, phase: "prepareInvitationURL.oneTime")
+            }
+        }
+
+        let hydratedShare = try await hydrateShareURLIfNeeded(share, for: family)
+        if let shareURL = hydratedShare.url {
+            updatePreparedShareState(
+                for: family,
+                shareURL: shareURL,
+                pendingSync: family.cloudKitPendingSync,
+                hasRemoteBaseline: family.cloudKitHasRemoteBaseline
+            )
+            return shareURL
+        }
+
+        throw CloudKitSharingError.invitationURLUnavailable
     }
 
     private func prepareShare(
@@ -286,6 +319,52 @@ final class CloudKitFamilySharingService {
         }
 
         return share
+    }
+
+    @available(iOS 18.0, *)
+    private func prepareOneTimeInvitationURL(for family: Family, share: CKShare) async throws -> URL {
+        let participant = CKShare.Participant.oneTimeURLParticipant()
+        participant.permission = .readWrite
+        share.addParticipant(participant)
+
+        let savedRecord = try await save(record: share, scope: .privateDatabase)
+        let savedShare = (savedRecord as? CKShare) ?? share
+        await cacheShareParticipants(from: savedShare, for: family)
+
+        if let invitationURL = oneTimeInvitationURL(from: savedShare, participantID: participant.participantID) {
+            updatePreparedShareState(
+                for: family,
+                shareURL: invitationURL,
+                pendingSync: family.cloudKitPendingSync,
+                hasRemoteBaseline: family.cloudKitHasRemoteBaseline
+            )
+            logger.notice("Generated one-time CloudKit invitation URL")
+            return invitationURL
+        }
+
+        if let refetchedShare = try await fetchZoneWideShare(for: family),
+           let invitationURL = oneTimeInvitationURL(from: refetchedShare, participantID: participant.participantID) {
+            updatePreparedShareState(
+                for: family,
+                shareURL: invitationURL,
+                pendingSync: family.cloudKitPendingSync,
+                hasRemoteBaseline: family.cloudKitHasRemoteBaseline
+            )
+            logger.notice("Recovered one-time CloudKit invitation URL after refetch")
+            return invitationURL
+        }
+
+        throw CloudKitSharingError.invitationURLUnavailable
+    }
+
+    @available(iOS 18.0, *)
+    private func oneTimeInvitationURL(from share: CKShare, participantID: String) -> URL? {
+        let selector = NSSelectorFromString("oneTimeURLForParticipantID:")
+        guard share.responds(to: selector),
+              let unmanagedURL = share.perform(selector, with: participantID) else {
+            return nil
+        }
+        return unmanagedURL.takeUnretainedValue() as? URL
     }
 
     @discardableResult
@@ -414,6 +493,7 @@ final class CloudKitFamilySharingService {
 
     func syncFamilyDataToCloudKit(for family: Family) async throws {
         guard family.isCloudKitSharedFamily else { return }
+        try await ensureCloudKitAccountAvailable()
         try attachOrphanLocalDataIfNeeded(to: family)
         LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
 
@@ -532,6 +612,7 @@ final class CloudKitFamilySharingService {
 
     func syncFamilyStateFromCloudKit(for family: Family) async throws {
         guard family.isCloudKitSharedFamily else { return }
+        try await ensureCloudKitAccountAvailable()
         let shouldPromotePendingSharedFamilyOnSuccess =
             family.cloudKitDatabaseScope == .sharedDatabase
             && family.cloudKitPendingSync
@@ -562,6 +643,7 @@ final class CloudKitFamilySharingService {
     }
 
     func fetchRemoteRecordCounts(for family: Family) async throws -> RemoteRecordCounts {
+        try await ensureCloudKitAccountAvailable()
         let targetZoneID = zoneID(for: family)
         let targetScope = databaseScope(for: family)
         async let familyRecords = fetchRecords(
@@ -592,6 +674,7 @@ final class CloudKitFamilySharingService {
         forceRefresh: Bool = false
     ) async throws -> [ShareParticipantDisplay] {
         guard family.shareState != .localOnly else { return [] }
+        try await ensureCloudKitAccountAvailable()
         let cacheKey = shareParticipantsCacheKey(for: family)
 
         if !forceRefresh,
@@ -1020,10 +1103,15 @@ final class CloudKitFamilySharingService {
     }
 
     private func normalizeSharePreparationError(_ error: Error) -> Error {
+        let normalizedError = normalizeCloudKitAccessError(error)
+        if normalizedError is CloudKitSharingError {
+            return normalizedError
+        }
+
         if shouldRetrySharePreparation(after: error) {
             return CloudKitSharingError.sharePreparationFailed(detail: makeShareErrorDetail(from: error))
         }
-        return error
+        return normalizedError
     }
 
     private func shouldAllowDeferredSharePreparation(after error: Error) -> Bool {
@@ -1070,6 +1158,53 @@ final class CloudKitFamilySharingService {
         }
 
         return nil
+    }
+
+    private func ensureCloudKitAccountAvailable() async throws {
+        do {
+            switch try await backend.accountStatus() {
+            case .available:
+                return
+            case .noAccount:
+                throw CloudKitSharingError.authenticatedAccountRequired(
+                    isSimulator: Self.isRunningInSimulatorApp
+                )
+            case .restricted:
+                throw CloudKitSharingError.iCloudAccountRestricted
+            case .couldNotDetermine:
+                throw CloudKitSharingError.iCloudAccountTemporarilyUnavailable
+            case .temporarilyUnavailable:
+                throw CloudKitSharingError.iCloudAccountTemporarilyUnavailable
+            @unknown default:
+                throw CloudKitSharingError.iCloudAccountTemporarilyUnavailable
+            }
+        } catch {
+            throw normalizeCloudKitAccessError(error)
+        }
+    }
+
+    private func normalizeCloudKitAccessError(_ error: Error) -> Error {
+        if let sharingError = error as? CloudKitSharingError {
+            return sharingError
+        }
+
+        if let ckError = error as? CKError,
+           ckError.code == .notAuthenticated {
+            return CloudKitSharingError.authenticatedAccountRequired(
+                isSimulator: Self.isRunningInSimulatorApp
+            )
+        }
+
+        let normalizedDescription = error.localizedDescription.lowercased()
+        if normalizedDescription.contains("requires an authenticated account")
+            || normalizedDescription.contains("not authenticated")
+            || normalizedDescription.contains("sign in to icloud") {
+            return CloudKitSharingError.authenticatedAccountRequired(
+                isSimulator: Self.isRunningInSimulatorApp
+            )
+        }
+
+        return error
     }
 
     private func makeShareErrorDetail(from error: Error) -> String {
@@ -2051,6 +2186,7 @@ enum CloudKitSharingDiagnostics {
 
 @MainActor
 protocol CloudKitFamilySharingBackend {
+    func accountStatus() async throws -> CKAccountStatus
     func ensureZoneExists(_ zoneID: CKRecordZone.ID) async throws
     func fetchRecords(
         recordType: String,
@@ -2075,6 +2211,18 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
 
     init(container: CKContainer) {
         self.container = container
+    }
+
+    func accountStatus() async throws -> CKAccountStatus {
+        try await withCheckedThrowingContinuation { continuation in
+            container.accountStatus { status, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: status)
+                }
+            }
+        }
     }
 
     func ensureZoneExists(_ zoneID: CKRecordZone.ID) async throws {
@@ -2344,6 +2492,10 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
 }
 
 enum CloudKitSharingError: LocalizedError, Equatable {
+    case authenticatedAccountRequired(isSimulator: Bool)
+    case iCloudAccountTemporarilyUnavailable
+    case iCloudAccountRestricted
+    case invitationURLUnavailable
     case invalidShareRecord
     case invalidShareMetadata
     case familyRecordNotFound
@@ -2353,6 +2505,16 @@ enum CloudKitSharingError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
+        case .authenticatedAccountRequired(let isSimulator):
+            return isSimulator
+                ? L10n.string("iCloud にサインインしてから、もう一度お試しください。シミュレーターでは設定アプリで Apple Account にログインする必要があります。")
+                : L10n.string("iCloud にサインインしてから、もう一度お試しください。")
+        case .iCloudAccountTemporarilyUnavailable:
+            return L10n.string("iCloud アカウントの状態を確認できませんでした。しばらくしてからもう一度お試しください。")
+        case .iCloudAccountRestricted:
+            return L10n.string("このデバイスでは iCloud 共有を利用できません。")
+        case .invitationURLUnavailable:
+            return L10n.string("招待用の共有リンクを作成できませんでした。")
         case .invalidShareRecord:
             return L10n.string("CloudKit共有レコードの作成に失敗しました。")
         case .invalidShareMetadata:
