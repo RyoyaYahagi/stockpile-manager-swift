@@ -216,6 +216,38 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertFalse(family.cloudKitHasRemoteBaseline)
     }
 
+    func testPrepareShareAutomaticallyAllowsPendingUploadOnTestFlightBuild() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "防災")
+        let bag = Bag(name: "非常袋")
+        let item = Item(name: "水", quantity: 3)
+        bag.family = family
+        item.family = family
+        item.bag = bag
+        harness.context.insert(family)
+        harness.context.insert(bag)
+        harness.context.insert(item)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordHandler = { _, _ in
+            throw CloudKitSharingError.recordNotFound
+        }
+        let service = CloudKitFamilySharingService(
+            modelContext: harness.context,
+            backend: backend,
+            sharePreparationRuntime: CloudKitSharePreparationRuntime(
+                isSimulatorApp: false,
+                isTestFlightBuild: true
+            )
+        )
+
+        _ = try await service.prepareShare(for: family)
+
+        XCTAssertTrue(family.cloudKitPendingSync)
+        XCTAssertFalse(family.cloudKitHasRemoteBaseline)
+    }
+
     func testVerifyCloudKitUploadUsesCurrentFamilyDatabaseScope() async throws {
         let harness = try TestHarness()
         let family = Family(name: "共有家族")

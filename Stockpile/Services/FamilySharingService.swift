@@ -3,6 +3,34 @@ import SwiftData
 import CloudKit
 import OSLog
 
+struct CloudKitSharePreparationRuntime {
+    let isSimulatorApp: Bool
+    let isTestFlightBuild: Bool
+
+    var shouldAllowDeferredSharePreparationAutomatically: Bool {
+        isSimulatorApp || isTestFlightBuild
+    }
+
+    static func live(
+        bundle: Bundle = .main,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> CloudKitSharePreparationRuntime {
+        let isSimulatorApp = environment["SIMULATOR_UDID"] != nil
+            && environment["XCTestConfigurationFilePath"] == nil
+        let usesSandboxReceipt = bundle.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+        #if DEBUG
+        let isDebugBuild = true
+        #else
+        let isDebugBuild = false
+        #endif
+
+        return CloudKitSharePreparationRuntime(
+            isSimulatorApp: isSimulatorApp,
+            isTestFlightBuild: !isDebugBuild && usesSandboxReceipt
+        )
+    }
+}
+
 @MainActor
 final class CloudKitFamilySharingService {
     enum SharePreparationVerificationPolicy {
@@ -131,15 +159,18 @@ final class CloudKitFamilySharingService {
     private let modelContext: ModelContext
     private let backend: any CloudKitFamilySharingBackend
     private let sharePreparationVerificationPolicy: SharePreparationVerificationPolicy
+    private let sharePreparationRuntime: CloudKitSharePreparationRuntime
 
     init(
         modelContext: ModelContext,
         backend: any CloudKitFamilySharingBackend = DefaultCloudKitFamilySharingBackend(container: .default()),
-        sharePreparationVerificationPolicy: SharePreparationVerificationPolicy = .automatic
+        sharePreparationVerificationPolicy: SharePreparationVerificationPolicy = .automatic,
+        sharePreparationRuntime: CloudKitSharePreparationRuntime = .live()
     ) {
         self.modelContext = modelContext
         self.backend = backend
         self.sharePreparationVerificationPolicy = sharePreparationVerificationPolicy
+        self.sharePreparationRuntime = sharePreparationRuntime
     }
 
     func prepareShare(for family: Family) async throws -> CKShare {
@@ -1178,16 +1209,12 @@ final class CloudKitFamilySharingService {
     private var resolvedSharePreparationVerificationPolicy: SharePreparationVerificationPolicy {
         switch sharePreparationVerificationPolicy {
         case .automatic:
-            return Self.isRunningInSimulatorApp ? .allowPendingUpload : .strict
+            return sharePreparationRuntime.shouldAllowDeferredSharePreparationAutomatically
+                ? .allowPendingUpload
+                : .strict
         case .strict, .allowPendingUpload:
             return sharePreparationVerificationPolicy
         }
-    }
-
-    private static var isRunningInSimulatorApp: Bool {
-        let environment = ProcessInfo.processInfo.environment
-        return environment["SIMULATOR_UDID"] != nil
-            && environment["XCTestConfigurationFilePath"] == nil
     }
 
     private func fetchExistingShareAfterTransientFailure(for family: Family) async throws -> CKShare? {
@@ -1214,7 +1241,7 @@ final class CloudKitFamilySharingService {
                 return
             case .noAccount:
                 throw CloudKitSharingError.authenticatedAccountRequired(
-                    isSimulator: Self.isRunningInSimulatorApp
+                    isSimulator: sharePreparationRuntime.isSimulatorApp
                 )
             case .restricted:
                 throw CloudKitSharingError.iCloudAccountRestricted
@@ -1238,7 +1265,7 @@ final class CloudKitFamilySharingService {
         if let ckError = error as? CKError,
            ckError.code == .notAuthenticated {
             return CloudKitSharingError.authenticatedAccountRequired(
-                isSimulator: Self.isRunningInSimulatorApp
+                isSimulator: sharePreparationRuntime.isSimulatorApp
             )
         }
 
@@ -1247,7 +1274,7 @@ final class CloudKitFamilySharingService {
             || normalizedDescription.contains("not authenticated")
             || normalizedDescription.contains("sign in to icloud") {
             return CloudKitSharingError.authenticatedAccountRequired(
-                isSimulator: Self.isRunningInSimulatorApp
+                isSimulator: sharePreparationRuntime.isSimulatorApp
             )
         }
 
