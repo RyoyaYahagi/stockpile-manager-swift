@@ -336,7 +336,7 @@ struct FamilySettingsView: View {
         }
         .sheet(isPresented: $showShareManagementSheet, onDismiss: {
             activeShare = nil
-            Task {
+            Task { @MainActor in
                 await refreshParticipantDisplays(forceRefresh: true)
             }
         }) {
@@ -412,7 +412,7 @@ struct FamilySettingsView: View {
     private func prepareShareLinkAndPresentActivity() {
         isStartingShare = true
 
-        Task {
+        Task { @MainActor in
             do {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 activeShare = try await sharingService.prepareShare(for: family)
@@ -434,7 +434,7 @@ struct FamilySettingsView: View {
     private func openShareManagement() {
         isOpeningShareManagement = true
 
-        Task {
+        Task { @MainActor in
             do {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 activeShare = try await sharingService.prepareShare(for: family)
@@ -473,7 +473,7 @@ struct FamilySettingsView: View {
     }
 
     private func leaveFamily() {
-        Task {
+        Task { @MainActor in
             do {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 try await sharingService.leaveFamily(family)
@@ -488,7 +488,7 @@ struct FamilySettingsView: View {
     private func syncFamilyDataNow() {
         isRefreshingFamilyData = true
 
-        Task {
+        Task { @MainActor in
             defer { isRefreshingFamilyData = false }
 
             do {
@@ -519,7 +519,7 @@ struct FamilySettingsView: View {
             """
         )
 
-        Task {
+        Task { @MainActor in
             defer { isSavingFamilyDataToCloud = false }
 
             do {
@@ -540,6 +540,7 @@ struct FamilySettingsView: View {
         }
     }
 
+    @MainActor
     private func autoSyncFamilyStateIfPossible() async {
         guard family.shareState != .localOnly else { return }
         guard autoSyncedFamilyID != family.id else { return }
@@ -553,6 +554,7 @@ struct FamilySettingsView: View {
         }
     }
 
+    @MainActor
     private func refreshParticipantDisplays(forceRefresh: Bool = false) async {
         guard usesCloudKitParticipantList else {
             participantDisplays = []

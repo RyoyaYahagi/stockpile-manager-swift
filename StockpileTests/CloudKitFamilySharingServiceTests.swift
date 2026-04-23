@@ -87,6 +87,43 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertEqual(capturedSharePermission, CKShare.ParticipantPermission.none)
     }
 
+    func testPrepareShareDoesNotReturnExistingShareWhenRemoteDataCannotBeVerified() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有済み")
+        family.cloudKitDatabaseScope = .privateDatabase
+        family.cloudKitPendingSync = false
+        family.cloudKitHasRemoteBaseline = true
+        family.cloudKitZoneName = "existing-zone"
+        family.cloudKitZoneOwnerName = CKCurrentUserDefaultName
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordCallCount = 0
+        backend.fetchRecordHandler = { recordID, scope in
+            XCTAssertEqual(scope, .privateDatabase)
+            backend.fetchRecordCallCount += 1
+
+            if recordID.recordName == CKRecordNameZoneWideShare {
+                return CKShare(recordZoneID: recordID.zoneID)
+            }
+
+            throw CloudKitSharingError.recordNotFound
+        }
+
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        await XCTAssertThrowsErrorAsync(try await service.prepareShare(for: family)) { error in
+            guard case CloudKitSharingError.shareDataNotUploaded = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        XCTAssertFalse(backend.modifyCalls.isEmpty)
+        XCTAssertTrue(family.cloudKitPendingSync)
+        XCTAssertFalse(family.cloudKitHasRemoteBaseline)
+    }
+
     func testPrepareSharePerformsPostShareSyncAfterShareIsSaved() async throws {
         CloudKitSharingDiagnostics.clear()
         let harness = try TestHarness()
@@ -216,7 +253,7 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertFalse(family.cloudKitHasRemoteBaseline)
     }
 
-    func testPrepareShareAutomaticallyAllowsPendingUploadOnTestFlightBuild() async throws {
+    func testPrepareShareRequiresUploadVerificationOnTestFlightBuild() async throws {
         let harness = try TestHarness()
         let family = Family(name: "防災")
         let bag = Bag(name: "非常袋")
@@ -242,7 +279,11 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
             )
         )
 
-        _ = try await service.prepareShare(for: family)
+        await XCTAssertThrowsErrorAsync(try await service.prepareShare(for: family)) { error in
+            guard case CloudKitSharingError.shareDataNotUploaded = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
 
         XCTAssertTrue(family.cloudKitPendingSync)
         XCTAssertFalse(family.cloudKitHasRemoteBaseline)

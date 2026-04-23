@@ -8,7 +8,9 @@ struct CloudKitSharePreparationRuntime {
     let isTestFlightBuild: Bool
 
     var shouldAllowDeferredSharePreparationAutomatically: Bool {
-        isSimulatorApp || isTestFlightBuild
+        // TestFlight uses Production CloudKit, so a share link must not be returned
+        // until Family/Bag/Item records are verified in CloudKit.
+        isSimulatorApp
     }
 
     static func live(
@@ -229,7 +231,7 @@ final class CloudKitFamilySharingService {
             try await prepareShare(for: family)
         }
 
-        if #available(iOS 18.0, *) {
+        if #available(iOS 26.0, *) {
             do {
                 return try await prepareOneTimeInvitationURL(for: family, share: share)
             } catch {
@@ -256,6 +258,12 @@ final class CloudKitFamilySharingService {
         resettingMetadataOnFailure shouldResetMetadataOnFailure: Bool
     ) async throws -> CKShare {
         ensureCloudKitMetadata(for: family)
+
+        if shouldTryExistingShareFastPath(for: family),
+           let existingShare = try await fetchExistingShare(for: family, scope: .privateDatabase) {
+            return try await finalizePreparedShare(existingShare, for: family)
+        }
+
         try await syncFamilyDataToCloudKit(for: family)
         try await ensureFamilyRecordExists(for: family)
 
@@ -287,6 +295,22 @@ final class CloudKitFamilySharingService {
     }
 
     private func finalizePreparedShare(_ share: CKShare, for family: Family) async throws -> CKShare {
+        if shouldReturnPreparedShareImmediately(for: family) {
+            updatePreparedShareState(
+                for: family,
+                shareURL: share.url ?? family.cloudKitShareURL,
+                pendingSync: family.cloudKitPendingSync,
+                hasRemoteBaseline: family.cloudKitHasRemoteBaseline
+            )
+            await cacheShareParticipants(from: share, for: family)
+
+            if family.cloudKitPendingSync || !family.cloudKitHasRemoteBaseline {
+                scheduleDeferredSharePreparationCompletion(for: family)
+            }
+
+            return share
+        }
+
         let preparedShare = try await hydrateShareURLIfNeeded(share, for: family)
         updatePreparedShareState(
             for: family,
@@ -331,6 +355,40 @@ final class CloudKitFamilySharingService {
         }
     }
 
+    private func shouldTryExistingShareFastPath(for family: Family) -> Bool {
+        resolvedSharePreparationVerificationPolicy == .allowPendingUpload
+    }
+
+    private func shouldReturnPreparedShareImmediately(for family: Family) -> Bool {
+        resolvedSharePreparationVerificationPolicy == .allowPendingUpload
+    }
+
+    private func scheduleDeferredSharePreparationCompletion(for family: Family) {
+        Task { @MainActor in
+            do {
+                try await syncFamilyDataToCloudKit(for: family)
+                try await ensureFamilyRecordExists(for: family)
+                try await verifyCloudKitUpload(for: family)
+                updatePreparedShareState(
+                    for: family,
+                    shareURL: family.cloudKitShareURL,
+                    pendingSync: false,
+                    hasRemoteBaseline: true
+                )
+                await logRemoteCountsForDiagnostics(event: "共有リンク準備完了(非同期)", family: family)
+            } catch {
+                logDiagnostics(
+                    event: "共有リンクの非同期検証を継続",
+                    family: family,
+                    extra: [
+                        "description": error.localizedDescription,
+                        "errorType": String(describing: type(of: error))
+                    ]
+                )
+            }
+        }
+    }
+
     private func hydrateShareURLIfNeeded(_ share: CKShare, for family: Family) async throws -> CKShare {
         guard share.url == nil else { return share }
 
@@ -352,7 +410,7 @@ final class CloudKitFamilySharingService {
         return share
     }
 
-    @available(iOS 18.0, *)
+    @available(iOS 26.0, *)
     private func prepareOneTimeInvitationURL(for family: Family, share: CKShare) async throws -> URL {
         let existingParticipantIDs = Set(share.participants.compactMap(\.participantID))
         let participant = CKShare.Participant.oneTimeURLParticipant()
@@ -399,12 +457,12 @@ final class CloudKitFamilySharingService {
         throw CloudKitSharingError.invitationURLUnavailable
     }
 
-    @available(iOS 18.0, *)
+    @available(iOS 26.0, *)
     private func invitationParticipantID(
         in share: CKShare,
-        existingParticipantIDs: Set<String>,
-        fallbackParticipantID: String?
-    ) -> String? {
+        existingParticipantIDs: Set<CKShare.Participant.ID>,
+        fallbackParticipantID: CKShare.Participant.ID?
+    ) -> CKShare.Participant.ID? {
         if let fallbackParticipantID,
            !existingParticipantIDs.contains(fallbackParticipantID) {
             return fallbackParticipantID
@@ -415,14 +473,12 @@ final class CloudKitFamilySharingService {
             .first(where: { !existingParticipantIDs.contains($0) })
     }
 
-    @available(iOS 18.0, *)
-    private func oneTimeInvitationURL(from share: CKShare, participantID: String) -> URL? {
-        let selector = NSSelectorFromString("oneTimeURLForParticipantID:")
-        guard share.responds(to: selector),
-              let unmanagedURL = share.perform(selector, with: participantID) else {
-            return nil
-        }
-        return unmanagedURL.takeUnretainedValue() as? URL
+    @available(iOS 26.0, *)
+    private func oneTimeInvitationURL(
+        from share: CKShare,
+        participantID: CKShare.Participant.ID
+    ) -> URL? {
+        share.oneTimeURL(for: participantID)
     }
 
     @discardableResult
