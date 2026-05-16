@@ -33,9 +33,14 @@ final class Family {
     init(name: String, inviteCode: String? = nil) {
         self.id = UUID()
         self.name = name
-        self.inviteCode = inviteCode ?? ""
+        self.inviteCode = inviteCode ?? Family.generateInviteCode()
         self.createdAt = Date()
         self.updatedAt = createdAt
+    }
+
+    static func generateInviteCode() -> String {
+        let characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return String((0..<6).map { _ in characters.randomElement()! })
     }
 
     var resolvedMembers: [User] {
@@ -99,8 +104,17 @@ extension Family {
         !uniqueMembers.isEmpty || !resolvedBags.isEmpty || !resolvedItems.isEmpty
     }
 
+    var isFirebaseBacked: Bool {
+        guard let firebaseFamilyID else { return false }
+        return !firebaseFamilyID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var isVisibleInApp: Bool {
-        true
+        guard !firebaseContentHidden else { return false }
+        if APIConfig.isFirebaseDeveloperModeEnabled {
+            return true
+        }
+        return !isFirebaseBacked || isCloudKitSharedFamily
     }
 
     var cloudKitDatabaseScope: FamilyCloudKitDatabaseScope? {
@@ -157,10 +171,18 @@ extension Family {
     }
 
     var shouldHideLegacyDisplayDetails: Bool {
-        false
+        !APIConfig.isFirebaseDeveloperModeEnabled
+            && cloudKitDatabaseScope == .sharedDatabase
+            && shareState != .shared
     }
 
     var shouldShowMemberList: Bool {
+        if shouldHideLegacyDisplayDetails {
+            return false
+        }
+        if cloudKitDatabaseScope == .sharedDatabase && !APIConfig.isFirebaseDeveloperModeEnabled {
+            return false
+        }
         return true
     }
 
@@ -169,7 +191,7 @@ extension Family {
     }
 
     var displayNameForCurrentState: String {
-        name
+        shouldHideLegacyDisplayDetails ? L10n.string("データ同期中") : name
     }
 }
 
