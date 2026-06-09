@@ -10,11 +10,8 @@ struct SettingsView: View {
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     @AppStorage("app.tutorial.replayRequestToken")
     private var tutorialReplayRequestToken = 0
-    @AppStorage(APIConfig.firebaseDeveloperModeKey)
-    private var isFirebaseDeveloperModeEnabled = false
     @State private var cloudKitMemberCount: Int?
     @State private var isLoadingCloudKitMemberCount = false
-    @State private var firebaseToggleErrorMessage: String?
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
     }
@@ -141,15 +138,6 @@ struct SettingsView: View {
                 Text("データ")
             }
 
-            // 開発者オプション
-            Section {
-                Toggle("Firebase連携を有効化", isOn: $isFirebaseDeveloperModeEnabled)
-            } header: {
-                Text("開発者オプション")
-            } footer: {
-                Text("既定ではiCloudで同一Apple IDの端末間同期を行います。家族の別Apple IDと共有する場合は家族設定からiCloud共有リンクを作成します。Firebaseは検証用に明示的に有効化した場合のみ利用します。")
-            }
-
             // アプリ情報
             Section {
                 HStack {
@@ -167,26 +155,6 @@ struct SettingsView: View {
         .localizedRefresh()
         .task(id: memberCountRefreshKey) {
             await refreshCloudKitMemberCount()
-        }
-        .onChange(of: isFirebaseDeveloperModeEnabled) { _, isEnabled in
-            Task {
-                do {
-                    let sharingService = FamilySharingService(modelContext: modelContext)
-                    try await sharingService.applyFirebaseAvailability(isEnabled: isEnabled)
-                } catch {
-                    firebaseToggleErrorMessage = error.localizedDescription
-                }
-            }
-        }
-        .alert("Firebase連携の更新に失敗しました", isPresented: Binding(
-            get: { firebaseToggleErrorMessage != nil },
-            set: { if !$0 { firebaseToggleErrorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { firebaseToggleErrorMessage = nil }
-        } message: {
-            if let msg = firebaseToggleErrorMessage {
-                Text(msg)
-            }
         }
     }
 

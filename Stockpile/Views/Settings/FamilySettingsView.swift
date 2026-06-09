@@ -46,9 +46,6 @@ struct FamilySettingsView: View {
     }
 
     private var memberSectionFooter: String {
-        if family.shouldHideLegacyDisplayDetails {
-            return L10n.string("CloudKit共有のデータを同期中です。Firebase由来の過去メンバーは表示していません。")
-        }
         if usesCloudKitParticipantList {
             return isLoadingParticipants
                 ? L10n.string("iCloud共有の参加者を読み込んでいます")

@@ -1,13 +1,7 @@
 import Foundation
-import FirebaseCore
 
 /// API設定を管理する構造体
 struct APIConfig {
-    static let firebaseDeveloperModeKey = "developerOptions.firebase.enabled"
-
-    private static let firebaseConfigLock = NSLock()
-    nonisolated(unsafe) private static var firebaseConfigured = false
-
     private static func normalizedSecretValue(_ value: String?) -> String {
         let trimmed = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
@@ -133,60 +127,5 @@ struct APIConfig {
         }
         components.queryItems = queryItems
         return components.url
-    }
-
-    // MARK: - Firebase
-
-    /// Firebase を開発者オプションで有効化しているか
-    static var isFirebaseDeveloperModeEnabled: Bool {
-        UserDefaults.standard.bool(forKey: firebaseDeveloperModeKey)
-    }
-
-    /// GoogleService-Info.plist が同梱されているか
-    static var hasFirebaseConfigurationFile: Bool {
-        Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil
-    }
-
-    /// Firebase 機能が利用可能か
-    static var isFirebaseEnabled: Bool {
-        isFirebaseDeveloperModeEnabled && isFirebaseConfigured
-    }
-
-    /// Firebase SDKを必要時に初期化
-    static func configureFirebaseIfNeeded() {
-        firebaseConfigLock.lock()
-        defer { firebaseConfigLock.unlock() }
-
-        guard isFirebaseDeveloperModeEnabled else {
-            #if DEBUG
-            print("ℹ️ 開発者オプションがOFFのためFirebase初期化をスキップしました。")
-            #endif
-            return
-        }
-
-        guard !firebaseConfigured else { return }
-
-        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
-           let options = FirebaseOptions(contentsOfFile: path) {
-            FirebaseApp.configure(options: options)
-            firebaseConfigured = true
-            return
-        }
-
-        guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else {
-            #if DEBUG
-            print("⚠️ GoogleService-Info.plist が見つからないためFirebase初期化をスキップしました。")
-            #endif
-            return
-        }
-        FirebaseApp.configure()
-        firebaseConfigured = true
-    }
-
-    /// Firebase SDKが初期化済みか
-    static var isFirebaseConfigured: Bool {
-        firebaseConfigLock.lock()
-        defer { firebaseConfigLock.unlock() }
-        return firebaseConfigured
     }
 }

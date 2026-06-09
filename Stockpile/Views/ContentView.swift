@@ -148,7 +148,6 @@ struct ContentView: View {
         }
         .task {
             LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
-            await applyFirebaseAvailabilityPreference()
 
             if let pendingUserInfo = NotificationTapRelay.consumePending() {
                 handleNotificationTap(
@@ -169,7 +168,6 @@ struct ContentView: View {
             startTutorial(at: 0)
         }
         .task(id: currentFamily?.id) {
-            FamilyRealtimeSyncCoordinator.shared.activate(for: currentFamily)
             NotificationManager.shared.requestReschedule(using: modelContext)
         }
         .task(id: notificationRescheduleSignature) {
@@ -178,12 +176,10 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, newValue in
             guard newValue == .active else { return }
             LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
-            FamilyRealtimeSyncCoordinator.shared.requestImmediateSync()
             premiumAccessManager.refreshUsageState()
             requestRescheduleForCurrentData()
             resumeTutorialIfNeeded()
             Task {
-                await applyFirebaseAvailabilityPreference()
                 await premiumAccessManager.refresh()
                 await refreshCloudKitSharedFamilies()
             }
@@ -390,19 +386,6 @@ struct ContentView: View {
         shouldResumeTutorialAfterAction = false
         tutorialPendingAction = nil
         showFirstLaunchTutorial = true
-    }
-
-    private func applyFirebaseAvailabilityPreference() async {
-        do {
-            let sharingService = FamilySharingService(modelContext: modelContext)
-            try await sharingService.applyFirebaseAvailability(
-                isEnabled: APIConfig.isFirebaseDeveloperModeEnabled
-            )
-        } catch {
-            #if DEBUG
-            print("Firebase表示状態の適用に失敗: \(error)")
-            #endif
-        }
     }
 
     private func requestRescheduleForCurrentData() {

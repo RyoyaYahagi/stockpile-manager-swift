@@ -9,8 +9,6 @@ final class Family {
     var name: String = ""
     var inviteCode: String = ""
     var lineGroupId: String?
-    var firebaseFamilyID: String?
-    var firebaseContentHidden: Bool = false
     var cloudKitZoneName: String?
     var cloudKitZoneOwnerName: String?
     var cloudKitDatabaseScopeRawValue: String?
@@ -104,17 +102,8 @@ extension Family {
         !uniqueMembers.isEmpty || !resolvedBags.isEmpty || !resolvedItems.isEmpty
     }
 
-    var isFirebaseBacked: Bool {
-        guard let firebaseFamilyID else { return false }
-        return !firebaseFamilyID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
     var isVisibleInApp: Bool {
-        guard !firebaseContentHidden else { return false }
-        if APIConfig.isFirebaseDeveloperModeEnabled {
-            return true
-        }
-        return !isFirebaseBacked || isCloudKitSharedFamily
+        true
     }
 
     var cloudKitDatabaseScope: FamilyCloudKitDatabaseScope? {
@@ -171,18 +160,10 @@ extension Family {
     }
 
     var shouldHideLegacyDisplayDetails: Bool {
-        !APIConfig.isFirebaseDeveloperModeEnabled
-            && cloudKitDatabaseScope == .sharedDatabase
-            && shareState != .shared
+        false
     }
 
     var shouldShowMemberList: Bool {
-        if shouldHideLegacyDisplayDetails {
-            return false
-        }
-        if cloudKitDatabaseScope == .sharedDatabase && !APIConfig.isFirebaseDeveloperModeEnabled {
-            return false
-        }
         return true
     }
 
@@ -191,7 +172,7 @@ extension Family {
     }
 
     var displayNameForCurrentState: String {
-        shouldHideLegacyDisplayDetails ? L10n.string("データ同期中") : name
+        name
     }
 }
 

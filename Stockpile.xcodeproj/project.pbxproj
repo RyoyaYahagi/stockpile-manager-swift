@@ -46,10 +46,6 @@
 		A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000004 /* PremiumAccessManagerTests.swift */; };
 		A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000005 /* AppLocalizationTests.swift */; };
 		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
-		033F1A6A2C0A000100000001 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000011 /* FirebaseCore */; };
-		033F1A6A2C0A000100000002 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000012 /* FirebaseAuth */; };
-		033F1A6A2C0A000100000003 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 033F1A6A2C0A000100000013 /* FirebaseFirestore */; };
-		A30EF01C2F4A7B7800979C1A /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A30EF01B2F4A7B7800979C1A /* GoogleService-Info.plist */; };
 		FB0000000000000000000101 /* QRCodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000001 /* QRCodeGenerator.swift */; };
 		FB0000000000000000000102 /* InviteCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000002 /* InviteCodeView.swift */; };
 		FB0000000000000000000103 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000003 /* QRScannerView.swift */; };
@@ -115,7 +111,6 @@
 		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockpileRelease.entitlements; sourceTree = "<group>"; };
 		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		A30EF01B2F4A7B7800979C1A /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "SOURCE_ROOT"; };
 		FB0000000000000000000001 /* QRCodeGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeGenerator.swift; sourceTree = "<group>"; };
 		FB0000000000000000000002 /* InviteCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCodeView.swift; sourceTree = "<group>"; };
 		FB0000000000000000000003 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
@@ -126,9 +121,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				033F1A6A2C0A000100000001 /* FirebaseCore in Frameworks */,
-				033F1A6A2C0A000100000002 /* FirebaseAuth in Frameworks */,
-				033F1A6A2C0A000100000003 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -156,7 +148,6 @@
 			children = (
 				A3325EAE2F40023100E83F43 /* Info.plist */,
 				A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */,
-				A30EF01B2F4A7B7800979C1A /* GoogleService-Info.plist */,
 				303 /* App */,
 				304 /* Models */,
 				315 /* Localization */,
@@ -342,9 +333,6 @@
 			);
 			name = Stockpile;
 			packageProductDependencies = (
-				033F1A6A2C0A000100000011 /* FirebaseCore */,
-				033F1A6A2C0A000100000012 /* FirebaseAuth */,
-				033F1A6A2C0A000100000013 /* FirebaseFirestore */,
 			);
 			productName = Stockpile;
 			productReference = 100 /* Stockpile.app */;
@@ -403,7 +391,6 @@
 			);
 			mainGroup = 300;
 			packageReferences = (
-				033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			productRefGroup = 302 /* Products */;
 			projectDirPath = "";
@@ -802,34 +789,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 11.0.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		033F1A6A2C0A000100000011 /* FirebaseCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseCore;
-		};
-		033F1A6A2C0A000100000012 /* FirebaseAuth */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAuth;
-		};
-		033F1A6A2C0A000100000013 /* FirebaseFirestore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 033F1A6A2C0A000100000021 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseFirestore;
-		};
-/* End XCSwiftPackageProductDependency section */
 
 	};
 	rootObject = 600 /* Project object */;
