@@ -728,6 +728,22 @@ final class CloudKitFamilySharingService {
     func syncFamilyStateFromCloudKit(for family: Family) async throws {
         guard family.isCloudKitSharedFamily else { return }
         try await ensureCloudKitAccountAvailable()
+
+        // sharedDatabase の pending family で zoneOwnerName が未確定の場合、
+        // zoneID(for:) が参加者自身の CKCurrentUserDefaultName にフォールバックして
+        // 存在しない zone を参照してしまうため、同期をスキップしてログだけ残す。
+        // ownerName は acceptShare 成功時に保存されるため、次回 acceptShare が
+        // 再試行されることで正しく解決される。
+        if family.cloudKitDatabaseScope == .sharedDatabase,
+           family.cloudKitZoneOwnerName == nil {
+            logDiagnostics(
+                event: "共有スナップショット同期スキップ（ownerName未確定）",
+                family: family,
+                extra: ["reason": "cloudKitZoneOwnerName is nil; skipping to prevent wrong zone lookup"]
+            )
+            return
+        }
+
         let shouldPromotePendingSharedFamilyOnSuccess =
             family.cloudKitDatabaseScope == .sharedDatabase
             && family.cloudKitPendingSync
@@ -759,8 +775,8 @@ final class CloudKitFamilySharingService {
 
     func fetchRemoteRecordCounts(for family: Family) async throws -> RemoteRecordCounts {
         try await ensureCloudKitAccountAvailable()
-        let targetZoneID = zoneID(for: family)
         let targetScope = databaseScope(for: family)
+        let targetZoneID = try await readableZoneID(for: family, scope: targetScope)
         async let familyRecords = fetchRecords(
             forRecordType: Constants.familyRecordType,
             in: targetZoneID,
@@ -995,8 +1011,9 @@ final class CloudKitFamilySharingService {
             }
 
             do {
+                let readableZoneID = try await readableSharedZoneID(forAcceptedZoneID: zoneID)
                 return try await syncZoneToLocal(
-                    zoneID: zoneID,
+                    zoneID: readableZoneID,
                     scope: .sharedDatabase
                 )
             } catch {
@@ -1013,6 +1030,34 @@ final class CloudKitFamilySharingService {
         }
 
         throw lastError ?? CloudKitSharingError.invalidShareMetadata
+    }
+
+    private func readableSharedZoneID(forAcceptedZoneID acceptedZoneID: CKRecordZone.ID) async throws -> CKRecordZone.ID {
+        let sharedZoneIDs = try await backend.fetchAllRecordZoneIDs(scope: .sharedDatabase)
+        if let matchingZoneID = sharedZoneIDs.first(where: { $0.zoneName == acceptedZoneID.zoneName }) {
+            if matchingZoneID != acceptedZoneID {
+                CloudKitSharingDiagnostics.log(
+                    event: "共有受理ゾーンIDをsharedCloudDatabaseから解決",
+                    details: [
+                        "acceptedZoneName": acceptedZoneID.zoneName,
+                        "acceptedOwnerName": acceptedZoneID.ownerName,
+                        "resolvedZoneName": matchingZoneID.zoneName,
+                        "resolvedOwnerName": matchingZoneID.ownerName
+                    ]
+                )
+            }
+            return matchingZoneID
+        }
+
+        CloudKitSharingDiagnostics.log(
+            event: "共有受理ゾーンIDを受理結果で継続",
+            details: [
+                "zoneName": acceptedZoneID.zoneName,
+                "ownerName": acceptedZoneID.ownerName,
+                "sharedZoneCount": String(sharedZoneIDs.count)
+            ]
+        )
+        return acceptedZoneID
     }
 
     private func fetchOrCreateFamily(id: UUID, fallbackName: String) throws -> Family {
@@ -1521,14 +1566,72 @@ final class CloudKitFamilySharingService {
     }
 
     private func zoneID(for family: Family) -> CKRecordZone.ID {
-        CKRecordZone.ID(
+        // sharedDatabase の family で ownerName が nil の場合、
+        // CKCurrentUserDefaultName（参加者自身のID）を使うと存在しない zone を参照してしまう。
+        // そのため sharedDatabase の場合は ownerName が確定している場合のみ組み立てる。
+        // privateDatabase の場合は CKCurrentUserDefaultName が正しいオーナーなので問題ない。
+        let resolvedOwnerName: String
+        if family.cloudKitDatabaseScope == .sharedDatabase,
+           let savedOwnerName = family.cloudKitZoneOwnerName {
+            resolvedOwnerName = savedOwnerName
+        } else if family.cloudKitDatabaseScope == .sharedDatabase {
+            // ownerName が未確定のまま呼ばれた場合はデバッグログを残す。
+            // 呼び出し元（syncFamilyStateFromCloudKit）でガードしているため
+            // 通常このパスには来ないが、防衛的に CKCurrentUserDefaultName を返す。
+            logger.error(
+                "zoneID(for:) called for sharedDatabase family with nil ownerName; using CKCurrentUserDefaultName as fallback which may be incorrect familyID=\(family.id.uuidString, privacy: .public)"
+            )
+            resolvedOwnerName = CKCurrentUserDefaultName
+        } else {
+            // privateDatabase: 自分がオーナーなので CKCurrentUserDefaultName で正しい
+            resolvedOwnerName = family.cloudKitZoneOwnerName ?? CKCurrentUserDefaultName
+        }
+        return CKRecordZone.ID(
             zoneName: family.cloudKitZoneName ?? "family-\(family.id.uuidString)",
-            ownerName: family.cloudKitZoneOwnerName ?? CKCurrentUserDefaultName
+            ownerName: resolvedOwnerName
         )
     }
 
     private func databaseScope(for family: Family) -> FamilyCloudKitDatabaseScope {
         family.cloudKitDatabaseScope ?? .privateDatabase
+    }
+
+    private func readableZoneID(
+        for family: Family,
+        scope: FamilyCloudKitDatabaseScope
+    ) async throws -> CKRecordZone.ID {
+        let savedZoneID = zoneID(for: family)
+        guard scope == .sharedDatabase else {
+            return savedZoneID
+        }
+
+        let sharedZoneIDs = try await backend.fetchAllRecordZoneIDs(scope: .sharedDatabase)
+        if let matchingZoneID = sharedZoneIDs.first(where: { $0.zoneName == savedZoneID.zoneName }) {
+            if matchingZoneID != savedZoneID {
+                logDiagnostics(
+                    event: "共有ゾーンIDをsharedCloudDatabaseから解決",
+                    family: family,
+                    extra: [
+                        "savedZoneName": savedZoneID.zoneName,
+                        "savedOwnerName": savedZoneID.ownerName,
+                        "resolvedZoneName": matchingZoneID.zoneName,
+                        "resolvedOwnerName": matchingZoneID.ownerName
+                    ]
+                )
+            }
+            return matchingZoneID
+        }
+
+        logDiagnostics(
+            event: "共有ゾーンIDを保存値で継続",
+            family: family,
+            extra: [
+                "zoneName": savedZoneID.zoneName,
+                "ownerName": savedZoneID.ownerName,
+                "sharedZoneCount": String(sharedZoneIDs.count)
+            ]
+        )
+        return savedZoneID
     }
 
     private func makeFamilyRecord(from family: Family) -> CKRecord {
@@ -2049,9 +2152,10 @@ final class CloudKitFamilySharingService {
 
     private func fetchRemoteSnapshotState(for family: Family) async throws -> RemoteSnapshotState {
         do {
+            let scope = databaseScope(for: family)
             let syncedFamily = try await syncZoneToLocal(
-                zoneID: zoneID(for: family),
-                scope: databaseScope(for: family)
+                zoneID: try await readableZoneID(for: family, scope: scope),
+                scope: scope
             )
             return .snapshotAvailable(syncedFamily)
         } catch {
@@ -2337,6 +2441,7 @@ enum CloudKitSharingDiagnostics {
 protocol CloudKitFamilySharingBackend {
     func accountStatus() async throws -> CKAccountStatus
     func ensureZoneExists(_ zoneID: CKRecordZone.ID) async throws
+    func fetchAllRecordZoneIDs(scope: FamilyCloudKitDatabaseScope) async throws -> [CKRecordZone.ID]
     func fetchRecords(
         recordType: String,
         in zoneID: CKRecordZone.ID,
@@ -2389,6 +2494,19 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
                 }
             }
             database.add(operation)
+        }
+    }
+
+    func fetchAllRecordZoneIDs(scope: FamilyCloudKitDatabaseScope) async throws -> [CKRecordZone.ID] {
+        let database = database(for: scope)
+        return try await withCheckedThrowingContinuation { continuation in
+            database.fetchAllRecordZones { zones, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: zones?.map(\.zoneID) ?? [])
+                }
+            }
         }
     }
 
@@ -3122,4 +3240,3 @@ private struct ItemContentKey: Hashable {
     let expiryDate: String?
     let locationNote: String?
 }
-

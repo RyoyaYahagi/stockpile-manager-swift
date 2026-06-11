@@ -356,6 +356,49 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertEqual(fetchedScopes, [.sharedDatabase, .sharedDatabase, .sharedDatabase])
     }
 
+    func testSharedFamilyRefreshResolvesZoneIDFromSharedDatabaseZones() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有家族")
+        family.cloudKitDatabaseScope = .sharedDatabase
+        family.cloudKitZoneName = "shared-zone"
+        family.cloudKitZoneOwnerName = "stale-owner"
+        family.cloudKitPendingSync = true
+        family.cloudKitHasRemoteBaseline = false
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let resolvedZoneID = CKRecordZone.ID(zoneName: "shared-zone", ownerName: "actual-owner")
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchAllRecordZoneIDsHandler = { scope in
+            XCTAssertEqual(scope, .sharedDatabase)
+            return [resolvedZoneID]
+        }
+
+        var fetchedZoneIDs: [CKRecordZone.ID] = []
+        backend.fetchRecordsHandler = { recordType, zoneID, scope in
+            XCTAssertEqual(scope, .sharedDatabase)
+            fetchedZoneIDs.append(zoneID)
+            switch recordType {
+            case "Family":
+                return [Self.makeFamilyRecord(id: family.id, name: family.name, zoneID: zoneID)]
+            case "Bag", "Item", "DeletionMarker":
+                return []
+            default:
+                return []
+            }
+        }
+
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        try await service.syncFamilyStateFromCloudKit(for: family)
+
+        XCTAssertEqual(backend.fetchAllRecordZoneIDsScopes, [.sharedDatabase])
+        XCTAssertTrue(fetchedZoneIDs.allSatisfy { $0 == resolvedZoneID })
+        XCTAssertEqual(family.cloudKitZoneOwnerName, "actual-owner")
+        XCTAssertFalse(family.cloudKitPendingSync)
+        XCTAssertTrue(family.cloudKitHasRemoteBaseline)
+    }
+
     func testCloudKitRecordQueryCompatibilityFallsBackForRecordNameQueryableError() {
         let error = NSError(
             domain: CKError.errorDomain,
@@ -1307,10 +1350,12 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
 
     var ensuredZoneIDs: [CKRecordZone.ID] = []
     var modifyCalls: [ModifyCall] = []
+    var fetchAllRecordZoneIDsScopes: [FamilyCloudKitDatabaseScope] = []
     var privateFamilyFetchFailureCount = 0
     var fetchRecordCallCount = 0
     var accountStatusValue: CKAccountStatus = .available
     var accountStatusError: Error?
+    var fetchAllRecordZoneIDsHandler: ((FamilyCloudKitDatabaseScope) throws -> [CKRecordZone.ID])?
     var fetchRecordsHandler: ((String, CKRecordZone.ID, FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
     var fetchRecordHandler: ((CKRecord.ID, FamilyCloudKitDatabaseScope) throws -> CKRecord)?
     var modifyHandler: (([CKRecord], [CKRecord.ID], FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
@@ -1325,6 +1370,14 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
 
     func ensureZoneExists(_ zoneID: CKRecordZone.ID) async throws {
         ensuredZoneIDs.append(zoneID)
+    }
+
+    func fetchAllRecordZoneIDs(scope: FamilyCloudKitDatabaseScope) async throws -> [CKRecordZone.ID] {
+        fetchAllRecordZoneIDsScopes.append(scope)
+        if let fetchAllRecordZoneIDsHandler {
+            return try fetchAllRecordZoneIDsHandler(scope)
+        }
+        return []
     }
 
     func fetchRecords(
