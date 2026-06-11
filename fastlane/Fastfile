@@ -89,16 +89,21 @@ def apply_versioning
 end
 
 def export_options_for_release
-  return {} unless match_configured?
+  options = {
+    signingStyle: match_configured? ? "manual" : "automatic",
+    teamID: DEFAULT_TEAM_ID
+  }
 
-  {
-    provisioningProfiles: {
+  if match_configured?
+    options[:provisioningProfiles] = {
       APP_IDENTIFIER => "match AppStore #{APP_IDENTIFIER}"
     }
-  }
+  end
+
+  options
 end
 
-def build_release_artifacts
+def build_release_artifacts(skip_package_ipa: false)
   build_app(
     project: PROJECT_PATH,
     scheme: SCHEME,
@@ -106,8 +111,11 @@ def build_release_artifacts
     clean: true,
     export_method: "app-store",
     export_options: export_options_for_release,
+    xcargs: "-allowProvisioningUpdates",
+    export_xcargs: "-allowProvisioningUpdates",
     output_directory: "build",
-    output_name: "#{SCHEME}.ipa"
+    output_name: "#{SCHEME}.ipa",
+    skip_package_ipa: skip_package_ipa
   )
 end
 
@@ -116,12 +124,12 @@ def csv_values(value)
 end
 
 platform :ios do
-  desc "Archive an App Store build without uploading"
+  desc "Archive an App Store build without uploading (ASC key not required)"
   lane :build do
     configure_ci_environment
     sync_release_signing
     apply_versioning
-    build_release_artifacts
+    build_release_artifacts(skip_package_ipa: true)
   end
 
   desc "Build and upload the app to TestFlight"
