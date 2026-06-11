@@ -5,6 +5,25 @@ import XCTest
 
 @MainActor
 final class CloudKitFamilySharingServiceTests: XCTestCase {
+    func testReleaseEntitlementsAllowInProcessOneTimeShareLinks() throws {
+        let testFileURL = URL(fileURLWithPath: #filePath)
+        let repositoryRootURL = testFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let entitlementsURL = repositoryRootURL
+            .appendingPathComponent("Stockpile")
+            .appendingPathComponent("StockpileRelease.entitlements")
+        let data = try Data(contentsOf: entitlementsURL)
+        let plist = try XCTUnwrap(
+            PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        )
+        let extendedShareAccess = try XCTUnwrap(
+            plist["com.apple.developer.icloud-extended-share-access"] as? [String]
+        )
+
+        XCTAssertTrue(extendedShareAccess.contains("InProcessOneTimeLinks"))
+    }
+
     func testPrepareShareSeedsPrivateZoneAndMarksBaseline() async throws {
         let harness = try TestHarness()
         let family = Family(name: "防災")

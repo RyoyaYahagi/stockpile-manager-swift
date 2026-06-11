@@ -416,10 +416,16 @@ struct FamilySettingsView: View {
             do {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                 activeShare = try await sharingService.prepareShare(for: family)
-                let invitationURL = try await sharingService.prepareInvitationURL(
-                    for: family,
-                    preparedShare: activeShare
-                )
+                let invitationURL: URL?
+                do {
+                    invitationURL = try await sharingService.prepareInvitationURL(
+                        for: family,
+                        preparedShare: activeShare
+                    )
+                } catch {
+                    print("[CloudKitShare] 招待リンクURLの取得に失敗。共有管理シートへフォールバック: \(error.localizedDescription)")
+                    invitationURL = nil
+                }
                 isStartingShare = false
                 presentPreparedShare(invitationURL: invitationURL)
                 await refreshParticipantDisplays()
