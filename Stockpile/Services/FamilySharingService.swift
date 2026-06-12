@@ -241,7 +241,8 @@ final class CloudKitFamilySharingService {
         }
 
         let hydratedShare = try await hydrateShareURLIfNeeded(share, for: family)
-        if let shareURL = hydratedShare.url {
+        if hydratedShare.publicPermission != .none,
+           let shareURL = hydratedShare.url {
             updatePreparedShareState(
                 for: family,
                 shareURL: shareURL,
@@ -430,7 +431,7 @@ final class CloudKitFamilySharingService {
            let invitationURL = oneTimeInvitationURL(from: savedShare, participantID: participantID) {
             updatePreparedShareState(
                 for: family,
-                shareURL: invitationURL,
+                shareURL: savedShare.url,
                 pendingSync: family.cloudKitPendingSync,
                 hasRemoteBaseline: family.cloudKitHasRemoteBaseline
             )
@@ -447,7 +448,7 @@ final class CloudKitFamilySharingService {
            let invitationURL = oneTimeInvitationURL(from: refetchedShare, participantID: participantID) {
             updatePreparedShareState(
                 for: family,
-                shareURL: invitationURL,
+                shareURL: refetchedShare.url,
                 pendingSync: family.cloudKitPendingSync,
                 hasRemoteBaseline: family.cloudKitHasRemoteBaseline
             )
@@ -839,12 +840,18 @@ final class CloudKitFamilySharingService {
     func leaveFamily(_ family: Family) async throws {
         guard family.cloudKitDatabaseScope == .sharedDatabase else { return }
         let cacheKey = shareParticipantsCacheKey(for: family)
+        try await deleteSharedZoneIfPossible(for: family)
         for marker in try fetchLocalDeletionMarkers(for: family) {
             modelContext.delete(marker)
         }
         modelContext.delete(family)
         try modelContext.save()
         await Self.shareParticipantsCache.removeValue(for: cacheKey)
+    }
+
+    private func deleteSharedZoneIfPossible(for family: Family) async throws {
+        let zoneID = try await readableZoneID(for: family, scope: .sharedDatabase)
+        try await backend.deleteZone(with: zoneID, scope: .sharedDatabase)
     }
 
     private func shareParticipantDisplays(from share: CKShare) -> [ShareParticipantDisplay] {
@@ -1180,11 +1187,6 @@ final class CloudKitFamilySharingService {
             return existingRecord as? CKShare
         } catch let error as CloudKitSharingError where error == .recordNotFound {
             return nil
-        } catch {
-            if shouldRetrySharePreparation(after: error) {
-                return nil
-            }
-            throw error
         }
     }
 
@@ -1414,8 +1416,18 @@ final class CloudKitFamilySharingService {
     }
 
     private func ensureFamilyRecordExists(for family: Family) async throws {
+        let scope = databaseScope(for: family)
+        let zoneID = zoneID(for: family)
+        let remoteState = try await fetchRemoteZoneState(zoneID: zoneID, scope: scope)
+        guard shouldUploadRecord(
+            localTimestamp: family.syncTimestamp,
+            remoteRecord: remoteState.familyRecord
+        ) else {
+            return
+        }
+
         let familyRecord = makeFamilyRecord(from: family)
-        try await modify(recordsToSave: [familyRecord], recordIDsToDelete: [], scope: .privateDatabase)
+        try await modify(recordsToSave: [familyRecord], recordIDsToDelete: [], scope: scope)
     }
 
     func verifyCloudKitUpload(for family: Family) async throws {
@@ -1785,18 +1797,18 @@ final class CloudKitFamilySharingService {
         zoneID: CKRecordZone.ID,
         scope: FamilyCloudKitDatabaseScope
     ) async throws -> RemoteZoneState {
-        async let familyRecords = fetchRecords(
-            forRecordType: Constants.familyRecordType,
+        async let familyRecords = fetchRecordsAllowingMissingRecordType(
+            Constants.familyRecordType,
             in: zoneID,
             scope: scope
         )
-        async let bagRecords = fetchRecords(
-            forRecordType: Constants.bagRecordType,
+        async let bagRecords = fetchRecordsAllowingMissingRecordType(
+            Constants.bagRecordType,
             in: zoneID,
             scope: scope
         )
-        async let itemRecords = fetchRecords(
-            forRecordType: Constants.itemRecordType,
+        async let itemRecords = fetchRecordsAllowingMissingRecordType(
+            Constants.itemRecordType,
             in: zoneID,
             scope: scope
         )
@@ -2456,6 +2468,10 @@ protocol CloudKitFamilySharingBackend {
         recordIDsToDelete: [CKRecord.ID],
         scope: FamilyCloudKitDatabaseScope
     ) async throws -> [CKRecord]
+    func deleteZone(
+        with zoneID: CKRecordZone.ID,
+        scope: FamilyCloudKitDatabaseScope
+    ) async throws
     func accept(metadata: CKShare.Metadata) async throws -> CKShare
 }
 
@@ -2712,6 +2728,29 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
                 switch result {
                 case .success:
                     continuation.resume(returning: savedRecords)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+            database.add(operation)
+        }
+    }
+
+    func deleteZone(
+        with zoneID: CKRecordZone.ID,
+        scope: FamilyCloudKitDatabaseScope
+    ) async throws {
+        let database = database(for: scope)
+
+        try await withCheckedThrowingContinuation { continuation in
+            let operation = CKModifyRecordZonesOperation(
+                recordZonesToSave: nil,
+                recordZoneIDsToDelete: [zoneID]
+            )
+            operation.modifyRecordZonesResultBlock = { result in
+                switch result {
+                case .success:
+                    continuation.resume(returning: ())
                 case .failure(let error):
                     continuation.resume(throwing: error)
                 }

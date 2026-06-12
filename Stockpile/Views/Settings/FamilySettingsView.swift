@@ -456,7 +456,7 @@ struct FamilySettingsView: View {
     }
 
     private func presentPreparedShare(invitationURL: URL? = nil) {
-        if let shareURL = invitationURL ?? activeShare?.url ?? family.cloudKitShareURL {
+        if let shareURL = invitationURL {
             presentShareActivity(for: shareURL)
             return
         }

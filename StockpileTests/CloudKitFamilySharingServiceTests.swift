@@ -479,6 +479,141 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertTrue(family.cloudKitHasRemoteBaseline)
     }
 
+    func testPrepareShareIgnoresMissingPrimaryRecordTypesDuringInitialProductionSchemaWarmup() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "防災")
+        let bag = Bag(name: "非常袋")
+        let item = Item(name: "水", quantity: 3)
+        bag.family = family
+        item.family = family
+        item.bag = bag
+        harness.context.insert(family)
+        harness.context.insert(bag)
+        harness.context.insert(item)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordsHandler = { recordType, zoneID, _ in
+            throw Self.makeMissingRecordTypePartialFailure(
+                recordType: recordType,
+                zoneID: zoneID
+            )
+        }
+        backend.fetchRecordHandler = { recordID, _ in
+            switch recordID.recordName {
+            case CKRecordNameZoneWideShare:
+                throw CloudKitSharingError.recordNotFound
+            case "family-\(family.id.uuidString)":
+                return Self.makeFamilyRecord(id: family.id, name: family.name, zoneID: recordID.zoneID)
+            case "bag-\(bag.id.uuidString)":
+                return Self.makeBagRecord(id: bag.id, name: bag.name, familyID: family.id, zoneID: recordID.zoneID)
+            case "item-\(item.id.uuidString)":
+                return Self.makeItemRecord(
+                    id: item.id,
+                    name: item.name,
+                    familyID: family.id,
+                    bagID: bag.id,
+                    zoneID: recordID.zoneID
+                )
+            default:
+                throw CloudKitSharingError.recordNotFound
+            }
+        }
+
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        _ = try await service.prepareShare(for: family)
+
+        XCTAssertFalse(family.cloudKitPendingSync)
+        XCTAssertTrue(family.cloudKitHasRemoteBaseline)
+        XCTAssertTrue(
+            backend.modifyCalls.contains { call in
+                Set(call.recordTypes).isSuperset(of: ["Family", "Bag", "Item"])
+            }
+        )
+    }
+
+    func testPrepareShareDoesNotOverwriteNewerRemoteFamilyRecordDuringEnsureStep() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "ローカル")
+        family.updatedAt = Date(timeIntervalSince1970: 100)
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordsHandler = { recordType, zoneID, _ in
+            switch recordType {
+            case "Family":
+                return [
+                    Self.makeFamilyRecord(
+                        id: family.id,
+                        name: "リモート",
+                        zoneID: zoneID,
+                        createdAt: Date(timeIntervalSince1970: 10),
+                        updatedAt: Date(timeIntervalSince1970: 200)
+                    )
+                ]
+            case "Bag", "Item", "DeletionMarker":
+                return []
+            default:
+                return []
+            }
+        }
+        backend.fetchRecordHandler = { recordID, _ in
+            switch recordID.recordName {
+            case CKRecordNameZoneWideShare:
+                throw CloudKitSharingError.recordNotFound
+            case "family-\(family.id.uuidString)":
+                return Self.makeFamilyRecord(
+                    id: family.id,
+                    name: "リモート",
+                    zoneID: recordID.zoneID,
+                    createdAt: Date(timeIntervalSince1970: 10),
+                    updatedAt: Date(timeIntervalSince1970: 200)
+                )
+            default:
+                throw CloudKitSharingError.recordNotFound
+            }
+        }
+
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        _ = try await service.prepareShare(for: family)
+
+        XCTAssertFalse(
+            backend.modifyCalls.contains { call in
+                call.recordTypes == ["Family"]
+            }
+        )
+    }
+
+    func testLeaveFamilyDeletesSharedZoneBeforeRemovingLocalFamily() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有家族")
+        family.cloudKitDatabaseScope = .sharedDatabase
+        family.cloudKitZoneName = "shared-zone"
+        family.cloudKitZoneOwnerName = "saved-owner"
+        family.cloudKitHasRemoteBaseline = true
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let resolvedZoneID = CKRecordZone.ID(zoneName: "shared-zone", ownerName: "actual-owner")
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchAllRecordZoneIDsHandler = { scope in
+            XCTAssertEqual(scope, .sharedDatabase)
+            return [resolvedZoneID]
+        }
+
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        try await service.leaveFamily(family)
+
+        XCTAssertEqual(backend.deletedZoneIDs.count, 1)
+        XCTAssertEqual(backend.deletedZoneIDs.first?.zoneID, resolvedZoneID)
+        XCTAssertEqual(backend.deletedZoneIDs.first?.scope, .sharedDatabase)
+        XCTAssertEqual(try harness.context.fetch(FetchDescriptor<Family>()).count, 0)
+    }
+
     func testSyncFamilyStateIgnoresMissingDeletionMarkerRecordType() async throws {
         let harness = try TestHarness()
         let family = Family(name: "共有準備中")
@@ -1201,16 +1336,21 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         CloudKitSharingDiagnostics.clear()
     }
 
-    private static func makeFamilyRecord(id: UUID, name: String, zoneID: CKRecordZone.ID) -> CKRecord {
+    private static func makeFamilyRecord(
+        id: UUID,
+        name: String,
+        zoneID: CKRecordZone.ID,
+        createdAt: Date = Date(timeIntervalSince1970: 10),
+        updatedAt: Date = Date(timeIntervalSince1970: 10)
+    ) -> CKRecord {
         let record = CKRecord(
             recordType: "Family",
             recordID: CKRecord.ID(recordName: "family-\(id.uuidString)", zoneID: zoneID)
         )
         record["id"] = id.uuidString as CKRecordValue
         record["name"] = name as CKRecordValue
-        let createdAt = Date(timeIntervalSince1970: 10)
         record["createdAt"] = createdAt as CKRecordValue
-        record["updatedAt"] = createdAt as CKRecordValue
+        record["updatedAt"] = updatedAt as CKRecordValue
         return record
     }
 
@@ -1349,6 +1489,7 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
     }
 
     var ensuredZoneIDs: [CKRecordZone.ID] = []
+    var deletedZoneIDs: [(zoneID: CKRecordZone.ID, scope: FamilyCloudKitDatabaseScope)] = []
     var modifyCalls: [ModifyCall] = []
     var fetchAllRecordZoneIDsScopes: [FamilyCloudKitDatabaseScope] = []
     var privateFamilyFetchFailureCount = 0
@@ -1359,6 +1500,7 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
     var fetchRecordsHandler: ((String, CKRecordZone.ID, FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
     var fetchRecordHandler: ((CKRecord.ID, FamilyCloudKitDatabaseScope) throws -> CKRecord)?
     var modifyHandler: (([CKRecord], [CKRecord.ID], FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
+    var deleteZoneHandler: ((CKRecordZone.ID, FamilyCloudKitDatabaseScope) throws -> Void)?
     var acceptHandler: ((CKShare.Metadata) throws -> CKShare)?
 
     func accountStatus() async throws -> CKAccountStatus {
@@ -1415,6 +1557,14 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
             return try modifyHandler(recordsToSave, recordIDsToDelete, scope)
         }
         return recordsToSave
+    }
+
+    func deleteZone(
+        with zoneID: CKRecordZone.ID,
+        scope: FamilyCloudKitDatabaseScope
+    ) async throws {
+        deletedZoneIDs.append((zoneID, scope))
+        try deleteZoneHandler?(zoneID, scope)
     }
 
     func accept(metadata: CKShare.Metadata) async throws -> CKShare {
