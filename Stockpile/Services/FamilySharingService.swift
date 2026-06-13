@@ -323,9 +323,6 @@ final class CloudKitFamilySharingService {
         await cacheShareParticipants(from: preparedShare, for: family)
 
         do {
-            // Share 作成後にもう一度 zone へ保存し、参加者側から既存レコードが見える状態を強める。
-            try await syncFamilyDataToCloudKit(for: family)
-            try await ensureFamilyRecordExists(for: family)
             try await verifyCloudKitUpload(for: family)
             updatePreparedShareState(
                 for: family,
@@ -333,7 +330,7 @@ final class CloudKitFamilySharingService {
                 pendingSync: false,
                 hasRemoteBaseline: true
             )
-            await logRemoteCountsForDiagnostics(event: "共有リンク準備完了", family: family)
+            scheduleRemoteCountsDiagnostics(event: "共有リンク準備完了", family: family)
             return preparedShare
         } catch {
             updatePreparedShareState(
@@ -359,10 +356,16 @@ final class CloudKitFamilySharingService {
 
     private func shouldTryExistingShareFastPath(for family: Family) -> Bool {
         resolvedSharePreparationVerificationPolicy == .allowPendingUpload
+            || isRemoteBaselineReady(for: family)
     }
 
     private func shouldReturnPreparedShareImmediately(for family: Family) -> Bool {
         resolvedSharePreparationVerificationPolicy == .allowPendingUpload
+            || isRemoteBaselineReady(for: family)
+    }
+
+    private func isRemoteBaselineReady(for family: Family) -> Bool {
+        family.cloudKitHasRemoteBaseline && !family.cloudKitPendingSync
     }
 
     private func scheduleDeferredSharePreparationCompletion(for family: Family) {
@@ -377,7 +380,7 @@ final class CloudKitFamilySharingService {
                     pendingSync: false,
                     hasRemoteBaseline: true
                 )
-                await logRemoteCountsForDiagnostics(event: "共有リンク準備完了(非同期)", family: family)
+                scheduleRemoteCountsDiagnostics(event: "共有リンク準備完了(非同期)", family: family)
             } catch {
                 logDiagnostics(
                     event: "共有リンクの非同期検証を継続",
@@ -1448,9 +1451,7 @@ final class CloudKitFamilySharingService {
             }
 
             do {
-                for recordID in recordIDs {
-                    _ = try await fetchRecord(with: recordID, scope: scope)
-                }
+                _ = try await fetchRecords(with: recordIDs, scope: scope)
 
                 logDiagnostics(
                     event: "共有ゾーン保存検証成功",
@@ -2013,6 +2014,10 @@ final class CloudKitFamilySharingService {
         try await backend.fetchRecord(with: recordID, scope: scope)
     }
 
+    private func fetchRecords(with recordIDs: [CKRecord.ID], scope: FamilyCloudKitDatabaseScope) async throws -> [CKRecord] {
+        try await backend.fetchRecords(with: recordIDs, scope: scope)
+    }
+
     private func save(record: CKRecord, scope: FamilyCloudKitDatabaseScope) async throws -> CKRecord {
         let savedRecords = try await modify(recordsToSave: [record], recordIDsToDelete: [], scope: scope)
         guard let savedRecord = savedRecords.first else {
@@ -2304,6 +2309,12 @@ final class CloudKitFamilySharingService {
         }
     }
 
+    private func scheduleRemoteCountsDiagnostics(event: String, family: Family) {
+        Task { @MainActor in
+            await logRemoteCountsForDiagnostics(event: event, family: family)
+        }
+    }
+
 }
 
 @MainActor
@@ -2463,6 +2474,10 @@ protocol CloudKitFamilySharingBackend {
         with recordID: CKRecord.ID,
         scope: FamilyCloudKitDatabaseScope
     ) async throws -> CKRecord
+    func fetchRecords(
+        with recordIDs: [CKRecord.ID],
+        scope: FamilyCloudKitDatabaseScope
+    ) async throws -> [CKRecord]
     func modify(
         recordsToSave: [CKRecord],
         recordIDsToDelete: [CKRecord.ID],
@@ -2679,21 +2694,31 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
         with recordID: CKRecord.ID,
         scope: FamilyCloudKitDatabaseScope
     ) async throws -> CKRecord {
+        guard let record = try await fetchRecords(with: [recordID], scope: scope).first else {
+            throw CloudKitSharingError.recordNotFound
+        }
+        return record
+    }
+
+    func fetchRecords(
+        with recordIDs: [CKRecord.ID],
+        scope: FamilyCloudKitDatabaseScope
+    ) async throws -> [CKRecord] {
         let database = database(for: scope)
 
         return try await withCheckedThrowingContinuation { continuation in
-            let operation = CKFetchRecordsOperation(recordIDs: [recordID])
-            var fetchedRecord: CKRecord?
+            let operation = CKFetchRecordsOperation(recordIDs: recordIDs)
+            var fetchedRecords: [CKRecord] = []
             operation.perRecordResultBlock = { _, result in
                 if case .success(let record) = result {
-                    fetchedRecord = record
+                    fetchedRecords.append(record)
                 }
             }
             operation.fetchRecordsResultBlock = { result in
                 switch result {
                 case .success:
-                    if let fetchedRecord {
-                        continuation.resume(returning: fetchedRecord)
+                    if fetchedRecords.count == recordIDs.count {
+                        continuation.resume(returning: fetchedRecords)
                     } else {
                         continuation.resume(throwing: CloudKitSharingError.recordNotFound)
                     }

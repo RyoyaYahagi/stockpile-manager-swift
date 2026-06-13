@@ -62,7 +62,7 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
 
         _ = try await service.prepareShare(for: family)
 
-        XCTAssertEqual(backend.ensuredZoneIDs.count, 2)
+        XCTAssertEqual(backend.ensuredZoneIDs.count, 1)
         XCTAssertTrue(
             backend.modifyCalls.contains { call in
                 call.scope == .privateDatabase
@@ -106,12 +106,13 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertEqual(capturedSharePermission, CKShare.ParticipantPermission.none)
     }
 
-    func testPrepareShareDoesNotReturnExistingShareWhenRemoteDataCannotBeVerified() async throws {
+    func testPrepareShareReturnsExistingShareFastPathWhenRemoteBaselineIsVerified() async throws {
         let harness = try TestHarness()
         let family = Family(name: "共有済み")
         family.cloudKitDatabaseScope = .privateDatabase
         family.cloudKitPendingSync = false
         family.cloudKitHasRemoteBaseline = true
+        family.cloudKitShareURL = URL(string: "https://www.icloud.com/share/example")
         family.cloudKitZoneName = "existing-zone"
         family.cloudKitZoneOwnerName = CKCurrentUserDefaultName
         harness.context.insert(family)
@@ -132,18 +133,14 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
 
         let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
 
-        await XCTAssertThrowsErrorAsync(try await service.prepareShare(for: family)) { error in
-            guard case CloudKitSharingError.shareDataNotUploaded = error else {
-                return XCTFail("Unexpected error: \(error)")
-            }
-        }
+        _ = try await service.prepareShare(for: family)
 
-        XCTAssertFalse(backend.modifyCalls.isEmpty)
-        XCTAssertTrue(family.cloudKitPendingSync)
-        XCTAssertFalse(family.cloudKitHasRemoteBaseline)
+        XCTAssertTrue(backend.modifyCalls.isEmpty)
+        XCTAssertFalse(family.cloudKitPendingSync)
+        XCTAssertTrue(family.cloudKitHasRemoteBaseline)
     }
 
-    func testPrepareSharePerformsPostShareSyncAfterShareIsSaved() async throws {
+    func testPrepareShareDoesNotRepeatFullSyncAfterShareIsSaved() async throws {
         CloudKitSharingDiagnostics.clear()
         let harness = try TestHarness()
         let family = Family(name: "防災")
@@ -186,11 +183,7 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
             call.scope == .privateDatabase
                 && Set(call.recordTypes).isSuperset(of: ["Family", "Bag", "Item"])
         }
-        XCTAssertEqual(zoneSyncCalls.count, 2)
-
-        let report = CloudKitSharingDiagnostics.makeReport(modelContext: harness.context)
-        XCTAssertTrue(report.contains("共有リンク準備完了"))
-        XCTAssertTrue(report.contains("remoteFamilyRecords=0"))
+        XCTAssertEqual(zoneSyncCalls.count, 1)
 
         CloudKitSharingDiagnostics.clear()
     }
@@ -329,23 +322,25 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
 
         let backend = FakeCloudKitFamilySharingBackend()
         var fetchedScopes: [FamilyCloudKitDatabaseScope] = []
-        backend.fetchRecordHandler = { recordID, scope in
+        backend.fetchRecordsByIDHandler = { recordIDs, scope in
             fetchedScopes.append(scope)
-            switch recordID.recordName {
-            case "family-\(family.id.uuidString)":
-                return Self.makeFamilyRecord(id: family.id, name: family.name, zoneID: recordID.zoneID)
-            case "bag-\(bag.id.uuidString)":
-                return Self.makeBagRecord(id: bag.id, name: bag.name, familyID: family.id, zoneID: recordID.zoneID)
-            case "item-\(item.id.uuidString)":
-                return Self.makeItemRecord(
-                    id: item.id,
-                    name: item.name,
-                    familyID: family.id,
-                    bagID: bag.id,
-                    zoneID: recordID.zoneID
-                )
-            default:
-                throw CloudKitSharingError.recordNotFound
+            return try recordIDs.map { recordID in
+                switch recordID.recordName {
+                case "family-\(family.id.uuidString)":
+                    return Self.makeFamilyRecord(id: family.id, name: family.name, zoneID: recordID.zoneID)
+                case "bag-\(bag.id.uuidString)":
+                    return Self.makeBagRecord(id: bag.id, name: bag.name, familyID: family.id, zoneID: recordID.zoneID)
+                case "item-\(item.id.uuidString)":
+                    return Self.makeItemRecord(
+                        id: item.id,
+                        name: item.name,
+                        familyID: family.id,
+                        bagID: bag.id,
+                        zoneID: recordID.zoneID
+                    )
+                default:
+                    throw CloudKitSharingError.recordNotFound
+                }
             }
         }
 
@@ -353,7 +348,7 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
 
         try await service.verifyCloudKitUpload(for: family)
 
-        XCTAssertEqual(fetchedScopes, [.sharedDatabase, .sharedDatabase, .sharedDatabase])
+        XCTAssertEqual(fetchedScopes, [.sharedDatabase])
     }
 
     func testSharedFamilyRefreshResolvesZoneIDFromSharedDatabaseZones() async throws {
@@ -1499,6 +1494,7 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
     var fetchAllRecordZoneIDsHandler: ((FamilyCloudKitDatabaseScope) throws -> [CKRecordZone.ID])?
     var fetchRecordsHandler: ((String, CKRecordZone.ID, FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
     var fetchRecordHandler: ((CKRecord.ID, FamilyCloudKitDatabaseScope) throws -> CKRecord)?
+    var fetchRecordsByIDHandler: (([CKRecord.ID], FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
     var modifyHandler: (([CKRecord], [CKRecord.ID], FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
     var deleteZoneHandler: ((CKRecordZone.ID, FamilyCloudKitDatabaseScope) throws -> Void)?
     var acceptHandler: ((CKShare.Metadata) throws -> CKShare)?
@@ -1534,10 +1530,32 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
         with recordID: CKRecord.ID,
         scope: FamilyCloudKitDatabaseScope
     ) async throws -> CKRecord {
+        if let fetchRecordsByIDHandler {
+            guard let record = try fetchRecordsByIDHandler([recordID], scope).first else {
+                throw CloudKitSharingError.recordNotFound
+            }
+            return record
+        }
         if let fetchRecordHandler {
             return try fetchRecordHandler(recordID, scope)
         }
         throw CloudKitSharingError.recordNotFound
+    }
+
+    func fetchRecords(
+        with recordIDs: [CKRecord.ID],
+        scope: FamilyCloudKitDatabaseScope
+    ) async throws -> [CKRecord] {
+        fetchRecordCallCount += 1
+        if let fetchRecordsByIDHandler {
+            return try fetchRecordsByIDHandler(recordIDs, scope)
+        }
+        return try recordIDs.map { recordID in
+            if let fetchRecordHandler {
+                return try fetchRecordHandler(recordID, scope)
+            }
+            throw CloudKitSharingError.recordNotFound
+        }
     }
 
     func modify(
