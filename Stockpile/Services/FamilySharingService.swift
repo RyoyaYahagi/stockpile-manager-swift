@@ -1440,8 +1440,10 @@ final class CloudKitFamilySharingService {
         let scope = databaseScope(for: family)
         let retryIntervalsInNanoseconds: [UInt64] = [
             0,
-            300_000_000,
-            1_000_000_000
+            500_000_000,
+            1_000_000_000,
+            2_000_000_000,
+            4_000_000_000
         ]
         var lastError: Error?
 
@@ -2709,15 +2711,21 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
         return try await withCheckedThrowingContinuation { continuation in
             let operation = CKFetchRecordsOperation(recordIDs: recordIDs)
             var fetchedRecords: [CKRecord] = []
+            var fetchErrors: [Error] = []
             operation.perRecordResultBlock = { _, result in
-                if case .success(let record) = result {
+                switch result {
+                case .success(let record):
                     fetchedRecords.append(record)
+                case .failure(let error):
+                    fetchErrors.append(error)
                 }
             }
             operation.fetchRecordsResultBlock = { result in
                 switch result {
                 case .success:
-                    if fetchedRecords.count == recordIDs.count {
+                    if let error = fetchErrors.first {
+                        continuation.resume(throwing: error)
+                    } else if fetchedRecords.count == recordIDs.count {
                         continuation.resume(returning: fetchedRecords)
                     } else {
                         continuation.resume(throwing: CloudKitSharingError.recordNotFound)
@@ -2743,16 +2751,26 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
             operation.isAtomic = false
 
             var savedRecords: [CKRecord] = []
+            var saveErrors: [Error] = []
 
             operation.perRecordSaveBlock = { _, result in
-                if case .success(let record) = result {
+                switch result {
+                case .success(let record):
                     savedRecords.append(record)
+                case .failure(let error):
+                    saveErrors.append(error)
                 }
             }
             operation.modifyRecordsResultBlock = { result in
                 switch result {
                 case .success:
-                    continuation.resume(returning: savedRecords)
+                    if let error = saveErrors.first {
+                        continuation.resume(throwing: error)
+                    } else if savedRecords.count == recordsToSave.count {
+                        continuation.resume(returning: savedRecords)
+                    } else {
+                        continuation.resume(throwing: CloudKitSharingError.recordNotFound)
+                    }
                 case .failure(let error):
                     continuation.resume(throwing: error)
                 }

@@ -218,6 +218,60 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertFalse(family.cloudKitHasRemoteBaseline)
     }
 
+    func testPrepareShareWaitsForInitialCloudKitUploadPropagation() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "防災")
+        let bag = Bag(name: "非常袋")
+        let item = Item(name: "水", quantity: 3)
+        bag.family = family
+        item.family = family
+        item.bag = bag
+        harness.context.insert(family)
+        harness.context.insert(bag)
+        harness.context.insert(item)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        var verificationAttemptCount = 0
+        backend.fetchRecordsByIDHandler = { recordIDs, _ in
+            if recordIDs.count == 1,
+               recordIDs.first?.recordName == CKRecordNameZoneWideShare {
+                throw CloudKitSharingError.recordNotFound
+            }
+
+            verificationAttemptCount += 1
+            if verificationAttemptCount < 3 {
+                throw CloudKitSharingError.recordNotFound
+            }
+
+            return try recordIDs.map { recordID in
+                switch recordID.recordName {
+                case "family-\(family.id.uuidString)":
+                    return Self.makeFamilyRecord(id: family.id, name: family.name, zoneID: recordID.zoneID)
+                case "bag-\(bag.id.uuidString)":
+                    return Self.makeBagRecord(id: bag.id, name: bag.name, familyID: family.id, zoneID: recordID.zoneID)
+                case "item-\(item.id.uuidString)":
+                    return Self.makeItemRecord(
+                        id: item.id,
+                        name: item.name,
+                        familyID: family.id,
+                        bagID: bag.id,
+                        zoneID: recordID.zoneID
+                    )
+                default:
+                    throw CloudKitSharingError.recordNotFound
+                }
+            }
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        _ = try await service.prepareShare(for: family)
+
+        XCTAssertEqual(verificationAttemptCount, 3)
+        XCTAssertFalse(family.cloudKitPendingSync)
+        XCTAssertTrue(family.cloudKitHasRemoteBaseline)
+    }
+
     func testPrepareShareFailsWithActionableMessageWhenICloudAccountIsMissing() async throws {
         let harness = try TestHarness()
         let family = Family(name: "防災")
