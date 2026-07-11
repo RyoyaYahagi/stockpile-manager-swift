@@ -64,21 +64,28 @@ struct ItemDetailView: View {
                     }
                 }
                 
-                if let bag = item.bag {
-                    HStack {
-                        Label("収納場所", systemImage: "bag")
-                        Spacer()
-                        Text(bag.name)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                if let locationNote = item.locationNote, !locationNote.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label("メモ", systemImage: "note.text")
-                        Text(locationNote)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                if item.bag != nil || normalizedLocationNote != nil {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let bag = item.bag {
+                            HStack {
+                                Label("収納場所", systemImage: "bag")
+                                Spacer()
+                                Text(bag.name)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if let locationNote = normalizedLocationNote {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label("場所メモ", systemImage: "note.text")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text(locationNote)
+                                    .font(.body)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
                     }
                 }
             } header: {
@@ -176,12 +183,28 @@ struct ItemDetailView: View {
         case .noExpiry: return .secondary
         }
     }
+
+    private var normalizedLocationNote: String? {
+        guard let locationNote = item.locationNote?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !locationNote.isEmpty else {
+            return nil
+        }
+        return locationNote
+    }
 }
 
 #Preview {
     NavigationStack {
-        ItemDetailView(item: Item(name: "缶詰", quantity: 3, expiryDate: Date().addingTimeInterval(86400 * 5)))
+        let item = Item(
+            name: "缶詰",
+            quantity: 3,
+            expiryDate: Date().addingTimeInterval(86400 * 5),
+            locationNote: "キッチン収納棚の上段"
+        )
+        let bag = Bag(name: "非常用バッグ")
+        item.bag = bag
+        return ItemDetailView(item: item)
     }
     .environment(Router())
-    .modelContainer(for: [Family.self, Item.self], inMemory: true)
+    .modelContainer(for: [Family.self, Item.self, Bag.self], inMemory: true)
 }
