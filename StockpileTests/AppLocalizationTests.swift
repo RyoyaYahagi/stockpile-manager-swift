@@ -65,3 +65,41 @@ final class AppLocalizationTests: XCTestCase {
         }
     }
 }
+
+final class FirstLaunchTutorialPresentationPolicyTests: XCTestCase {
+    func testPresentsOnceAfterInitialLanguageSelection() {
+        XCTAssertTrue(
+            FirstLaunchTutorialPresentationPolicy.shouldPresentAutomatically(
+                hasCompletedTutorial: false,
+                hasCompletedInitialLanguageSelection: true,
+                hasPresentedTutorial: false,
+                isLanguageSelectionPresented: false,
+                isTutorialPresented: false
+            )
+        )
+    }
+
+    func testDoesNotPresentAgainAfterTutorialWasShownAndClosed() {
+        XCTAssertFalse(
+            FirstLaunchTutorialPresentationPolicy.shouldPresentAutomatically(
+                hasCompletedTutorial: false,
+                hasCompletedInitialLanguageSelection: true,
+                hasPresentedTutorial: true,
+                isLanguageSelectionPresented: false,
+                isTutorialPresented: false
+            )
+        )
+    }
+
+    func testDoesNotPresentBeforeInitialLanguageSelectionIsComplete() {
+        XCTAssertFalse(
+            FirstLaunchTutorialPresentationPolicy.shouldPresentAutomatically(
+                hasCompletedTutorial: false,
+                hasCompletedInitialLanguageSelection: false,
+                hasPresentedTutorial: false,
+                isLanguageSelectionPresented: false,
+                isTutorialPresented: false
+            )
+        )
+    }
+}
