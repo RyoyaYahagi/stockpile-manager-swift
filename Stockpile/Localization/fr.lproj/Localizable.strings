@@ -211,9 +211,9 @@
 "通知単位" = "Unité de rappel";
 "共有リンクを再送" = "Renvoyer le lien de partage";
 "先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。" = "Créez d’abord un lien de partage iCloud, puis choisissez comment l’envoyer.";
-"先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。離脱した相手を再参加させる場合は「共有設定を管理」から招待し直してください。" = "Créez d’abord un lien de partage iCloud, puis choisissez comment l’envoyer. Si quelqu’un doit rejoindre à nouveau après avoir quitté le partage, invitez-le de nouveau depuis « Gérer le partage ».";
+"共有リンクの作成には時間がかかる場合があります。完了後に共有方法を選んで送信できます。" = "La création du lien de partage peut prendre un certain temps. Une fois prêt, vous pourrez choisir comment l’envoyer.";
 "作成済みの共有リンクを送信できます。参加者の管理や共有停止は「共有設定を管理」から行えます。" = "Vous pouvez envoyer le lien de partage existant. Gérez les participants ou arrêtez le partage depuis « Gérer le partage ».";
-"このリンクは private share 用の共有リンクです。離脱した相手の再参加には使えない場合があるため、その場合は「共有設定を管理」から招待し直してください。" = "Ce lien est destiné à un partage privé. Si quelqu’un ne peut pas rejoindre à nouveau après avoir quitté le partage, invitez-le de nouveau depuis « Gérer le partage ».";
+"共有リンクを再送できます。以前にこの共有から離脱した人を再招待する場合は、「共有設定を管理」から招待してください。" = "Vous pouvez renvoyer le lien de partage. Pour inviter de nouveau une personne qui a quitté ce partage, utilisez « Gérer le partage ».";
 "メンバー（%@人）" = "Membres (%@)";
 "共有設定を管理" = "Gérer le partage";
 "共有方法" = "Méthode de partage";

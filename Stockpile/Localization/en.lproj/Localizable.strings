@@ -216,9 +216,9 @@
 "通知単位" = "Reminder Unit";
 "共有リンクを再送" = "Resend Share Link";
 "先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。" = "Create an iCloud sharing link first, then choose how to send it.";
-"先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。離脱した相手を再参加させる場合は「共有設定を管理」から招待し直してください。" = "Create an iCloud sharing link first, then choose how to send it. If someone needs to rejoin after leaving, invite them again from “Manage Sharing Settings.”";
+"共有リンクの作成には時間がかかる場合があります。完了後に共有方法を選んで送信できます。" = "Creating the sharing link may take some time. Once it is ready, you can choose how to send it.";
 "作成済みの共有リンクを送信できます。参加者の管理や共有停止は「共有設定を管理」から行えます。" = "You can send the existing share link. Manage participants or stop sharing from “Manage Sharing Settings.”";
-"このリンクは private share 用の共有リンクです。離脱した相手の再参加には使えない場合があるため、その場合は「共有設定を管理」から招待し直してください。" = "This link is for a private share. If someone cannot rejoin after leaving, invite them again from “Manage Sharing Settings.”";
+"共有リンクを再送できます。以前にこの共有から離脱した人を再招待する場合は、「共有設定を管理」から招待してください。" = "You can resend the sharing link. To reinvite someone who previously left this share, use “Manage Sharing Settings.”";
 "メンバー（%@人）" = "Members (%@)";
 "共有設定を管理" = "Manage Sharing Settings";
 "共有方法" = "Sharing Method";
