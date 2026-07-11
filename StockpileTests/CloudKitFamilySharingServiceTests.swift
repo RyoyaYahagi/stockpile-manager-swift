@@ -73,6 +73,105 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertTrue(family.cloudKitHasRemoteBaseline)
     }
 
+    func testPrepareShareTreatsRawUnknownItemAsMissingShareAndCreatesNewShare() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "防災")
+        let bag = Bag(name: "非常袋")
+        let item = Item(name: "水", quantity: 3)
+        bag.family = family
+        item.family = family
+        item.bag = bag
+        harness.context.insert(family)
+        harness.context.insert(bag)
+        harness.context.insert(item)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordHandler = { recordID, _ in
+            switch recordID.recordName {
+            case CKRecordNameZoneWideShare:
+                // 実CloudKitはレコード未存在を生の CKError(.unknownItem) で返す
+                throw CKError(.unknownItem)
+            case "family-\(family.id.uuidString)":
+                return Self.makeFamilyRecord(id: family.id, name: family.name, zoneID: recordID.zoneID)
+            case "bag-\(bag.id.uuidString)":
+                return Self.makeBagRecord(id: bag.id, name: bag.name, familyID: family.id, zoneID: recordID.zoneID)
+            case "item-\(item.id.uuidString)":
+                return Self.makeItemRecord(
+                    id: item.id,
+                    name: item.name,
+                    familyID: family.id,
+                    bagID: bag.id,
+                    zoneID: recordID.zoneID
+                )
+            default:
+                throw CKError(.unknownItem)
+            }
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        _ = try await service.prepareShare(for: family)
+
+        XCTAssertTrue(
+            backend.modifyCalls.contains { call in
+                call.recordTypes.contains(CKRecord.SystemType.share)
+            }
+        )
+        XCTAssertFalse(family.cloudKitPendingSync)
+        XCTAssertTrue(family.cloudKitHasRemoteBaseline)
+    }
+
+    func testMissingRecordCompatibilityTreatsUnknownItemAsRecordNotFound() {
+        XCTAssertTrue(
+            CloudKitMissingRecordCompatibility.isRecordNotFound(CKError(.unknownItem))
+        )
+        XCTAssertTrue(
+            CloudKitMissingRecordCompatibility.isRecordNotFound(CloudKitSharingError.recordNotFound)
+        )
+        XCTAssertFalse(
+            CloudKitMissingRecordCompatibility.isRecordNotFound(CKError(.networkFailure))
+        )
+        XCTAssertFalse(
+            CloudKitMissingRecordCompatibility.isRecordNotFound(CKError(.zoneNotFound))
+        )
+        XCTAssertTrue(
+            CloudKitMissingRecordCompatibility.areAllRecordsNotFound([
+                CKError(.unknownItem),
+                CloudKitSharingError.recordNotFound
+            ])
+        )
+        XCTAssertFalse(CloudKitMissingRecordCompatibility.areAllRecordsNotFound([]))
+        XCTAssertFalse(
+            CloudKitMissingRecordCompatibility.areAllRecordsNotFound([
+                CKError(.unknownItem),
+                CKError(.networkFailure)
+            ])
+        )
+    }
+
+    func testMissingRecordCompatibilityUnwrapsPartialFailure() {
+        let recordID = CKRecord.ID(recordName: CKRecordNameZoneWideShare)
+        let allUnknown = CKError(
+            .partialFailure,
+            userInfo: [CKPartialErrorsByItemIDKey: [recordID: CKError(.unknownItem)]]
+        )
+        XCTAssertTrue(CloudKitMissingRecordCompatibility.isRecordNotFound(allUnknown))
+
+        let mixed = CKError(
+            .partialFailure,
+            userInfo: [
+                CKPartialErrorsByItemIDKey: [
+                    recordID: CKError(.unknownItem),
+                    CKRecord.ID(recordName: "family"): CKError(.networkFailure)
+                ]
+            ]
+        )
+        XCTAssertFalse(CloudKitMissingRecordCompatibility.isRecordNotFound(mixed))
+
+        let empty = CKError(.partialFailure, userInfo: [:])
+        XCTAssertFalse(CloudKitMissingRecordCompatibility.isRecordNotFound(empty))
+    }
+
     func testPrepareShareKeepsPrivateSharePermission() async throws {
         let harness = try TestHarness()
         let family = Family(name: "防災")

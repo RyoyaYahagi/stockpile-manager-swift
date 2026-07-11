@@ -1290,7 +1290,7 @@ final class CloudKitFamilySharingService {
         do {
             let existingRecord = try await fetchRecord(with: shareRecordID, scope: scope)
             return existingRecord as? CKShare
-        } catch let error as CloudKitSharingError where error == .recordNotFound {
+        } catch where CloudKitMissingRecordCompatibility.isRecordNotFound(error) {
             return nil
         }
     }
@@ -1534,10 +1534,18 @@ final class CloudKitFamilySharingService {
     private func ensureFamilyRecordExists(for family: Family) async throws {
         let scope = databaseScope(for: family)
         let zoneID = try await readableZoneID(for: family, scope: scope)
-        let remoteState = try await fetchRemoteZoneState(zoneID: zoneID, scope: scope)
+        let remoteFamilyRecord: CKRecord?
+        do {
+            remoteFamilyRecord = try await fetchRecord(
+                with: familyRecordID(for: family, zoneID: zoneID),
+                scope: scope
+            )
+        } catch where CloudKitMissingRecordCompatibility.isRecordNotFound(error) {
+            remoteFamilyRecord = nil
+        }
         guard shouldUploadRecord(
             localTimestamp: family.syncTimestamp,
-            remoteRecord: remoteState.familyRecord
+            remoteRecord: remoteFamilyRecord
         ) else {
             return
         }
@@ -2912,7 +2920,12 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
             operation.fetchRecordsResultBlock = { result in
                 switch result {
                 case .success:
-                    if let error = fetchErrors.first {
+                    if !fetchErrors.isEmpty,
+                       CloudKitMissingRecordCompatibility.areAllRecordsNotFound(fetchErrors) {
+                        continuation.resume(throwing: CloudKitSharingError.recordNotFound)
+                    } else if let error = fetchErrors.first(
+                        where: { !CloudKitMissingRecordCompatibility.isRecordNotFound($0) }
+                    ) {
                         continuation.resume(throwing: error)
                     } else if fetchedRecords.count == recordIDs.count {
                         continuation.resume(returning: fetchedRecords)
@@ -2920,7 +2933,11 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
                         continuation.resume(throwing: CloudKitSharingError.recordNotFound)
                     }
                 case .failure(let error):
-                    continuation.resume(throwing: error)
+                    if CloudKitMissingRecordCompatibility.isRecordNotFound(error) {
+                        continuation.resume(throwing: CloudKitSharingError.recordNotFound)
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
             database.add(operation)
@@ -3150,6 +3167,37 @@ enum CloudKitRecordDeletionCompatibility {
         }
 
         return false
+    }
+}
+
+enum CloudKitMissingRecordCompatibility {
+    /// CKFetchRecordsOperation はレコード未存在を per-record の CKError(.unknownItem) として返す。
+    /// zoneNotFound 等は「未存在」に含めない（ゾーン再作成など別の回復手順が必要なため）。
+    static func isRecordNotFound(_ error: Error) -> Bool {
+        if let sharingError = error as? CloudKitSharingError,
+           sharingError == .recordNotFound {
+            return true
+        }
+
+        guard let ckError = error as? CKError else {
+            return false
+        }
+
+        if ckError.code == .unknownItem {
+            return true
+        }
+
+        if ckError.code == .partialFailure,
+           let partialErrors = ckError.partialErrorsByItemID?.values,
+           !partialErrors.isEmpty {
+            return partialErrors.allSatisfy(isRecordNotFound)
+        }
+
+        return false
+    }
+
+    static func areAllRecordsNotFound(_ errors: [Error]) -> Bool {
+        !errors.isEmpty && errors.allSatisfy(isRecordNotFound)
     }
 }
 
