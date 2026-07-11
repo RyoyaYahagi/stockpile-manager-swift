@@ -9,14 +9,14 @@ class VerifyCloudKitSchemaTest < Minitest::Test
   COMPLETE_SCHEMA = <<~SCHEMA
     DEFINE SCHEMA
       RECORD TYPE Family (
-        "___recordID" REFERENCE QUERYABLE,
+        "___recordID" REFERENCE,
         id STRING,
         name STRING,
         createdAt TIMESTAMP,
         updatedAt TIMESTAMP
       );
       RECORD TYPE Bag (
-        "___recordID" REFERENCE QUERYABLE,
+        "___recordID" REFERENCE,
         id STRING,
         name STRING,
         familyID STRING,
@@ -24,7 +24,7 @@ class VerifyCloudKitSchemaTest < Minitest::Test
         updatedAt TIMESTAMP
       );
       RECORD TYPE Item (
-        "___recordID" REFERENCE QUERYABLE,
+        "___recordID" REFERENCE,
         id STRING,
         name STRING,
         janCode STRING,
@@ -40,7 +40,7 @@ class VerifyCloudKitSchemaTest < Minitest::Test
         familyID STRING
       );
       RECORD TYPE DeletionMarker (
-        "___recordID" REFERENCE QUERYABLE,
+        "___recordID" REFERENCE,
         id STRING,
         familyID STRING,
         entityType STRING,
@@ -81,15 +81,6 @@ class VerifyCloudKitSchemaTest < Minitest::Test
 
     refute status.success?
     assert_includes stderr, "Item.quantity の型がINT64ではありません (STRING)"
-  end
-
-  def test_rejects_missing_record_name_index
-    _stdout, stderr, status = run_verifier(
-      COMPLETE_SCHEMA.sub('"___recordID" REFERENCE QUERYABLE', '"___recordID" REFERENCE')
-    )
-
-    refute status.success?
-    assert_includes stderr, "Family.___recordID に QUERYABLE index がありません"
   end
 
   private

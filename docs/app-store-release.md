@@ -108,7 +108,6 @@ Base64 で保存する場合は `ASC_KEY_CONTENT_BASE64=true` も合わせて設
 
 - `Family` / `Bag` / `Item` / `DeletionMarker` が存在する
 - アプリが保存する全フィールドが存在する
-- 各 record type の `___recordID` に `QUERYABLE` index がある
 
 CloudKit Console で `iCloud.com.stockpile-manager.app` の Development schema を Production へ Deploy していない場合、リリースはビルド前に停止します。Management Token は CloudKit Console で作成し、ローカルでは `xcrun cktool save-token --type management` でKeychainへ保存するか、`CLOUDKIT_MANAGEMENT_TOKEN` に設定してください。
 

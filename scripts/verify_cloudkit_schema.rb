@@ -93,10 +93,6 @@ EXPECTED_RECORD_FIELDS.each do |record_type, required_fields|
     end
   end
 
-  record_id_pattern = /"?___recordID"?\s+REFERENCE\b[^,)]*\bQUERYABLE\b/i
-  unless body.match?(record_id_pattern)
-    errors << "#{record_type}.___recordID に QUERYABLE index がありません"
-  end
 end
 
 unless errors.empty?
