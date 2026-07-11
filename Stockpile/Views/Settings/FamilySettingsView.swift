@@ -30,7 +30,7 @@ struct FamilySettingsView: View {
     @State private var isOpeningShareManagement = false
 
     private var isParticipantFamily: Bool {
-        family.cloudKitDatabaseScope == .sharedDatabase && !family.cloudKitPendingSync
+        family.cloudKitDatabaseScope == .sharedDatabase
     }
 
     private var usesCloudKitParticipantList: Bool {
@@ -347,6 +347,17 @@ struct FamilySettingsView: View {
                     onDidStopSharing: {
                         let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
                         sharingService.clearShareMetadata(for: family)
+                    },
+                    onError: { error in
+                        CloudKitSharingDiagnostics.logError(
+                            context: "共有管理シート",
+                            error: error
+                        )
+                        shareError = L10n.format(
+                            "共有設定の保存に失敗しました: %@",
+                            error.localizedDescription
+                        )
+                        showShareError = true
                     }
                 )
             }
@@ -612,9 +623,10 @@ struct CloudKitSharingSheet: UIViewControllerRepresentable {
     let share: CKShare
     let container: CKContainer
     var onDidStopSharing: (() -> Void)?
+    var onError: ((Error) -> Void)?
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onDidStopSharing: onDidStopSharing)
+        Coordinator(onDidStopSharing: onDidStopSharing, onError: onError)
     }
 
     func makeUIViewController(context: Context) -> UICloudSharingController {
@@ -626,11 +638,17 @@ struct CloudKitSharingSheet: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UICloudSharingController, context: Context) {}
 
+    @MainActor
     final class Coordinator: NSObject, UICloudSharingControllerDelegate {
         private let onDidStopSharing: (() -> Void)?
+        private let onError: ((Error) -> Void)?
 
-        init(onDidStopSharing: (() -> Void)?) {
+        init(
+            onDidStopSharing: (() -> Void)?,
+            onError: ((Error) -> Void)?
+        ) {
             self.onDidStopSharing = onDidStopSharing
+            self.onError = onError
         }
 
         func itemTitle(for csc: UICloudSharingController) -> String? {
@@ -640,7 +658,9 @@ struct CloudKitSharingSheet: UIViewControllerRepresentable {
         func cloudSharingController(
             _ csc: UICloudSharingController,
             failedToSaveShareWithError error: any Error
-        ) {}
+        ) {
+            onError?(error)
+        }
 
         func cloudSharingControllerDidSaveShare(_ csc: UICloudSharingController) {}
 

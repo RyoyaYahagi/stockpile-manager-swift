@@ -16,6 +16,7 @@
 - Scheme: `Stockpile`
 - Bundle ID: `com.stockpile-manager.app`
 - Apple Developer Team ID: `2L6CD9CNHL`
+- CloudKit Container: `iCloud.com.stockpile-manager.app`
 
 ## 推奨構成
 
@@ -33,6 +34,8 @@
 - `ASC_KEY_ID`
 - `ASC_ISSUER_ID`
 - `ASC_KEY_CONTENT` または `ASC_KEY_FILEPATH`
+- `CLOUDKIT_MANAGEMENT_TOKEN`
+  `cktool` で Production schema を読み取り検証するための Management Token
 
 任意:
 
@@ -40,6 +43,8 @@
 - `APPLE_TEAM_ID`  
   未指定時は `2L6CD9CNHL`
 - `ASC_TEAM_ID`
+- `CLOUDKIT_CONTAINER_ID`
+  未指定時は `iCloud.com.stockpile-manager.app`
 - `MATCH_GIT_URL`
 - `MATCH_PASSWORD`
 - `MATCH_READONLY`
@@ -89,12 +94,25 @@ APPSTORE_SUBMIT_FOR_REVIEW=true APPSTORE_AUTOMATIC_RELEASE=true bundle exec fast
 - `ASC_KEY_ID`
 - `ASC_ISSUER_ID`
 - `ASC_KEY_CONTENT`
+- `CLOUDKIT_MANAGEMENT_TOKEN`
 - `MATCH_GIT_URL`
 - `MATCH_PASSWORD`
 
 `ASC_KEY_CONTENT` には `.p8` の中身そのものを入れられます。  
 Base64 で保存する場合は `ASC_KEY_CONTENT_BASE64=true` も合わせて設定してください。
 `APPLE_TEAM_ID` はこのリポジトリでは未指定でも `2L6CD9CNHL` を使います。
+
+## CloudKit Production preflight
+
+`build` / `beta` / `release` はビルド前に `cktool` で Production schema を取得し、次を検証します。
+
+- `Family` / `Bag` / `Item` / `DeletionMarker` が存在する
+- アプリが保存する全フィールドが存在する
+- 各 record type の `___recordID` に `QUERYABLE` index がある
+
+CloudKit Console で `iCloud.com.stockpile-manager.app` の Development schema を Production へ Deploy していない場合、リリースはビルド前に停止します。Management Token は CloudKit Console で作成し、ローカルでは `xcrun cktool save-token --type management` でKeychainへ保存するか、`CLOUDKIT_MANAGEMENT_TOKEN` に設定してください。
+
+IPA生成後は、アップロード前に署名済みappとembedded provisioning profileの両方について、Production環境、CloudKit container、`InProcessOneTimeLinks` entitlementを検証します。古いmatch profileなどで必要なentitlementが欠けた成果物はアップロードされません。
 
 ## build / version policy
 

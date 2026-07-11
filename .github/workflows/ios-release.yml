@@ -38,6 +38,8 @@ jobs:
       ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
       ASC_KEY_CONTENT_BASE64: ${{ secrets.ASC_KEY_CONTENT_BASE64 }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      CLOUDKIT_CONTAINER_ID: iCloud.com.stockpile-manager.app
+      CLOUDKIT_MANAGEMENT_TOKEN: ${{ secrets.CLOUDKIT_MANAGEMENT_TOKEN }}
       ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
       MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
       MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}

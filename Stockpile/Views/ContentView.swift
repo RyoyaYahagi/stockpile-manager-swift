@@ -467,7 +467,19 @@ struct ContentView: View {
             }
         }
 
-        for family in sharedFamiliesForRefresh() {
+        for family in cloudKitFamiliesForRefresh() {
+            do {
+                try await sharingService.syncFamilyDataToCloudKit(
+                    for: family,
+                    attachOrphanLocalData: false
+                )
+            } catch {
+                logCloudKitShareError(
+                    error,
+                    context: "共有家族送信"
+                )
+            }
+
             do {
                 try await sharingService.syncFamilyStateFromCloudKit(for: family)
             } catch {
@@ -481,13 +493,9 @@ struct ContentView: View {
         updatePendingSharedFamilyRefreshSchedule()
     }
 
-    private func sharedFamiliesForRefresh() -> [Family] {
-        let scopeRawValue = FamilyCloudKitDatabaseScope.sharedDatabase.rawValue
-        let descriptor = FetchDescriptor<Family>(
-            predicate: #Predicate { $0.cloudKitDatabaseScopeRawValue == scopeRawValue }
-        )
-        return (try? modelContext.fetch(descriptor))
-            ?? families.filter { $0.cloudKitDatabaseScope == .sharedDatabase }
+    private func cloudKitFamiliesForRefresh() -> [Family] {
+        let storedFamilies = (try? modelContext.fetch(FetchDescriptor<Family>())) ?? families
+        return storedFamilies.filter { $0.shareState != .localOnly }
     }
 
     private func logCloudKitShareError(_ error: Error, context: String) {
@@ -511,7 +519,7 @@ struct ContentView: View {
     }
 
     private func updatePendingSharedFamilyRefreshSchedule() {
-        let hasPendingSharedFamilies = sharedFamiliesForRefresh().contains {
+        let hasPendingSharedFamilies = cloudKitFamiliesForRefresh().contains {
             $0.cloudKitDatabaseScope == .sharedDatabase && $0.cloudKitPendingSync
         }
 
@@ -542,7 +550,7 @@ struct ContentView: View {
 
                 guard !Task.isCancelled else { return }
                 await refreshCloudKitSharedFamilies()
-                guard sharedFamiliesForRefresh().contains(where: {
+                guard cloudKitFamiliesForRefresh().contains(where: {
                     $0.cloudKitDatabaseScope == .sharedDatabase && $0.cloudKitPendingSync
                 }) else {
                     return
