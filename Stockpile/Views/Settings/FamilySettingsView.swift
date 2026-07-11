@@ -101,12 +101,22 @@ struct FamilySettingsView: View {
                             saveChanges()
                         }
                 } else {
-                    HStack {
-                        Label("家族名", systemImage: "person.3")
-                        Spacer()
-                        Text(family.displayNameForCurrentState)
-                            .foregroundStyle(.secondary)
+                    Button {
+                        editedName = family.name
+                        isEditing = true
+                    } label: {
+                        HStack {
+                            Label("家族名", systemImage: "person.3")
+                            Spacer()
+                            Text(family.displayNameForCurrentState)
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
             } header: {
                 Text("家族情報")
@@ -277,13 +287,10 @@ struct FamilySettingsView: View {
         .navigationTitle("家族設定")
         .localizedRefresh()
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(isEditing ? LocalizedStringKey("完了") : LocalizedStringKey("編集")) {
-                    if isEditing {
+            if isEditing {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完了") {
                         saveChanges()
-                    } else {
-                        editedName = family.name
-                        isEditing = true
                     }
                 }
             }
