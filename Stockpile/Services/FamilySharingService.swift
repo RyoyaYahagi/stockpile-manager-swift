@@ -822,7 +822,13 @@ final class CloudKitFamilySharingService {
             localTimestamp: family.syncTimestamp,
             remoteRecord: remoteState.familyRecord
         ) {
-            recordsToSave.append(makeFamilyRecord(from: family, zoneID: operationZoneID))
+            recordsToSave.append(
+                makeFamilyRecord(
+                    from: family,
+                    zoneID: operationZoneID,
+                    existingRecord: remoteState.familyRecord
+                )
+            )
         }
 
         for bag in scopedBags {
@@ -839,7 +845,13 @@ final class CloudKitFamilySharingService {
             ) else {
                 continue
             }
-            recordsToSave.append(makeBagRecord(from: bag, zoneID: operationZoneID))
+            recordsToSave.append(
+                makeBagRecord(
+                    from: bag,
+                    zoneID: operationZoneID,
+                    existingRecord: remoteBagMap[bag.id]
+                )
+            )
         }
 
         for item in scopedItems {
@@ -856,7 +868,13 @@ final class CloudKitFamilySharingService {
             ) else {
                 continue
             }
-            recordsToSave.append(makeItemRecord(from: item, zoneID: operationZoneID))
+            recordsToSave.append(
+                makeItemRecord(
+                    from: item,
+                    zoneID: operationZoneID,
+                    existingRecord: remoteItemMap[item.id]
+                )
+            )
         }
 
         var uploadedDeletionMarkerIDs = Set<UUID>()
@@ -877,11 +895,28 @@ final class CloudKitFamilySharingService {
         }
 
         if !recordsToSave.isEmpty || !recordIDsToDelete.isEmpty {
-            try await modify(
-                recordsToSave: recordsToSave,
-                recordIDsToDelete: recordIDsToDelete,
-                scope: scope
-            )
+            do {
+                try await modify(
+                    recordsToSave: recordsToSave,
+                    recordIDsToDelete: recordIDsToDelete,
+                    scope: scope
+                )
+            } catch {
+                if CloudKitConflictCompatibility.isServerRecordChanged(error) {
+                    CloudKitSharingDiagnostics.logError(
+                        context: "共有データの競合を検出",
+                        error: error
+                    )
+                    NotificationCenter.default.post(
+                        name: .didDetectCloudKitConflict,
+                        object: family.id
+                    )
+                    // Refresh against the server's current change tag. The local
+                    // timestamp guard keeps a newer local edit available for retry.
+                    try? await syncFamilyStateFromCloudKit(for: family)
+                }
+                throw error
+            }
         }
 
         for marker in localDeletionMarkers
@@ -893,6 +928,13 @@ final class CloudKitFamilySharingService {
             family.cloudKitHasRemoteBaseline = true
         }
         try modelContext.save()
+    }
+
+    /// Ensures that CloudKit can notify every device participating in a family.
+    /// The operation is idempotent and safe to call at launch and after accepting a share.
+    func ensureAutomaticSyncSubscriptions(for families: [Family]) async throws {
+        try await ensureCloudKitAccountAvailable()
+        try await backend.ensureAutomaticSyncSubscriptions(for: families)
     }
 
     func syncFamilyStateFromCloudKit(for family: Family) async throws {
@@ -1828,9 +1870,11 @@ final class CloudKitFamilySharingService {
 
     private func makeFamilyRecord(
         from family: Family,
-        zoneID: CKRecordZone.ID
+        zoneID: CKRecordZone.ID,
+        existingRecord: CKRecord? = nil
     ) -> CKRecord {
-        let record = CKRecord(
+        let record = mutableRecord(
+            existingRecord,
             recordType: Constants.familyRecordType,
             recordID: familyRecordID(for: family, zoneID: zoneID)
         )
@@ -1843,9 +1887,11 @@ final class CloudKitFamilySharingService {
 
     private func makeBagRecord(
         from bag: Bag,
-        zoneID: CKRecordZone.ID
+        zoneID: CKRecordZone.ID,
+        existingRecord: CKRecord? = nil
     ) -> CKRecord {
-        let record = CKRecord(
+        let record = mutableRecord(
+            existingRecord,
             recordType: Constants.bagRecordType,
             recordID: bagRecordID(for: bag, zoneID: zoneID)
         )
@@ -1855,15 +1901,19 @@ final class CloudKitFamilySharingService {
         record["updatedAt"] = bag.syncTimestamp as CKRecordValue
         if let familyID = bag.family?.id.uuidString {
             record["familyID"] = familyID as CKRecordValue
+        } else {
+            record["familyID"] = nil
         }
         return record
     }
 
     private func makeItemRecord(
         from item: Item,
-        zoneID: CKRecordZone.ID
+        zoneID: CKRecordZone.ID,
+        existingRecord: CKRecord? = nil
     ) -> CKRecord {
-        let record = CKRecord(
+        let record = mutableRecord(
+            existingRecord,
             recordType: Constants.itemRecordType,
             recordID: itemRecordID(for: item, zoneID: zoneID)
         )
@@ -1871,13 +1921,19 @@ final class CloudKitFamilySharingService {
         record["name"] = item.name as CKRecordValue
         if let janCode = normalizedOptionalString(item.janCode) {
             record["janCode"] = janCode as CKRecordValue
+        } else {
+            record["janCode"] = nil
         }
         record["quantity"] = item.quantity as CKRecordValue
         if let expiryDate = item.expiryDate {
             record["expiryDate"] = expiryDate as CKRecordValue
+        } else {
+            record["expiryDate"] = nil
         }
         if let locationNote = item.locationNote {
             record["locationNote"] = locationNote as CKRecordValue
+        } else {
+            record["locationNote"] = nil
         }
         record["notified30"] = item.notified30 as CKRecordValue
         record["notified7"] = item.notified7 as CKRecordValue
@@ -1886,11 +1942,27 @@ final class CloudKitFamilySharingService {
         record["updatedAt"] = item.syncTimestamp as CKRecordValue
         if let bagID = item.bag?.id.uuidString {
             record["bagID"] = bagID as CKRecordValue
+        } else {
+            record["bagID"] = nil
         }
         if let familyID = item.family?.id.uuidString {
             record["familyID"] = familyID as CKRecordValue
+        } else {
+            record["familyID"] = nil
         }
         return record
+    }
+
+    private func mutableRecord(
+        _ existingRecord: CKRecord?,
+        recordType: String,
+        recordID: CKRecord.ID
+    ) -> CKRecord {
+        if let existingRecord,
+           let copy = existingRecord.copy() as? CKRecord {
+            return copy
+        }
+        return CKRecord(recordType: recordType, recordID: recordID)
     }
 
     private func makeDeletionMarkerRecord(
@@ -2694,6 +2766,14 @@ protocol CloudKitFamilySharingBackend {
         scope: FamilyCloudKitDatabaseScope
     ) async throws
     func accept(metadata: CKShare.Metadata) async throws -> CKShare
+
+    /// Registers the subscriptions needed for automatic family synchronization.
+    /// Test backends may use the default no-op implementation.
+    func ensureAutomaticSyncSubscriptions(for families: [Family]) async throws
+}
+
+extension CloudKitFamilySharingBackend {
+    func ensureAutomaticSyncSubscriptions(for families: [Family]) async throws {}
 }
 
 enum CloudKitShareAcceptanceResult {
@@ -2731,6 +2811,83 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
                     continuation.resume(returning: status)
                 }
             }
+        }
+    }
+
+    func ensureAutomaticSyncSubscriptions(for families: [Family]) async throws {
+        var subscriptions: [CKSubscription] = []
+        var hasSharedFamily = false
+
+        for family in families where family.isCloudKitSharedFamily {
+            switch family.cloudKitDatabaseScope {
+            case .privateDatabase:
+                guard let zoneName = family.cloudKitZoneName else { continue }
+                let ownerName = family.cloudKitZoneOwnerName ?? CKCurrentUserDefaultName
+                let zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: ownerName)
+                let subscriptionID = "family-zone-\(family.id.uuidString)"
+                let subscription = CKRecordZoneSubscription(
+                    zoneID: zoneID,
+                    subscriptionID: subscriptionID
+                )
+                subscription.notificationInfo = Self.silentNotificationInfo()
+                subscriptions.append(subscription)
+            case .sharedDatabase:
+                hasSharedFamily = true
+            case .none:
+                continue
+            }
+        }
+
+        if hasSharedFamily {
+            let subscription = CKDatabaseSubscription(subscriptionID: "shared-family-data")
+            subscription.notificationInfo = Self.silentNotificationInfo()
+            subscriptions.append(subscription)
+        }
+
+        guard !subscriptions.isEmpty else { return }
+
+        let privateSubscriptions = subscriptions.filter { $0 is CKRecordZoneSubscription }
+        let sharedSubscriptions = subscriptions.filter { $0 is CKDatabaseSubscription }
+
+        if !privateSubscriptions.isEmpty {
+            try await saveSubscriptions(
+                privateSubscriptions,
+                to: container.privateCloudDatabase
+            )
+        }
+        if !sharedSubscriptions.isEmpty {
+            try await saveSubscriptions(
+                sharedSubscriptions,
+                to: container.sharedCloudDatabase
+            )
+        }
+    }
+
+    private static func silentNotificationInfo() -> CKSubscription.NotificationInfo {
+        let info = CKSubscription.NotificationInfo()
+        info.shouldSendContentAvailable = true
+        info.shouldBadge = false
+        return info
+    }
+
+    private func saveSubscriptions(
+        _ subscriptions: [CKSubscription],
+        to database: CKDatabase
+    ) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            let operation = CKModifySubscriptionsOperation(
+                subscriptionsToSave: subscriptions,
+                subscriptionIDsToDelete: nil
+            )
+            operation.modifySubscriptionsResultBlock = { result in
+                switch result {
+                case .success:
+                    continuation.resume(returning: ())
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+            database.add(operation)
         }
     }
 
@@ -3189,6 +3346,21 @@ enum CloudKitRecordQueryCompatibility {
         let description = error.localizedDescription.lowercased()
         return description.contains("field 'recordname' is not marked queryable")
             || description.contains("field \"recordname\" is not marked queryable")
+    }
+}
+
+enum CloudKitConflictCompatibility {
+    static func isServerRecordChanged(_ error: Error) -> Bool {
+        if let ckError = error as? CKError {
+            if ckError.code == .serverRecordChanged {
+                return true
+            }
+            if ckError.code == .partialFailure,
+               let partialErrors = ckError.partialErrorsByItemID?.values {
+                return partialErrors.contains(where: isServerRecordChanged)
+            }
+        }
+        return false
     }
 }
 

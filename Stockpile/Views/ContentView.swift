@@ -5,6 +5,7 @@ import CloudKit
 extension Notification.Name {
     static let didTapNotification = Notification.Name("didTapNotification")
     static let didAcceptCloudKitShare = Notification.Name("didAcceptCloudKitShare")
+    static let didDetectCloudKitConflict = Notification.Name("didDetectCloudKitConflict")
 }
 
 @MainActor
@@ -213,6 +214,11 @@ struct ContentView: View {
             Task {
                 await refreshCloudKitSharedFamilies()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didDetectCloudKitConflict)) { _ in
+            showCloudKitShareSuccess(
+                L10n.string("別の端末で同じデータが更新されたため、最新状態を再同期しています。")
+            )
         }
         .onDisappear {
             pendingSharedFamilyRefreshTask?.cancel()
@@ -485,7 +491,14 @@ struct ContentView: View {
             }
         }
 
-        for family in cloudKitFamiliesForRefresh() {
+        let familiesToRefresh = cloudKitFamiliesForRefresh()
+        do {
+            try await sharingService.ensureAutomaticSyncSubscriptions(for: familiesToRefresh)
+        } catch {
+            logCloudKitShareError(error, context: "共有自動同期購読")
+        }
+
+        for family in familiesToRefresh {
             do {
                 try await sharingService.syncFamilyDataToCloudKit(
                     for: family,

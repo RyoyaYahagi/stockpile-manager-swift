@@ -5,6 +5,27 @@ import XCTest
 
 @MainActor
 final class CloudKitFamilySharingServiceTests: XCTestCase {
+    func testAutomaticSyncSubscriptionRequestCoversSharedFamilies() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有")
+        family.cloudKitDatabaseScope = .sharedDatabase
+        family.cloudKitZoneName = "family-zone"
+        family.cloudKitZoneOwnerName = CKCurrentUserDefaultName
+        family.cloudKitPendingSync = false
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        let service = CloudKitFamilySharingService(
+            modelContext: harness.context,
+            backend: backend
+        )
+
+        try await service.ensureAutomaticSyncSubscriptions(for: [family])
+
+        XCTAssertEqual(backend.automaticSubscriptionFamilyIDs, [family.id])
+    }
+
     func testReleaseEntitlementsAllowInProcessOneTimeShareLinks() throws {
         let testFileURL = URL(fileURLWithPath: #filePath)
         let repositoryRootURL = testFileURL
@@ -1978,6 +1999,7 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
     var modifyHandler: (([CKRecord], [CKRecord.ID], FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
     var deleteZoneHandler: ((CKRecordZone.ID, FamilyCloudKitDatabaseScope) throws -> Void)?
     var acceptHandler: ((CKShare.Metadata) throws -> CKShare)?
+    var automaticSubscriptionFamilyIDs: [UUID] = []
 
     func accountStatus() async throws -> CKAccountStatus {
         if let accountStatusError {
@@ -1988,6 +2010,10 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
 
     func ensureZoneExists(_ zoneID: CKRecordZone.ID) async throws {
         ensuredZoneIDs.append(zoneID)
+    }
+
+    func ensureAutomaticSyncSubscriptions(for families: [Family]) async throws {
+        automaticSubscriptionFamilyIDs = families.map(\.id)
     }
 
     func fetchAllRecordZoneIDs(scope: FamilyCloudKitDatabaseScope) async throws -> [CKRecordZone.ID] {
