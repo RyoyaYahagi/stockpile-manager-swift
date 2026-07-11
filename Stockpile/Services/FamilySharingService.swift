@@ -455,7 +455,10 @@ final class CloudKitFamilySharingService {
     @available(iOS 26.0, *)
     private func prepareOneTimeInvitationURL(for family: Family, share: CKShare) async throws -> URL {
         let existingParticipantIDs = Set(share.participants.compactMap(\.participantID))
-        let invitation = try Self.makeOneTimeInvitationShare(from: share)
+        let invitation = try Self.makeOneTimeInvitationShare(
+            from: share,
+            replacingPendingOneTimeParticipants: true
+        )
         let invitationShare = invitation.share
         let participant = invitation.participant
 
@@ -526,14 +529,51 @@ final class CloudKitFamilySharingService {
     static func makeOneTimeInvitationShare(
         from share: CKShare
     ) throws -> (share: CKShare, participant: CKShare.Participant) {
+        try makeOneTimeInvitationShare(
+            from: share,
+            replacingPendingOneTimeParticipants: false
+        )
+    }
+
+    @available(iOS 26.0, *)
+    static func makeOneTimeInvitationShare(
+        from share: CKShare,
+        replacingPendingOneTimeParticipants: Bool
+    ) throws -> (share: CKShare, participant: CKShare.Participant) {
         guard let invitationShare = share.copy() as? CKShare else {
             throw CloudKitSharingError.invalidShareRecord
+        }
+
+        if replacingPendingOneTimeParticipants {
+            invitationShare.participants
+                .filter(Self.isPendingOneTimeURLParticipant)
+                .forEach(invitationShare.removeParticipant)
         }
 
         let participant = CKShare.Participant.oneTimeURLParticipant()
         participant.permission = .readWrite
         invitationShare.addParticipant(participant)
         return (invitationShare, participant)
+    }
+
+    @available(iOS 26.0, *)
+    static func isPendingOneTimeURLParticipant(
+        _ participant: CKShare.Participant
+    ) -> Bool {
+        guard participant.acceptanceStatus == .pending else { return false }
+
+        let identity = participant.userIdentity
+        let hasName = identity.nameComponents.map {
+            !PersonNameComponentsFormatter()
+                .string(from: $0)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
+        } ?? false
+
+        return identity.userRecordID == nil
+            && identity.lookupInfo == nil
+            && identity.contactIdentifiers.isEmpty
+            && !hasName
     }
 
     @available(iOS 26.0, *)
@@ -915,6 +955,8 @@ final class CloudKitFamilySharingService {
         )
     }
 
+    /// Returns the owner and accepted participants for member lists and counts.
+    /// Pending invitations are intentionally excluded.
     func fetchShareParticipants(
         for family: Family,
         forceRefresh: Bool = false
@@ -928,13 +970,13 @@ final class CloudKitFamilySharingService {
             for: cacheKey,
             maxAge: Constants.shareParticipantsCacheTTL
            ) {
-            return cachedParticipants
+            return cachedParticipants.filter { $0.status != .pending }
         }
 
         guard let share = try await fetchZoneWideShare(for: family) else { return [] }
         let participants = shareParticipantDisplays(from: share)
         await Self.shareParticipantsCache.store(participants, for: cacheKey)
-        return participants
+        return participants.filter { $0.status != .pending }
     }
 
     func clearShareMetadata(for family: Family) {
