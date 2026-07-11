@@ -1,4 +1,4 @@
-# Stockpile Shopping Proxy
+# Stockpile Product Search API
 
 Stockpile iOS のバーコード検索用 Vercel バックエンドです。
 
@@ -50,7 +50,7 @@ Stockpile iOS のバーコード検索用 Vercel バックエンドです。
 ## デプロイ手順
 
 1. Vercel で新規 Project を作成する
-2. Root Directory を `backend/vercel-rakuten-proxy` に設定する
+2. Root Directory を `backend/vercel-product-search-api` に設定する
 3. `YAHOO_CLIENT_ID` / `RAKUTEN_APP_ID` / `RAKUTEN_ACCESS_KEY` を登録する
 4. 必要なら `RATE_LIMIT_MAX_REQUESTS_PER_MINUTE` を追加する
 5. Deploy する
@@ -63,7 +63,7 @@ Stockpile iOS のバーコード検索用 Vercel バックエンドです。
 その場合はこのディレクトリを standalone Node サーバーとして動かし、固定グローバル IP を持つ環境へ配置してください。
 
 ```bash
-cd backend/vercel-rakuten-proxy
+cd backend/vercel-product-search-api
 npm run start
 ```
 
@@ -77,7 +77,7 @@ npm run start
 ## ローカル確認
 
 ```bash
-cd backend/vercel-rakuten-proxy
+cd backend/vercel-product-search-api
 npm run check
 npm test
 ```

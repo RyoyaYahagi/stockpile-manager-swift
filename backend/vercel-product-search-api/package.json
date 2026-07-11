@@ -1,5 +1,5 @@
 {
-  "name": "stockpile-rakuten-proxy",
+  "name": "stockpile-product-search-api",
   "private": true,
   "type": "module",
   "scripts": {

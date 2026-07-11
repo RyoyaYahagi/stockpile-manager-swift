@@ -7,7 +7,7 @@ const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 30;
 export const SEARCH_CACHE_CONTROL =
   "public, max-age=0, s-maxage=86400, stale-while-revalidate=3600";
 export const DEFAULT_REQUEST_HEADERS = {
-  "User-Agent": "stockpile-rakuten-proxy/1.0"
+  "User-Agent": "stockpile-product-search-api/1.0"
 };
 export const DEFAULT_UPSTREAM_TIMEOUTS_MS = Object.freeze({
   product: 4_000,

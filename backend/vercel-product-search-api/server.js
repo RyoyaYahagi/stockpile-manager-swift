@@ -100,5 +100,5 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.info(`stockpile-rakuten-proxy listening on http://${HOST}:${PORT}`);
+  console.info(`stockpile-product-search-api listening on http://${HOST}:${PORT}`);
 });
