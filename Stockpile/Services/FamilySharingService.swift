@@ -1478,6 +1478,10 @@ final class CloudKitFamilySharingService {
             return sharingError
         }
 
+        if CloudKitQuotaCompatibility.isQuotaExceeded(error) {
+            return CloudKitSharingError.iCloudStorageQuotaExceeded
+        }
+
         if let ckError = error as? CKError,
            ckError.code == .notAuthenticated {
             return CloudKitSharingError.authenticatedAccountRequired(
@@ -3049,6 +3053,7 @@ private final class DefaultCloudKitFamilySharingBackend: CloudKitFamilySharingBa
 
 enum CloudKitSharingError: LocalizedError, Equatable {
     case authenticatedAccountRequired(isSimulator: Bool)
+    case iCloudStorageQuotaExceeded
     case iCloudAccountTemporarilyUnavailable
     case iCloudAccountRestricted
     case invitationURLUnavailable
@@ -3067,6 +3072,8 @@ enum CloudKitSharingError: LocalizedError, Equatable {
             return isSimulator
                 ? L10n.string("iCloud にサインインしてから、もう一度お試しください。シミュレーターでは設定アプリで Apple Account にログインする必要があります。")
                 : L10n.string("iCloud にサインインしてから、もう一度お試しください。")
+        case .iCloudStorageQuotaExceeded:
+            return L10n.string("iCloudストレージの空き容量が不足しているため、共有データを保存できません。設定アプリの「Apple Account」→「iCloud」→「ストレージ」で空き容量を確保してから、もう一度お試しください。端末内のデータは削除されていません。")
         case .iCloudAccountTemporarilyUnavailable:
             return L10n.string("iCloud アカウントの状態を確認できませんでした。しばらくしてからもう一度お試しください。")
         case .iCloudAccountRestricted:
@@ -3090,6 +3097,25 @@ enum CloudKitSharingError: LocalizedError, Equatable {
         case .sharePreparationFailed(let detail):
             return L10n.format("共有リンクの再準備に失敗しました。%@", detail)
         }
+    }
+}
+
+enum CloudKitQuotaCompatibility {
+    static func isQuotaExceeded(_ error: Error) -> Bool {
+        guard let ckError = error as? CKError else {
+            return false
+        }
+
+        if ckError.code == .quotaExceeded {
+            return true
+        }
+
+        if ckError.code == .partialFailure,
+           let partialErrors = ckError.partialErrorsByItemID?.values {
+            return partialErrors.contains(where: isQuotaExceeded)
+        }
+
+        return false
     }
 }
 

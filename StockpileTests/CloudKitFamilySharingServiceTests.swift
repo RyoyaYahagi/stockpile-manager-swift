@@ -290,6 +290,35 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         }
     }
 
+    func testPrepareShareMapsQuotaExceededToActionableICloudStorageError() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "防災")
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.modifyHandler = { _, _, _ in
+            throw CKError(.quotaExceeded)
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        await XCTAssertThrowsErrorAsync(try await service.prepareShare(for: family)) { error in
+            XCTAssertEqual(error as? CloudKitSharingError, .iCloudStorageQuotaExceeded)
+            XCTAssertTrue(error.localizedDescription.contains("iCloudストレージの空き容量"))
+            XCTAssertFalse(error.localizedDescription.contains("Quota exceeded"))
+        }
+    }
+
+    func testQuotaCompatibilityFindsQuotaExceededInsidePartialFailure() {
+        let recordID = CKRecord.ID(recordName: "family")
+        let partialFailure = CKError(
+            .partialFailure,
+            userInfo: [CKPartialErrorsByItemIDKey: [recordID: CKError(.quotaExceeded)]]
+        )
+
+        XCTAssertTrue(CloudKitQuotaCompatibility.isQuotaExceeded(partialFailure))
+    }
+
     func testPrepareShareRejectsSharedDatabaseParticipant() async throws {
         let harness = try TestHarness()
         let family = Family(name: "共有家族")
