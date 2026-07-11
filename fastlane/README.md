@@ -1,0 +1,56 @@
+fastlane documentation
+----
+
+# Installation
+
+Make sure you have the latest version of the Xcode command line tools installed:
+
+```sh
+xcode-select --install
+```
+
+For _fastlane_ installation instructions, see [Installing _fastlane_](https://docs.fastlane.tools/#installing-fastlane)
+
+# Available Actions
+
+## iOS
+
+### ios build
+
+```sh
+[bundle exec] fastlane ios build
+```
+
+Archive an App Store build without uploading (ASC key not required)
+
+### ios beta
+
+```sh
+[bundle exec] fastlane ios beta
+```
+
+Build and upload the app to TestFlight
+
+### ios retry_beta_upload
+
+```sh
+[bundle exec] fastlane ios retry_beta_upload
+```
+
+Verify and upload an existing IPA to TestFlight without rebuilding
+
+### ios release
+
+```sh
+[bundle exec] fastlane ios release
+```
+
+Build and upload the app to App Store Connect
+
+----
+
+This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.
+
+More information about _fastlane_ can be found on [fastlane.tools](https://fastlane.tools).
+
+The documentation of _fastlane_ can be found on [docs.fastlane.tools](https://docs.fastlane.tools).

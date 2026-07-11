@@ -1,10 +1,12 @@
-# CloudKit / CKShare 共有まわり 修正レポート
+# アプリ問題レポート（CloudKit 共有 / その他）
 
 更新日: 2026-06-12
 
 ---
 
 ## TLDR
+
+### CloudKit / CKShare 共有まわり（修正済み）
 
 `FamilySharingService` と共有 UI を確認し、共有リンク作成・参加・再同期で実害が出やすい問題を修正した。
 
@@ -20,6 +22,21 @@
    `fetchExistingShare` は retryable エラーを握りつぶさず throw する。
 6. **共有から離脱すると shared zone を削除する**  
    `leaveFamily` は shared database の zone を削除してからローカル家族を削除する。
+
+### CloudKit 以外の問題点（要対応）
+
+1. **課金機能が `allFeaturesFree = true` で完全バイパスされている**  
+   `PremiumAccessManager` の静的フラグにより、IAP が App Store Connect に登録されていても課金が機能しない。リリース前に必ず `false` へ戻す。
+2. **Time Sensitive 通知 entitlement が未登録**  
+   `NotificationManager` が `.timeSensitive` interruption level を設定しているが、entitlements に `com.apple.developer.usernotifications.time-sensitive` がなく、実行時に無効化される。
+3. **`remote-notification` バックグラウンドモードが宣言のみで未実装**  
+   Info.plist に宣言があるが、`registerForRemoteNotifications` も `CKDatabaseSubscription` も実装されていない。審査でのリジェクトリスクがある。
+4. **Firebase / LINE 時代の dead code が残存**  
+   `User.lineUserId` / `User.appleUserId`、`Router.inviteCode` ルート、`QRScannerView` の no-op コールバックなど、現在の CloudKit 実装では使われないコードが残っている。
+5. **通知スケジューリングの二重実装**  
+   `NotificationManager` の per-item スケジューリング系（`scheduleNotifications(for:)` / `scheduleSingleNotification`）は呼び出し元がなく dead code。実際に使われているのは bag 単位の一括スケジューリング系のみ。
+6. **`ModelContainer` 生成失敗時に `fatalError`**  
+   `StockpileApp` でスキーマ変更時などに `fatalError` でクラッシュする。エラー表示 + graceful degradation が望ましい。
 
 ---
 
@@ -119,3 +136,75 @@ CloudKit の missing record type 判定は引き続きエラーメッセージ�
   結果: 成功
 - `xcodebuild test -project Stockpile.xcodeproj -scheme Stockpile -destination 'platform=iOS Simulator,id=AB556D29-AF1D-4D66-A56B-D6A770C552E3' -derivedDataPath /tmp/stockpile-derived-data -only-testing:StockpileTests/CloudKitFamilySharingServiceTests`  
   結果: テスト runner が戻らず未完了。ビルドとテスト bundle 生成までは成功。
+
+---
+
+## CloudKit 以外の問題点
+
+### 1. 課金機能のバイパスフラグ（リリースブロッカー）
+
+**対象:** `PremiumAccessManager.swift:328`
+
+```swift
+private static let allFeaturesFree = true
+```
+
+このフラグが `true` のままだと、IAP が App Store Connect に登録・審査済みであっても課金チェックが完全にスキップされる。StoreKit 2 連携（`Transaction.updates`、`Product.purchase()`）のコード自体は実装済みのため、リリース前に `false` へ変更するだけで有効化できる。
+
+`false` への変更後は、各プレミアム機能のゲート（`canUseFamily`、`canUseAdvancedFilters` 等）が実際の購入状態に基づいて動くことを Sandbox 環境で確認する。
+
+### 2. Time Sensitive 通知 entitlement の欠落
+
+**対象:** `NotificationManager.swift:201`, `Stockpile.entitlements`, `StockpileRelease.entitlements`
+
+```swift
+content.interruptionLevel = .timeSensitive  // entitlement なしでは無効化される
+```
+
+`com.apple.developer.usernotifications.time-sensitive` が両 entitlements ファイルに存在しないため、`timeSensitive` 設定は実行時にシステムに無視され、`active` 相当に降格する。賞味期限切れ通知を集中モード中も確実に届けたい場合は entitlement の追加と Apple の審査が必要。
+
+entitlement を追加しない場合は `.active` に下げておくと意図と実装が合う。
+
+### 3. `remote-notification` バックグラウンドモードが宣言のみ
+
+**対象:** `Info.plist`, `StockpileApp.swift`
+
+`UIBackgroundModes` に `remote-notification` を宣言しているが、アプリ側で `UIApplication.registerForRemoteNotifications()` を呼んでおらず、`CKDatabaseSubscription` も未設定。App Store 審査では「宣言した機能が使われていない」として Binary Rejection の対象になる場合がある。
+
+CloudKit の変更をバックグラウンドで受け取る必要がない場合は、`Info.plist` からこのエントリを削除する。プッシュ連動の自動同期が必要な場合は `CKDatabaseSubscription` の実装が必要。
+
+### 4. Firebase / LINE 時代の dead code
+
+**対象:** 複数ファイル
+
+以前の Firebase / LINE 連携で追加されたと思われる以下のコードが残存している。現在の CloudKit 実装では使われていない。
+
+| コード | 場所 | 状態 |
+|---|---|---|
+| `lineUserId: String?` / `appleUserId: String?` | `User.swift` | 参照なし（CloudKit は `familyId` で管理） |
+| `Router.inviteCode(String)` | `Router.swift:23` | 表示先の `InviteCodeView` が存在しない |
+| `QRScannerView { _ in }` | `ContentView.swift:260` | コールバックが空クロージャで no-op |
+
+`Router.inviteCode` は `Router.swift` 側の `switch` で `case` が存在しなければコンパイルエラーにはならないが、呼び出し元がなければ到達しない dead code。一括削除してよい。
+
+### 5. 通知スケジューリングの二重実装
+
+**対象:** `NotificationManager.swift`
+
+アイテム単位のスケジューリング系（`scheduleNotifications(for:)` / `scheduleSingleNotification`）と、バッグ単位の一括スケジューリング系の2系統がある。実際に呼び出されているのはバッグ単位系のみで、アイテム単位系は呼び出し元がない dead code になっている。
+
+デバッグ用途でなければアイテム単位系を削除し、`NotificationManager` の責務を明確にする。
+
+### 6. `ModelContainer` 生成失敗時の `fatalError`
+
+**対象:** `StockpileApp.swift:69`
+
+```swift
+} catch {
+    fatalError("Failed to create ModelContainer: \(error)")
+}
+```
+
+SwiftData のスキーマ変更（マイグレーション失敗）やストレージ破損時にアプリが起動クラッシュする。この状態になると App Store からの強制更新や再インストール以外に回復手段がない。
+
+最低限、エラーをログ出力して空の `ModelContainer` にフォールバックするか、「データを復元できませんでした」画面を表示してユーザーにリセット手段を提示する構成が望ましい。
