@@ -188,6 +188,27 @@ platform :ios do
     upload_to_testflight(**upload_options)
   end
 
+  desc "Verify and upload an existing IPA to TestFlight without rebuilding"
+  lane :retry_beta_upload do |options|
+    api_key = api_key_for_app_store_connect!
+    ipa_path = File.expand_path(options[:ipa] || "../build/#{SCHEME}.ipa", __dir__)
+
+    verify_cloudkit_production_schema
+    verify_cloudkit_release_ipa(ipa_path)
+
+    upload_options = {
+      api_key: api_key,
+      ipa: ipa_path,
+      skip_waiting_for_build_processing: options[:skip_waiting_for_build_processing].nil? ? env_boolean("TESTFLIGHT_SKIP_WAITING_FOR_BUILD_PROCESSING", default: true) : options[:skip_waiting_for_build_processing],
+      distribute_external: false
+    }
+
+    changelog = options[:changelog] || ENV["TESTFLIGHT_CHANGELOG"]
+    upload_options[:changelog] = changelog unless changelog.to_s.strip.empty?
+
+    upload_to_testflight(**upload_options)
+  end
+
   desc "Build and upload the app to App Store Connect"
   lane :release do |options|
     api_key = api_key_for_app_store_connect!
