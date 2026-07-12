@@ -6,9 +6,7 @@
   "workers_dev": true,
   "secrets": {
     "required": [
-      "YAHOO_CLIENT_ID",
-      "RAKUTEN_APP_ID",
-      "RAKUTEN_ACCESS_KEY"
+      "YAHOO_CLIENT_ID"
     ]
   },
   "ratelimits": [

@@ -14,19 +14,6 @@ struct APIConfig {
         return trimmed
     }
 
-    // MARK: - 楽天API
-    
-    /// 楽天アプリID
-    /// 楽天ウェブサービスで取得: https://webservice.rakuten.co.jp/
-    static var rakutenAppId: String {
-        normalizedSecretValue(ProcessInfo.processInfo.environment["RAKUTEN_APP_ID"])
-    }
-    
-    /// 楽天アクセスキー
-    static var rakutenAccessKey: String {
-        normalizedSecretValue(ProcessInfo.processInfo.environment["RAKUTEN_ACCESS_KEY"])
-    }
-
     // MARK: - Backend
 
     /// バックエンドのベースURL
@@ -61,11 +48,6 @@ struct APIConfig {
     
     // MARK: - 設定状態の確認
     
-    /// 楽天APIが利用可能かどうか
-    static var isRakutenConfigured: Bool {
-        !rakutenAppId.isEmpty && !rakutenAccessKey.isEmpty
-    }
-    
     /// Yahoo APIが利用可能かどうか
     static var isYahooConfigured: Bool {
         !yahooClientId.isEmpty
@@ -73,24 +55,16 @@ struct APIConfig {
 
     /// Backend 経由を含めて Yahoo 検索が利用可能かどうか
     static var isYahooSearchAvailable: Bool {
-        isRakutenBackendConfigured || isYahooConfigured
+        isBackendConfigured || isYahooConfigured
     }
     
     /// いずれかの商品検索APIが利用可能かどうか
     static var isProductSearchAvailable: Bool {
-        isRakutenBackendConfigured || isRakutenConfigured || isYahooConfigured
+        isBackendConfigured || isYahooConfigured
     }
 
-    static var isRakutenBackendConfigured: Bool {
+    static var isBackendConfigured: Bool {
         backendBaseURL != nil
-    }
-
-    static func rakutenSearchURL(for janCode: String, itemName: String? = nil) -> URL? {
-        rakutenEndpointURL(pathComponent: "search", janCode: janCode, itemName: itemName)
-    }
-
-    static func rakutenPurchaseURL(for janCode: String, itemName: String? = nil) -> URL? {
-        rakutenEndpointURL(pathComponent: "redirect", janCode: janCode, itemName: itemName)
     }
 
     static func yahooSearchURL(for janCode: String) -> URL? {
@@ -114,10 +88,6 @@ struct APIConfig {
         components.query = nil
         components.fragment = nil
         return components.url
-    }
-
-    private static func rakutenEndpointURL(pathComponent: String, janCode: String, itemName: String?) -> URL? {
-        backendEndpointURL(pathComponents: ["v1", "rakuten", pathComponent], janCode: janCode, itemName: itemName)
     }
 
     private static func backendEndpointURL(

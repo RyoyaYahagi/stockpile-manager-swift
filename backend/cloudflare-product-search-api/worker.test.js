@@ -5,8 +5,6 @@ import worker from "./worker.js";
 
 function createEnv(overrides = {}) {
   return {
-    RAKUTEN_APP_ID: "test-app-id",
-    RAKUTEN_ACCESS_KEY: "test-access-key",
     YAHOO_CLIENT_ID: "test-yahoo-client-id",
     OPERATOR_NAME: "Stockpile開発者",
     SUPPORT_EMAIL: "support@example.com",
@@ -93,6 +91,17 @@ test("Worker preserves validation and rate-limit responses", async () => {
 test("Worker returns JSON 404 for unknown routes", async () => {
   const response = await worker.fetch(
     new Request("https://stockpile-product-search-api.example.workers.dev/unknown"),
+    createEnv()
+  );
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), {
+    error: "not_found"
+  });
+});
+
+test("Worker no longer exposes Rakuten routes", async () => {
+  const response = await worker.fetch(
+    new Request("https://stockpile-product-search-api.example.workers.dev/v1/rakuten/search?jan=4901777300445"),
     createEnv()
   );
   assert.equal(response.status, 404);

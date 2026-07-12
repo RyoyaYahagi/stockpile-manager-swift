@@ -1,8 +1,6 @@
 import healthHandler from "./api/health.js";
 import privacyHandler from "./api/privacy.js";
 import supportHandler from "./api/support.js";
-import rakutenRedirectHandler from "./api/v1/rakuten/redirect.js";
-import rakutenSearchHandler from "./api/v1/rakuten/search.js";
 import yahooSearchHandler from "./api/v1/yahoo/search.js";
 
 function createRequestAdapter(request, url) {
@@ -76,10 +74,6 @@ export async function handleRequest(request, env = {}) {
       await privacyHandler(adaptedRequest, adapter, env);
     } else if (url.pathname === "/support") {
       await supportHandler(adaptedRequest, adapter, env);
-    } else if (url.pathname === "/v1/rakuten/search") {
-      await rakutenSearchHandler(adaptedRequest, adapter, env);
-    } else if (url.pathname === "/v1/rakuten/redirect") {
-      await rakutenRedirectHandler(adaptedRequest, adapter, env);
     } else if (url.pathname === "/v1/yahoo/search") {
       await yahooSearchHandler(adaptedRequest, adapter, env);
     } else {

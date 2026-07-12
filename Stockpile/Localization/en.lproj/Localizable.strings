@@ -167,7 +167,6 @@
 "JANコード" = "JAN Code";
 "JANコード: %@" = "JAN Code: %@";
 "手動入力" = "Manual Entry";
-"楽天" = "Rakuten";
 "無効なJANコードです" = "Invalid JAN code.";
 
 "共有完了メッセージを閉じる" = "Close the sharing complete message";
@@ -270,7 +269,6 @@
 "残り日数" = "Days Remaining";
 "メモ" = "Notes";
 "登録日" = "Added On";
-"楽天市場で購入" = "Buy on Rakuten";
 "この備蓄品を削除しますか？" = "Delete this stockpile item?";
 "品名（例: 水、缶詰、乾電池）" = "Item name (e.g. Water, Canned Food, Batteries)";
 "バーコードで登録" = "Add via Barcode";
@@ -291,10 +289,6 @@
 "商品価格ナビAPIのJSONを解析できませんでした" = "Could not parse the Product Price Navi API JSON";
 "商品価格ナビAPIのレスポンスに Products が含まれていません" = "The Product Price Navi API response does not include Products";
 "商品価格ナビAPIの productName を取得できませんでした" = "Could not retrieve productName from the Product Price Navi API";
-"楽天市場検索APIのURLを生成できませんでした" = "Could not create the Rakuten Ichiba Search API URL";
-"楽天市場検索APIのHTTPレスポンスを取得できませんでした" = "Could not retrieve the Rakuten Ichiba Search API HTTP response";
-"楽天市場検索APIのJSONを解析できませんでした" = "Could not parse the Rakuten Ichiba Search API JSON";
-"楽天市場検索APIの itemName を取得できませんでした" = "Could not retrieve itemName from the Rakuten Ichiba Search API";
 "Yahoo検索APIのURLを生成できませんでした" = "Could not create the Yahoo Search API URL";
 "Yahoo検索APIのHTTPレスポンスを取得できませんでした" = "Could not retrieve the Yahoo Search API HTTP response";
 "Yahoo検索APIのJSONを解析できませんでした" = "Could not parse the Yahoo Search API JSON";

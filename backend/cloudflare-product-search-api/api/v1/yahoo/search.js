@@ -9,7 +9,7 @@ import {
   fetchUpstream,
   sendJSON,
   classifyUpstreamResult
-} from "../rakuten/search.js";
+} from "../shared.js";
 
 const YAHOO_SEARCH_URL =
   "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch";

@@ -53,7 +53,7 @@ export function privacyPage(env = {}) {
   <ul>
     <li><strong>ユーザーコンテンツ:</strong> 家族名、表示名、メールアドレス（入力した場合）、収納場所、備蓄品名、JANコード、数量、期限、メモ。</li>
     <li><strong>iCloud共有情報:</strong> iCloud共有を有効にした場合、上記の共有対象データとCloudKitの共有参加者情報がAppleのCloudKitに保存されます。共有は招待制です。</li>
-    <li><strong>商品検索:</strong> 検索に使ったJANコードと、入力した場合の商品名。検索結果を返すため、Cloudflare Workers上の本アプリサーバーを経由して楽天、Yahoo! JAPAN、Open Food Factsへ送信されます。</li>
+    <li><strong>商品検索:</strong> 検索に使ったJANコードと、入力した場合の商品名。検索結果を返すため、Cloudflare Workers上の本アプリサーバーを経由してYahoo! JAPAN、Open Food Factsへ送信されます。</li>
     <li><strong>カメラ:</strong> バーコード読み取りと端末上のOCRに使用します。カメラ映像・画像を運営者のサーバーへ保存しません。</li>
     <li><strong>通知・購入:</strong> 期限通知の設定、Apple Push Notificationの登録、StoreKitによる購入・復元状態の確認。</li>
     <li><strong>技術情報:</strong> 不正利用防止のため、商品検索APIでは接続元IPをレート制限の識別に一時的に使用します。検索語や商品データを運営者が独自のデータベースへ保存する設計ではありません。</li>
@@ -70,7 +70,7 @@ export function privacyPage(env = {}) {
     <li><strong>Apple iCloud / CloudKit:</strong> 利用者が有効にした家族共有データの保存・同期。</li>
     <li><strong>Apple StoreKit / Push Notification:</strong> 購入状態と通知の提供。</li>
     <li><strong>Cloudflare Workers:</strong> 商品検索APIの実行基盤。通信元の技術情報はCloudflareのサービスログで処理される場合があります。</li>
-    <li><strong>楽天、Yahoo! JAPAN、Open Food Facts:</strong> 商品検索結果の提供。各サービスのプライバシー方針も確認してください。</li>
+    <li><strong>Yahoo! JAPAN、Open Food Facts:</strong> 商品検索結果の提供。各サービスのプライバシー方針も確認してください。</li>
   </ul>
   <p>広告目的の追跡、行動履歴の広告利用、個人データの販売は行いません。商品検索サービスへの送信は、検索機能を利用した場合に限られます。</p>
   <h2>保存期間と削除</h2>

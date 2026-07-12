@@ -162,7 +162,6 @@
 "JANコード" = "Código JAN";
 "JANコード: %@" = "Código JAN: %@";
 "手動入力" = "Entrada manual";
-"楽天" = "Rakuten";
 "無効なJANコードです" = "Código JAN no válido.";
 
 "共有完了メッセージを閉じる" = "Cerrar el mensaje de compartición completada";
@@ -265,7 +264,6 @@
 "残り日数" = "Días restantes";
 "メモ" = "Notas";
 "登録日" = "Fecha de registro";
-"楽天市場で購入" = "Comprar en Rakuten";
 "この備蓄品を削除しますか？" = "¿Eliminar este artículo almacenado?";
 "品名（例: 水、缶詰、乾電池）" = "Nombre del artículo (p. ej. agua, comida enlatada, pilas)";
 "バーコードで登録" = "Añadir mediante código de barras";
@@ -286,10 +284,6 @@
 "商品価格ナビAPIのJSONを解析できませんでした" = "No se pudo analizar el JSON de la API Product Price Navi";
 "商品価格ナビAPIのレスポンスに Products が含まれていません" = "La respuesta de la API Product Price Navi no incluye Products";
 "商品価格ナビAPIの productName を取得できませんでした" = "No se pudo obtener productName de la API Product Price Navi";
-"楽天市場検索APIのURLを生成できませんでした" = "No se pudo crear la URL de la API de búsqueda de Rakuten Ichiba";
-"楽天市場検索APIのHTTPレスポンスを取得できませんでした" = "No se pudo obtener la respuesta HTTP de la API de búsqueda de Rakuten Ichiba";
-"楽天市場検索APIのJSONを解析できませんでした" = "No se pudo analizar el JSON de la API de búsqueda de Rakuten Ichiba";
-"楽天市場検索APIの itemName を取得できませんでした" = "No se pudo obtener itemName de la API de búsqueda de Rakuten Ichiba";
 "Yahoo検索APIのURLを生成できませんでした" = "No se pudo crear la URL de la API de búsqueda de Yahoo";
 "Yahoo検索APIのHTTPレスポンスを取得できませんでした" = "No se pudo obtener la respuesta HTTP de la API de búsqueda de Yahoo";
 "Yahoo検索APIのJSONを解析できませんでした" = "No se pudo analizar el JSON de la API de búsqueda de Yahoo";

@@ -12,7 +12,6 @@ struct ProductInfo: Sendable {
     /// 検索ソース
     enum Source: String, Sendable {
         case openFoodFacts = "Open Food Facts"
-        case rakuten = "楽天"
         case yahoo = "Yahoo"
         case manual = "手動入力"
 
@@ -20,8 +19,6 @@ struct ProductInfo: Sendable {
             switch self {
             case .openFoodFacts:
                 return "Open Food Facts"
-            case .rakuten:
-                return L10n.string("楽天")
             case .yahoo:
                 return L10n.string("Yahoo")
             case .manual:
@@ -67,21 +64,15 @@ enum ProductSearchError: Error, LocalizedError {
 }
 
 /// 商品検索サービス
-/// 楽天・Yahoo APIを使用してJANコードから商品情報を取得
+/// Yahoo API と Open Food Facts を使用してJANコードから商品情報を取得
 actor ProductSearchService {
     typealias SearchOperation = @Sendable (String) async throws -> ProductInfo?
 
     struct SearchAttemptDeadlines: Sendable {
-        let rakutenBackend: TimeInterval
-        let rakutenProduct: TimeInterval
-        let rakutenKeyword: TimeInterval
         let openFoodFacts: TimeInterval
         let yahoo: TimeInterval
 
         static let `default` = SearchAttemptDeadlines(
-            rakutenBackend: 10,
-            rakutenProduct: 4,
-            rakutenKeyword: 3,
             openFoodFacts: 3,
             yahoo: 3
         )
@@ -158,26 +149,17 @@ actor ProductSearchService {
     
     private let session: URLSession
     private let deadlines: SearchAttemptDeadlines
-    private let rakutenBackendOperation: SearchOperation?
-    private let rakutenProductOperation: SearchOperation?
-    private let rakutenKeywordOperation: SearchOperation?
     private let openFoodFactsOperation: SearchOperation?
     private let yahooOperation: SearchOperation?
 
     init(
         session: URLSession? = nil,
         deadlines: SearchAttemptDeadlines = .default,
-        rakutenBackendOperation: SearchOperation? = nil,
-        rakutenProductOperation: SearchOperation? = nil,
-        rakutenKeywordOperation: SearchOperation? = nil,
         openFoodFactsOperation: SearchOperation? = nil,
         yahooOperation: SearchOperation? = nil
     ) {
         self.session = session ?? ProductSearchService.makeSession()
         self.deadlines = deadlines
-        self.rakutenBackendOperation = rakutenBackendOperation
-        self.rakutenProductOperation = rakutenProductOperation
-        self.rakutenKeywordOperation = rakutenKeywordOperation
         self.openFoodFactsOperation = openFoodFactsOperation
         self.yahooOperation = yahooOperation
     }
@@ -391,27 +373,6 @@ actor ProductSearchService {
         return "\(brand) \(name)"
     }
 
-    private func performRakutenBackendSearch(janCode: String) async throws -> ProductInfo? {
-        if let rakutenBackendOperation {
-            return try await rakutenBackendOperation(janCode)
-        }
-        return try await searchRakutenViaBackend(janCode: janCode, timeout: deadlines.rakutenBackend)
-    }
-
-    private func performRakutenProductSearch(janCode: String) async throws -> ProductInfo? {
-        if let rakutenProductOperation {
-            return try await rakutenProductOperation(janCode)
-        }
-        return try await searchRakutenProduct(janCode: janCode, timeout: deadlines.rakutenProduct)
-    }
-
-    private func performRakutenKeywordSearch(janCode: String) async throws -> ProductInfo? {
-        if let rakutenKeywordOperation {
-            return try await rakutenKeywordOperation(janCode)
-        }
-        return try await searchRakuten(janCode: janCode, timeout: deadlines.rakutenKeyword)
-    }
-
     private func performOpenFoodFactsSearch(janCode: String) async throws -> ProductInfo? {
         if let openFoodFactsOperation {
             return try await openFoodFactsOperation(janCode)
@@ -423,7 +384,7 @@ actor ProductSearchService {
         if let yahooOperation {
             return try await yahooOperation(janCode)
         }
-        if APIConfig.isRakutenBackendConfigured {
+        if APIConfig.isBackendConfigured {
             return try await searchYahooViaBackend(janCode: janCode, timeout: deadlines.yahoo)
         }
         return try await searchYahoo(janCode: janCode, timeout: deadlines.yahoo)
@@ -441,10 +402,7 @@ actor ProductSearchService {
             throw ProductSearchError.invalidJANCode
         }
 
-        let hasConfiguredCommercialAPI =
-            APIConfig.isRakutenBackendConfigured ||
-            APIConfig.isRakutenConfigured ||
-            APIConfig.isYahooConfigured
+        let hasConfiguredCommercialAPI = APIConfig.isYahooSearchAvailable
         var technicalFailures: [SearchAttemptFailure] = []
         var sawCommercialNotFound = false
         var sawAnyNotFound = false
@@ -467,7 +425,7 @@ actor ProductSearchService {
 
         // 1. Yahoo が backend または direct で利用できる場合は Yahoo を優先
         if APIConfig.isYahooSearchAvailable {
-            if APIConfig.isRakutenBackendConfigured {
+            if APIConfig.isBackendConfigured {
                 debugLog("[ProductSearch] Yahoo backend検索を優先します")
             } else {
                 debugLog("[ProductSearch] Yahoo検索を優先します")
@@ -487,36 +445,7 @@ actor ProductSearchService {
         } else {
             debugLog("[ProductSearch] Yahoo検索は未設定です")
 
-            // 2. 従来どおり楽天検索を優先
-            if APIConfig.isRakutenBackendConfigured {
-                if let product = resolve(await runSearchAttempt(source: .rakuten) {
-                    try await performRakutenBackendSearch(janCode: cleanedCode)
-                }, isCommercialSource: true) {
-                    return product
-                }
-            } else {
-                debugLog("[ProductSearch] 楽天Backendは未設定です")
-            }
-
-            if !APIConfig.isRakutenBackendConfigured && APIConfig.isRakutenConfigured {
-                if let product = resolve(await runSearchAttempt(source: .rakuten) {
-                    try await performRakutenProductSearch(janCode: cleanedCode)
-                }, isCommercialSource: true) {
-                    return product
-                }
-
-                if let product = resolve(await runSearchAttempt(source: .rakuten) {
-                    try await performRakutenKeywordSearch(janCode: cleanedCode)
-                }, isCommercialSource: true) {
-                    return product
-                }
-            } else if APIConfig.isRakutenBackendConfigured {
-                debugLog("[ProductSearch] Backend設定があるため direct Rakuten API はスキップします")
-            } else {
-                debugLog("[ProductSearch] 楽天APIは未設定です")
-            }
-
-            // 3. Open Food Facts API（無料・登録不要）
+            // Yahoo 未設定時も Open Food Facts は利用する
             if let product = resolve(await runSearchAttempt(source: .openFoodFacts) {
                 try await performOpenFoodFactsSearch(janCode: cleanedCode)
             }, isCommercialSource: false) {
@@ -637,91 +566,6 @@ actor ProductSearchService {
         )
     }
     
-    // MARK: - 楽天API
-
-    private func searchRakutenViaBackend(janCode: String, timeout: TimeInterval) async throws -> ProductInfo? {
-        guard let url = APIConfig.rakutenSearchURL(for: janCode) else {
-            throw SearchAttemptFailure.invalidResponse(
-                source: .rakuten,
-                detail: L10n.string("楽天Backend検索URLを生成できませんでした")
-            )
-        }
-
-        debugLog("[ProductSearch] Requesting Rakuten backend: \(url.absoluteString)")
-
-        let (data, response) = try await requestData(from: url, source: .rakuten, timeout: timeout)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw SearchAttemptFailure.invalidResponse(
-                source: .rakuten,
-                detail: L10n.string("楽天Backend検索のHTTPレスポンスを取得できませんでした")
-            )
-        }
-
-        let payload = backendErrorPayload(from: data)
-
-        if httpResponse.statusCode == 404 {
-            if payload?.error == "not_found" {
-                return nil
-            }
-
-            throw SearchAttemptFailure.httpStatus(
-                source: .rakuten,
-                statusCode: httpResponse.statusCode,
-                detail: payload?.message ?? sanitizedResponseDetail(from: data)
-            )
-        }
-
-        if httpResponse.statusCode == 429 || payload?.error == "rate_limited" {
-            throw SearchAttemptFailure.rateLimited(
-                source: .rakuten,
-                retryAfterSeconds: retryAfterSeconds(from: httpResponse, payload: payload)
-            )
-        }
-
-        if httpResponse.statusCode == 503 {
-            if payload?.error == "upstream_rate_limited" {
-                throw SearchAttemptFailure.rateLimited(
-                    source: .rakuten,
-                    retryAfterSeconds: retryAfterSeconds(from: httpResponse, payload: payload)
-                )
-            }
-
-            throw SearchAttemptFailure.serviceUnavailable(source: .rakuten)
-        }
-
-        guard httpResponse.statusCode == 200 else {
-            throw SearchAttemptFailure.httpStatus(
-                source: .rakuten,
-                statusCode: httpResponse.statusCode,
-                detail: payload?.message ?? sanitizedResponseDetail(from: data)
-            )
-        }
-
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw SearchAttemptFailure.parse(
-                source: .rakuten,
-                detail: L10n.string("楽天Backend検索のJSONを解析できませんでした")
-            )
-        }
-
-        guard let name = normalizedText(json["name"]) else {
-            throw SearchAttemptFailure.parse(
-                source: .rakuten,
-                detail: L10n.string("楽天Backend検索の name を取得できませんでした")
-            )
-        }
-
-        return ProductInfo(
-            name: name,
-            description: normalizedText(json["description"]),
-            category: normalizedText(json["category"]),
-            imageURL: normalizedText(json["imageURL"]).flatMap(URL.init(string:)),
-            janCode: normalizedText(json["janCode"]) ?? janCode,
-            source: .rakuten
-        )
-    }
-
     // MARK: - Yahoo backend
 
     private func searchYahooViaBackend(janCode: String, timeout: TimeInterval) async throws -> ProductInfo? {
@@ -811,224 +655,6 @@ actor ProductSearchService {
         )
     }
 
-    /// 楽天商品価格ナビ 製品検索API
-    /// JANコード(productCode)で直接検索する
-    private func searchRakutenProduct(janCode: String, timeout: TimeInterval) async throws -> ProductInfo? {
-        let appId = APIConfig.rakutenAppId
-        let accessKey = APIConfig.rakutenAccessKey
-
-        var components = URLComponents(string: "https://openapi.rakuten.co.jp/ichibaproduct/api/Product/Search/20250801")!
-        components.queryItems = [
-            URLQueryItem(name: "format", value: "json"),
-            URLQueryItem(name: "formatVersion", value: "2"),
-            URLQueryItem(name: "applicationId", value: appId),
-            URLQueryItem(name: "accessKey", value: accessKey),
-            URLQueryItem(name: "productCode", value: janCode),
-            URLQueryItem(
-                name: "elements",
-                value: "productName,productCaption,genreName,mediumImageUrl,productUrlPC,productCode"
-            ),
-            URLQueryItem(name: "hits", value: "1")
-        ]
-
-        guard let url = components.url else {
-            throw SearchAttemptFailure.invalidResponse(
-                source: .rakuten,
-                detail: L10n.string("商品価格ナビAPIのURLを生成できませんでした")
-            )
-        }
-
-        let maskedURL = maskedURLString(from: url, sensitiveQueryNames: ["applicationid", "accesskey"])
-        debugLog("[ProductSearch] Requesting Rakuten product API: \(maskedURL)")
-
-        let (data, response) = try await requestData(from: url, source: .rakuten, timeout: timeout)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw SearchAttemptFailure.invalidResponse(
-                source: .rakuten,
-                detail: L10n.string("商品価格ナビAPIのHTTPレスポンスを取得できませんでした")
-            )
-        }
-
-        debugLog("[ProductSearch] Rakuten product API HTTP Status: \(httpResponse.statusCode)")
-
-        if httpResponse.statusCode == 404 {
-            return nil
-        }
-
-        if httpResponse.statusCode == 429 {
-            throw SearchAttemptFailure.rateLimited(
-                source: .rakuten,
-                retryAfterSeconds: retryAfterSeconds(from: httpResponse)
-            )
-        }
-
-        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 || httpResponse.statusCode >= 500 {
-            throw SearchAttemptFailure.serviceUnavailable(source: .rakuten)
-        }
-
-        guard httpResponse.statusCode == 200 else {
-            if let responseString = sanitizedResponseDetail(from: data) {
-                debugLog("[ProductSearch] Rakuten product API error response: \(responseString)")
-            }
-            throw SearchAttemptFailure.httpStatus(
-                source: .rakuten,
-                statusCode: httpResponse.statusCode,
-                detail: sanitizedResponseDetail(from: data)
-            )
-        }
-
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw SearchAttemptFailure.parse(
-                source: .rakuten,
-                detail: L10n.string("商品価格ナビAPIのJSONを解析できませんでした")
-            )
-        }
-
-        let productPayload: [String: Any]?
-        if let products = json["Products"] as? [[String: Any]], let firstProduct = products.first {
-            productPayload = (firstProduct["Product"] as? [String: Any]) ?? firstProduct
-        } else if let items = json["items"] as? [[String: Any]], let firstItem = items.first {
-            productPayload = (firstItem["Product"] as? [String: Any]) ?? firstItem
-        } else if normalizedText(json["error"] as? String) == "not_found" {
-            return nil
-        } else {
-            throw SearchAttemptFailure.parse(
-                source: .rakuten,
-                detail: L10n.string("商品価格ナビAPIのレスポンスに Products が含まれていません")
-            )
-        }
-
-        guard let productPayload,
-              let rawProductName = normalizedText(productPayload["productName"]) else {
-            throw SearchAttemptFailure.parse(
-                source: .rakuten,
-                detail: L10n.string("商品価格ナビAPIの productName を取得できませんでした")
-            )
-        }
-
-        let productName = mergedProductName(
-            brand: normalizedText(productPayload["brandName"]),
-            name: rawProductName
-        )
-        let description = normalizedText(productPayload["productCaption"])
-        let category = normalizedText(productPayload["genreName"])
-        let imageURL = normalizedText(productPayload["mediumImageUrl"]).flatMap(URL.init(string:))
-
-        debugLog("[ProductSearch] Rakuten product API found: \(productName)")
-
-        return ProductInfo(
-            name: productName,
-            description: description,
-            category: category,
-            imageURL: imageURL,
-            janCode: janCode,
-            source: .rakuten
-        )
-    }
-    
-    /// 楽天市場商品検索API
-    /// https://webservice.rakuten.co.jp/documentation/ichiba-item-search
-    private func searchRakuten(janCode: String, timeout: TimeInterval) async throws -> ProductInfo? {
-        let appId = APIConfig.rakutenAppId
-        let accessKey = APIConfig.rakutenAccessKey
-        
-        // URL構築（新しい楽天OpenAPI エンドポイント）
-        var components = URLComponents(string: "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601")!
-        components.queryItems = [
-            URLQueryItem(name: "format", value: "json"),
-            URLQueryItem(name: "keyword", value: janCode),
-            URLQueryItem(name: "applicationId", value: appId),
-            URLQueryItem(name: "accessKey", value: accessKey),
-            URLQueryItem(name: "hits", value: "1")
-        ]
-        
-        guard let url = components.url else {
-            throw SearchAttemptFailure.invalidResponse(
-                source: .rakuten,
-                detail: L10n.string("楽天市場検索APIのURLを生成できませんでした")
-            )
-        }
-        
-        let maskedURL = maskedURLString(from: url, sensitiveQueryNames: ["applicationid", "accesskey"])
-        debugLog("[ProductSearch] Requesting: \(maskedURL)")
-        
-        let (data, response) = try await requestData(from: url, source: .rakuten, timeout: timeout)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw SearchAttemptFailure.invalidResponse(
-                source: .rakuten,
-                detail: L10n.string("楽天市場検索APIのHTTPレスポンスを取得できませんでした")
-            )
-        }
-        
-        debugLog("[ProductSearch] HTTP Status: \(httpResponse.statusCode)")
-        
-        if httpResponse.statusCode == 404 {
-            return nil
-        }
-
-        if httpResponse.statusCode == 429 {
-            throw SearchAttemptFailure.rateLimited(
-                source: .rakuten,
-                retryAfterSeconds: retryAfterSeconds(from: httpResponse)
-            )
-        }
-
-        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 || httpResponse.statusCode >= 500 {
-            throw SearchAttemptFailure.serviceUnavailable(source: .rakuten)
-        }
-
-        guard httpResponse.statusCode == 200 else {
-            if let responseString = sanitizedResponseDetail(from: data) {
-                debugLog("[ProductSearch] Error response: \(responseString)")
-            }
-            throw SearchAttemptFailure.httpStatus(
-                source: .rakuten,
-                statusCode: httpResponse.statusCode,
-                detail: sanitizedResponseDetail(from: data)
-            )
-        }
-        
-        // JSONパース
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw SearchAttemptFailure.parse(
-                source: .rakuten,
-                detail: L10n.string("楽天市場検索APIのJSONを解析できませんでした")
-            )
-        }
-        
-        guard let items = json["Items"] as? [[String: Any]],
-              let firstItem = items.first,
-              let itemData = firstItem["Item"] as? [String: Any] else {
-            return nil
-        }
-
-        guard let itemName = normalizedText(itemData["itemName"]) else {
-            throw SearchAttemptFailure.parse(
-                source: .rakuten,
-                detail: L10n.string("楽天市場検索APIの itemName を取得できませんでした")
-            )
-        }
-        
-        let description = normalizedText(itemData["itemCaption"])
-        let genreName = normalizedText(itemData["genreName"])
-        let imageURLString = (itemData["mediumImageUrls"] as? [[String: String]])?.first?["imageUrl"]
-            ?? (itemData["smallImageUrls"] as? [[String: String]])?.first?["imageUrl"]
-        let imageURL = imageURLString.flatMap { URL(string: $0) }
-        
-        debugLog("[ProductSearch] Found: \(itemName)")
-        
-        return ProductInfo(
-            name: itemName,
-            description: description,
-            category: genreName,
-            imageURL: imageURL,
-            janCode: janCode,
-            source: .rakuten
-        )
-    }
-    
     // MARK: - Yahoo API
     
     /// Yahoo ショッピング商品検索API V3

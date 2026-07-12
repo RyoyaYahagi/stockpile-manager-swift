@@ -3,11 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check worker.js && node --check api/public-page.js && node --check api/privacy.js && node --check api/support.js && node --check api/v1/rakuten/redirect.js && node --check api/v1/rakuten/search.js && node --check api/v1/yahoo/search.js && node --check api/health.js",
+    "check": "node --check worker.js && node --check api/public-page.js && node --check api/privacy.js && node --check api/support.js && node --check api/v1/shared.js && node --check api/v1/yahoo/search.js && node --check api/health.js",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "deploy:dry-run": "wrangler deploy --dry-run",
-    "test": "node --test worker.test.js api/public-page.test.js api/v1/rakuten/search.test.js api/v1/rakuten/redirect.test.js api/v1/yahoo/search.test.js"
+    "test": "node --test worker.test.js api/public-page.test.js api/v1/yahoo/search.test.js"
   },
   "devDependencies": {
     "wrangler": ">=4.36.0 <5"

@@ -6,10 +6,6 @@ Stockpile iOS のバーコード検索、プライバシーポリシー、サポ
 
 - `GET /health`
 - `GET /v1/yahoo/search?jan=4901777300445`
-- `GET /v1/rakuten/search?jan=4901777300445`
-- `GET /v1/rakuten/search?jan=4901777300445&name=水`
-- `GET /v1/rakuten/redirect?jan=4901777300445`
-- `GET /v1/rakuten/redirect?jan=4901777300445&name=水`
 - `GET|HEAD /privacy`
 - `GET|HEAD /support`
 
@@ -31,12 +27,9 @@ Worker が各パスを直接処理するため、旧プラットフォームの 
 必須 secrets:
 
 - `YAHOO_CLIENT_ID`
-- `RAKUTEN_APP_ID`
-- `RAKUTEN_ACCESS_KEY`
 
 任意の設定:
 
-- `RAKUTEN_AFFILIATE_ID`
 - `OPERATOR_NAME`
 - `SUPPORT_EMAIL`
 
@@ -70,14 +63,11 @@ Cloudflare にログインした状態で、次を実行します。
 cd backend/cloudflare-product-search-api
 npm ci
 npx wrangler secret put YAHOO_CLIENT_ID
-npx wrangler secret put RAKUTEN_APP_ID
-npx wrangler secret put RAKUTEN_ACCESS_KEY
-npx wrangler secret put RAKUTEN_AFFILIATE_ID
 npx wrangler secret put OPERATOR_NAME
 npx wrangler secret put SUPPORT_EMAIL
 npm run deploy
 ```
 
-デプロイ後に表示された `workers.dev` URL で `/health`、`/privacy`、`/support`、`HEAD`、不正JAN、検索、楽天リダイレクト、429レスポンスを確認してください。
+デプロイ後に表示された `workers.dev` URL で `/health`、`/privacy`、`/support`、`HEAD`、不正JAN、Yahoo検索、429レスポンスを確認してください。
 
 確認完了後、iOS の `BackendBaseURL` と App Store Connect の Privacy Policy URL / Support URL を Worker URL に切り替えます。

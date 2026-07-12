@@ -6,13 +6,13 @@ const { privacyPage, supportPage } = await import("./public-page.js");
 test("privacy page describes the app data flows and deletion", () => {
   const page = privacyPage();
   assert.match(page, /CloudKit/);
-  assert.match(page, /楽天/);
   assert.match(page, /Yahoo/);
   assert.match(page, /JSONバックアップ/);
   assert.match(page, /保存期間と削除/);
   assert.match(page, /HTTPS/);
   assert.match(page, /Cloudflare Workers/);
   assert.doesNotMatch(page, /Vercel/);
+  assert.doesNotMatch(page, /楽天/);
 });
 
 test("support page contains actionable troubleshooting and safe-contact guidance", () => {
