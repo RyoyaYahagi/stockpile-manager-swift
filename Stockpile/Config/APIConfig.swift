@@ -97,6 +97,25 @@ struct APIConfig {
         backendEndpointURL(pathComponents: ["v1", "yahoo", "search"], janCode: janCode, itemName: nil)
     }
 
+    static var privacyPolicyURL: URL? {
+        backendPublicPageURL(pathComponent: "privacy")
+    }
+
+    static var supportURL: URL? {
+        backendPublicPageURL(pathComponent: "support")
+    }
+
+    private static func backendPublicPageURL(pathComponent: String) -> URL? {
+        guard let baseURL = backendBaseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+        components.path = "/\(pathComponent)"
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+
     private static func rakutenEndpointURL(pathComponent: String, janCode: String, itemName: String?) -> URL? {
         backendEndpointURL(pathComponents: ["v1", "rakuten", pathComponent], janCode: janCode, itemName: itemName)
     }

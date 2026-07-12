@@ -143,8 +143,20 @@ struct SettingsView: View {
                 HStack {
                     Label("バージョン", systemImage: "info.circle")
                     Spacer()
-                    Text("1.0.0")
+                    Text(appVersion)
                         .foregroundStyle(.secondary)
+                }
+
+                if let privacyPolicyURL = APIConfig.privacyPolicyURL {
+                    Link(destination: privacyPolicyURL) {
+                        Label("プライバシーポリシー", systemImage: "hand.raised")
+                    }
+                }
+
+                if let supportURL = APIConfig.supportURL {
+                    Link(destination: supportURL) {
+                        Label("サポート", systemImage: "questionmark.circle")
+                    }
                 }
             } header: {
                 Text("アプリ情報")
@@ -156,6 +168,10 @@ struct SettingsView: View {
         .task(id: memberCountRefreshKey) {
             await refreshCloudKitMemberCount()
         }
+    }
+
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-"
     }
 
     @MainActor

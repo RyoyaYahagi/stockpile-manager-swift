@@ -1,6 +1,8 @@
 import http from "node:http";
 
 import healthHandler from "./api/health.js";
+import privacyHandler from "./api/privacy.js";
+import supportHandler from "./api/support.js";
 import rakutenRedirectHandler from "./api/v1/rakuten/redirect.js";
 import rakutenSearchHandler from "./api/v1/rakuten/search.js";
 import yahooSearchHandler from "./api/v1/yahoo/search.js";
@@ -73,6 +75,14 @@ const server = http.createServer(async (request, response) => {
   try {
     if (url.pathname === "/health") {
       return await healthHandler(adaptedRequest, adaptedResponse);
+    }
+
+    if (url.pathname === "/privacy") {
+      return await privacyHandler(adaptedRequest, adaptedResponse);
+    }
+
+    if (url.pathname === "/support") {
+      return await supportHandler(adaptedRequest, adaptedResponse);
     }
 
     if (url.pathname === "/v1/rakuten/search") {
