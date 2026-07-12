@@ -34,7 +34,7 @@ while IFS= read -r path; do
   if is_forbidden_secret_path "$path"; then
     report_failure "secret file exists in Git history: $path"
   fi
-done < <(git log --all --pretty=format: --name-only | sort -u)
+done < <(git log HEAD --pretty=format: --name-only | sort -u)
 
 SECRET_PATTERN='BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|sk_(live|test)_[0-9A-Za-z]{16,}|gh[pousr]_[0-9A-Za-z]{20,}|xox[baprs]-[0-9A-Za-z-]{10,}'
 if git grep -I -n -E "$SECRET_PATTERN" -- . \

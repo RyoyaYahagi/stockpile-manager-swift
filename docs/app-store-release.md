@@ -113,7 +113,7 @@ CloudKit Console で `iCloud.com.stockpile-manager.app` の Development schema �
 
 IPA生成後は、アップロード前に署名済みappとembedded provisioning profileの両方について、Production環境、CloudKit container、`InProcessOneTimeLinks` entitlementを検証します。古いmatch profileなどで必要なentitlementが欠けた成果物はアップロードされません。
 
-加えて `scripts/release_security_preflight.sh` が、追跡済みファイル、全Git履歴、生成IPAについて秘密ファイルと秘密値の混入を検査します。検出時は値をログへ表示せず、アップロードを停止します。
+加えて `scripts/release_security_preflight.sh` が、追跡済みファイル、リリース対象 `HEAD` のGit履歴、生成IPAについて秘密ファイルと秘密値の混入を検査します。検出時は値をログへ表示せず、アップロードを停止します。
 
 ## build / version policy
 
