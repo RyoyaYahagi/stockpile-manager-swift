@@ -43,9 +43,16 @@ Stockpile iOS のバーコード検索用 Vercel バックエンドです。
 
 ## セキュリティ前提
 
-- この endpoint は code 側で 1 IP あたりの簡易レート制限を行います
+- この endpoint は code 側で 1 IP あたりの簡易レート制限を行います。クライアントが自由に指定できる `x-forwarded-for` / `x-real-ip` は使用せず、Vercel が付与する `x-vercel-forwarded-for` を使用します
 - redirect 先は `https://*.rakuten.co.jp` に限定します
-- 商用公開時は、上記に加えて Vercel Firewall / WAF / 監視の有効化を推奨します
+- インメモリ制限は Serverless インスタンスをまたがない補助防御です。商用公開前に Vercel Firewall の Rate Limiting を `/v1/rakuten/*` と `/v1/yahoo/*` に対して必ず有効化してください
+
+### 本番公開前のVercel設定
+
+1. Firewallで各IPについて `/v1/rakuten/*` と `/v1/yahoo/*` を合計30リクエスト/分に制限する
+2. 429率、5xx率、Function呼び出し数を監視し、通常値の2倍または上流APIの日次上限の80%で通知する
+3. 楽天・Yahoo側にも利用上限通知を設定し、上限到達時にキーを無効化できる担当者を決める
+4. Preview環境にはProductionのAPIキーを設定しない
 
 ## デプロイ手順
 

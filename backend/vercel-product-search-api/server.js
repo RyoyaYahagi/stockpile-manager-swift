@@ -24,7 +24,8 @@ function createRequestAdapter(request, url) {
     method: request.method ?? "GET",
     headers: normalizeHeaders(request.headers),
     query,
-    url: request.url ?? url.pathname
+    url: request.url ?? url.pathname,
+    remoteAddress: request.socket.remoteAddress
   };
 }
 

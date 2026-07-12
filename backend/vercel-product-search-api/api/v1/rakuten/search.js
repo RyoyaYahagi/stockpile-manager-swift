@@ -89,7 +89,9 @@ function rateLimitMaxRequests(env = process.env) {
 }
 
 function clientAddress(request) {
-  const forwardedFor = request.headers["x-forwarded-for"];
+  // Vercel sets this header after normalizing the inbound connection. Do not
+  // trust the generic x-forwarded-for/x-real-ip headers supplied by clients.
+  const forwardedFor = request.headers["x-vercel-forwarded-for"];
   const forwardedValue = Array.isArray(forwardedFor)
     ? forwardedFor[0]
     : forwardedFor;
@@ -97,9 +99,9 @@ function clientAddress(request) {
     return forwardedValue.split(",")[0].trim();
   }
 
-  const realIp = request.headers["x-real-ip"];
-  if (typeof realIp === "string" && realIp.trim()) {
-    return realIp.trim();
+  const remoteAddress = request.socket?.remoteAddress ?? request.remoteAddress;
+  if (typeof remoteAddress === "string" && remoteAddress.trim()) {
+    return remoteAddress.trim();
   }
 
   return "unknown";
