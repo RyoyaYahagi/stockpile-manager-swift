@@ -40,6 +40,10 @@ Stockpile iOS のバーコード検索用 Vercel バックエンドです。
   設定するとアフィリエイトURLへ誘導します。未設定時は通常の楽天URLへフォールバックします。
 - `RATE_LIMIT_MAX_REQUESTS_PER_MINUTE` 任意
   1 IP あたりの 1 分間の上限回数です。未設定時は `30` を使用します。
+- `OPERATOR_NAME` 任意
+  `/privacy` に表示する運営者名です。App Store Connectへ提出する前に設定してください。
+- `SUPPORT_EMAIL` 任意
+  `/privacy` と `/support` に表示する問い合わせメールアドレスです。App Store Connectへ提出する前に設定してください。
 
 ## セキュリティ前提
 
@@ -53,6 +57,8 @@ Stockpile iOS のバーコード検索用 Vercel バックエンドです。
 2. 429率、5xx率、Function呼び出し数を監視し、通常値の2倍または上流APIの日次上限の80%で通知する
 3. 楽天・Yahoo側にも利用上限通知を設定し、上限到達時にキーを無効化できる担当者を決める
 4. Preview環境にはProductionのAPIキーを設定しない
+
+`OPERATOR_NAME` と `SUPPORT_EMAIL` が未設定の場合、ページは仮の案内を表示します。一般公開前に必ず設定し、公開URLから実際に連絡できることを確認してください。
 
 ## デプロイ手順
 
