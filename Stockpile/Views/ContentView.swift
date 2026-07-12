@@ -5,6 +5,7 @@ import CloudKit
 extension Notification.Name {
     static let didTapNotification = Notification.Name("didTapNotification")
     static let didAcceptCloudKitShare = Notification.Name("didAcceptCloudKitShare")
+    static let didDetectCloudKitConflict = Notification.Name("didDetectCloudKitConflict")
 }
 
 @MainActor
@@ -57,6 +58,20 @@ private enum TutorialIllustrationKind {
 
 private let firstLaunchTutorialStepCount = 5
 
+enum FirstLaunchTutorialPresentationPolicy {
+    static func shouldPresentAutomatically(
+        hasCompletedTutorial: Bool,
+        hasCompletedInitialLanguageSelection: Bool,
+        hasPresentedTutorial: Bool,
+        isLanguageSelectionPresented: Bool,
+        isTutorialPresented: Bool
+    ) -> Bool {
+        guard !isLanguageSelectionPresented, !isTutorialPresented else { return false }
+        guard hasCompletedInitialLanguageSelection else { return false }
+        return !hasCompletedTutorial && !hasPresentedTutorial
+    }
+}
+
 struct ContentView: View {
     private static let isRunningUnderXCTest =
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
@@ -74,11 +89,12 @@ struct ContentView: View {
     private var hasCompletedInitialLanguageSelection = false
     @AppStorage("app.hasCompletedFirstLaunchTutorial")
     private var hasCompletedFirstLaunchTutorial = false
+    @AppStorage("app.hasPresentedFirstLaunchTutorial")
+    private var hasPresentedFirstLaunchTutorial = false
     @AppStorage("app.tutorial.replayRequestToken")
     private var tutorialReplayRequestToken = 0
     @State private var showInitialLanguageSelection = false
     @State private var showFirstLaunchTutorial = false
-    @State private var hasPresentedFirstLaunchTutorialInSession = false
     @State private var tutorialStepIndex = 0
     @State private var shouldResumeTutorialAfterAction = false
     @State private var tutorialPendingAction: FirstLaunchAction?
@@ -164,7 +180,6 @@ struct ContentView: View {
             presentPendingFirstLaunchFlowIfNeeded()
         }
         .onChange(of: tutorialReplayRequestToken) { _, _ in
-            hasPresentedFirstLaunchTutorialInSession = true
             startTutorial(at: 0)
         }
         .task(id: currentFamily?.id) {
@@ -199,6 +214,11 @@ struct ContentView: View {
             Task {
                 await refreshCloudKitSharedFamilies()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .didDetectCloudKitConflict)) { _ in
+            showCloudKitShareSuccess(
+                L10n.string("別の端末で同じデータが更新されたため、最新状態を再同期しています。")
+            )
         }
         .onDisappear {
             pendingSharedFamilyRefreshTask?.cancel()
@@ -287,6 +307,7 @@ struct ContentView: View {
     }
     
     private func startTutorial(at index: Int) {
+        hasPresentedFirstLaunchTutorial = true
         tutorialStepIndex = min(max(0, index), firstLaunchTutorialStepCount - 1)
         shouldResumeTutorialAfterAction = false
         tutorialPendingAction = nil
@@ -304,9 +325,13 @@ struct ContentView: View {
             return
         }
 
-        if !hasCompletedFirstLaunchTutorial,
-           !hasPresentedFirstLaunchTutorialInSession {
-            hasPresentedFirstLaunchTutorialInSession = true
+        if FirstLaunchTutorialPresentationPolicy.shouldPresentAutomatically(
+            hasCompletedTutorial: hasCompletedFirstLaunchTutorial,
+            hasCompletedInitialLanguageSelection: hasCompletedInitialLanguageSelection,
+            hasPresentedTutorial: hasPresentedFirstLaunchTutorial,
+            isLanguageSelectionPresented: showInitialLanguageSelection,
+            isTutorialPresented: showFirstLaunchTutorial
+        ) {
             startTutorial(at: 0)
         }
     }
@@ -316,7 +341,6 @@ struct ContentView: View {
         showInitialLanguageSelection = false
 
         guard !hasCompletedFirstLaunchTutorial else { return }
-        hasPresentedFirstLaunchTutorialInSession = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             startTutorial(at: 0)
         }
@@ -467,7 +491,14 @@ struct ContentView: View {
             }
         }
 
-        for family in cloudKitFamiliesForRefresh() {
+        let familiesToRefresh = cloudKitFamiliesForRefresh()
+        do {
+            try await sharingService.ensureAutomaticSyncSubscriptions(for: familiesToRefresh)
+        } catch {
+            logCloudKitShareError(error, context: "共有自動同期購読")
+        }
+
+        for family in familiesToRefresh {
             do {
                 try await sharingService.syncFamilyDataToCloudKit(
                     for: family,

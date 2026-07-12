@@ -49,13 +49,35 @@ jobs:
       APPSTORE_AUTOMATIC_RELEASE: ${{ inputs.automatic_release }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@d45b1a4e94b71acab930e56e79c6aa188764e7f9 # v1
         with:
           ruby-version: "3.2"
           bundler-cache: true
+
+      - name: Security preflight
+        run: bash scripts/release_security_preflight.sh
+
+      - name: Test backend
+        run: |
+          npm ci --prefix backend/cloudflare-product-search-api
+          npm run check --prefix backend/cloudflare-product-search-api
+          npm test --prefix backend/cloudflare-product-search-api
+
+      - name: Test iOS
+        run: |
+          SIMULATOR_ID="$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')"
+          if [[ -z "$SIMULATOR_ID" || "$SIMULATOR_ID" == "null" ]]; then
+            echo "No available iPhone Simulator" >&2
+            exit 1
+          fi
+          xcodebuild test \
+            -project Stockpile.xcodeproj \
+            -scheme Stockpile \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -derivedDataPath "$RUNNER_TEMP/stockpile-derived-data"
 
       - name: Run fastlane
         run: bundle exec fastlane ios ${{ inputs.lane }}

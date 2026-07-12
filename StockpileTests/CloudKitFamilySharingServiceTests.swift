@@ -5,6 +5,27 @@ import XCTest
 
 @MainActor
 final class CloudKitFamilySharingServiceTests: XCTestCase {
+    func testAutomaticSyncSubscriptionRequestCoversSharedFamilies() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有")
+        family.cloudKitDatabaseScope = .sharedDatabase
+        family.cloudKitZoneName = "family-zone"
+        family.cloudKitZoneOwnerName = CKCurrentUserDefaultName
+        family.cloudKitPendingSync = false
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        let service = CloudKitFamilySharingService(
+            modelContext: harness.context,
+            backend: backend
+        )
+
+        try await service.ensureAutomaticSyncSubscriptions(for: [family])
+
+        XCTAssertEqual(backend.automaticSubscriptionFamilyIDs, [family.id])
+    }
+
     func testReleaseEntitlementsAllowInProcessOneTimeShareLinks() throws {
         let testFileURL = URL(fileURLWithPath: #filePath)
         let repositoryRootURL = testFileURL
@@ -690,6 +711,68 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertEqual(original.participants.count, originalParticipantCount)
         XCTAssertEqual(invitation.share.participants.count, originalParticipantCount + 1)
         XCTAssertEqual(invitation.participant.permission, .readWrite)
+    }
+
+    @available(iOS 26.0, *)
+    func testOneTimeInvitationShareReplacesExistingPendingOneTimeParticipant() throws {
+        let original = CKShare(
+            recordZoneID: CKRecordZone.ID(zoneName: "replace-pending-zone", ownerName: CKCurrentUserDefaultName)
+        )
+        let oldInvitationParticipant = CKShare.Participant.oneTimeURLParticipant()
+        oldInvitationParticipant.permission = .readWrite
+        original.addParticipant(oldInvitationParticipant)
+
+        let invitation = try CloudKitFamilySharingService.makeOneTimeInvitationShare(
+            from: original,
+            replacingPendingOneTimeParticipants: true
+        )
+
+        let pendingOneTimeParticipants = invitation.share.participants.filter(
+            CloudKitFamilySharingService.isPendingOneTimeURLParticipant
+        )
+        XCTAssertEqual(pendingOneTimeParticipants.count, 1)
+        XCTAssertEqual(invitation.share.participants.count, original.participants.count)
+        XCTAssertEqual(invitation.participant.permission, .readWrite)
+    }
+
+    @available(iOS 18.0, *)
+    func testFetchShareParticipantsExcludesPendingOneTimeInvitations() async throws {
+        let harness = try TestHarness()
+        let family = Family(name: "共有家族")
+        family.cloudKitDatabaseScope = .privateDatabase
+        family.cloudKitPendingSync = false
+        family.cloudKitHasRemoteBaseline = true
+        family.cloudKitZoneName = "member-list-zone"
+        family.cloudKitZoneOwnerName = CKCurrentUserDefaultName
+        family.cloudKitShareURL = URL(string: "https://example.com/share")
+        harness.context.insert(family)
+        try harness.context.save()
+
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.fetchRecordHandler = { recordID, _ in
+            guard recordID.recordName == CKRecordNameZoneWideShare else {
+                throw CloudKitSharingError.recordNotFound
+            }
+
+            let share = CKShare(recordZoneID: recordID.zoneID)
+            let pendingParticipant = CKShare.Participant.oneTimeURLParticipant()
+            pendingParticipant.permission = .readWrite
+            share.addParticipant(pendingParticipant)
+            return share
+        }
+        let service = CloudKitFamilySharingService(modelContext: harness.context, backend: backend)
+
+        let participants = try await service.fetchShareParticipants(
+            for: family,
+            forceRefresh: true
+        )
+
+        XCTAssertEqual(participants.count, 1)
+        XCTAssertEqual(participants.first?.status, .owner)
+
+        let cachedParticipants = try await service.fetchShareParticipants(for: family)
+        XCTAssertEqual(cachedParticipants.count, 1)
+        XCTAssertEqual(cachedParticipants.first?.status, .owner)
     }
 
     func testShareAcceptanceResultPreservesPerShareError() {
@@ -1916,6 +1999,7 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
     var modifyHandler: (([CKRecord], [CKRecord.ID], FamilyCloudKitDatabaseScope) throws -> [CKRecord])?
     var deleteZoneHandler: ((CKRecordZone.ID, FamilyCloudKitDatabaseScope) throws -> Void)?
     var acceptHandler: ((CKShare.Metadata) throws -> CKShare)?
+    var automaticSubscriptionFamilyIDs: [UUID] = []
 
     func accountStatus() async throws -> CKAccountStatus {
         if let accountStatusError {
@@ -1926,6 +2010,10 @@ private final class FakeCloudKitFamilySharingBackend: CloudKitFamilySharingBacke
 
     func ensureZoneExists(_ zoneID: CKRecordZone.ID) async throws {
         ensuredZoneIDs.append(zoneID)
+    }
+
+    func ensureAutomaticSyncSubscriptions(for families: [Family]) async throws {
+        automaticSubscriptionFamilyIDs = families.map(\.id)
     }
 
     func fetchAllRecordZoneIDs(scope: FamilyCloudKitDatabaseScope) async throws -> [CKRecordZone.ID] {

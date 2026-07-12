@@ -5,8 +5,6 @@ final class ProductSearchServiceTests: XCTestCase {
     override func tearDown() {
         super.tearDown()
         unsetenv("BACKEND_BASE_URL")
-        unsetenv("RAKUTEN_APP_ID")
-        unsetenv("RAKUTEN_ACCESS_KEY")
         unsetenv("YAHOO_CLIENT_ID")
         URLProtocolStub.requestHandler = nil
     }
@@ -16,10 +14,6 @@ final class ProductSearchServiceTests: XCTestCase {
             "BACKEND_BASE_URL": "https://example.com"
         ]) {
             let service = ProductSearchService(
-                rakutenBackendOperation: { _ in
-                    XCTFail("Rakuten backend should be skipped when Yahoo backend is available")
-                    return nil
-                },
                 openFoodFactsOperation: { _ in
                     nil
                 },
@@ -53,10 +47,6 @@ final class ProductSearchServiceTests: XCTestCase {
             "BACKEND_BASE_URL": "https://example.com"
         ]) {
             let service = ProductSearchService(
-                rakutenBackendOperation: { _ in
-                    XCTFail("Rakuten backend should be skipped when Yahoo backend is available")
-                    return nil
-                },
                 openFoodFactsOperation: { _ in
                     fallbackProduct
                 },
@@ -71,7 +61,7 @@ final class ProductSearchServiceTests: XCTestCase {
         }
     }
 
-    func testBackendRateLimitedThenOpenFoodFactsHitReturnsFallbackProductWithoutDirectRakutenFallback() async throws {
+    func testYahooRateLimitedThenOpenFoodFactsHitReturnsFallbackProduct() async throws {
         let fallbackProduct = ProductInfo(
             name: "テストウォーター",
             description: nil,
@@ -82,23 +72,9 @@ final class ProductSearchServiceTests: XCTestCase {
         )
 
         try await withEnvironment([
-            "BACKEND_BASE_URL": "https://example.com",
-            "RAKUTEN_APP_ID": "local-app-id",
-            "RAKUTEN_ACCESS_KEY": "local-access-key"
+            "BACKEND_BASE_URL": "https://example.com"
         ]) {
             let service = ProductSearchService(
-                rakutenBackendOperation: { _ in
-                    XCTFail("Rakuten backend should be skipped when Yahoo backend is available")
-                    return nil
-                },
-                rakutenProductOperation: { _ in
-                    XCTFail("Direct Rakuten product search should be skipped when backend is configured")
-                    return nil
-                },
-                rakutenKeywordOperation: { _ in
-                    XCTFail("Direct Rakuten keyword search should be skipped when backend is configured")
-                    return nil
-                },
                 openFoodFactsOperation: { _ in
                     fallbackProduct
                 },
@@ -113,7 +89,7 @@ final class ProductSearchServiceTests: XCTestCase {
         }
     }
 
-    func testYahooConfiguredUsesYahooBeforeRakuten() async throws {
+    func testYahooConfiguredUsesYahooBeforeOpenFoodFacts() async throws {
         let yahooProduct = ProductInfo(
             name: "ヤフーの水",
             description: nil,
@@ -125,23 +101,9 @@ final class ProductSearchServiceTests: XCTestCase {
 
         try await withEnvironment([
             "YAHOO_CLIENT_ID": "test-client-id",
-            "BACKEND_BASE_URL": "https://example.com",
-            "RAKUTEN_APP_ID": "local-app-id",
-            "RAKUTEN_ACCESS_KEY": "local-access-key"
+            "BACKEND_BASE_URL": "https://example.com"
         ]) {
             let service = ProductSearchService(
-                rakutenBackendOperation: { _ in
-                    XCTFail("Rakuten backend should be skipped when Yahoo is configured")
-                    return nil
-                },
-                rakutenProductOperation: { _ in
-                    XCTFail("Direct Rakuten product search should be skipped when Yahoo is configured")
-                    return nil
-                },
-                rakutenKeywordOperation: { _ in
-                    XCTFail("Direct Rakuten keyword search should be skipped when Yahoo is configured")
-                    return nil
-                },
                 yahooOperation: { _ in
                     yahooProduct
                 }
@@ -153,7 +115,7 @@ final class ProductSearchServiceTests: XCTestCase {
         }
     }
 
-    func testBackendConfiguredUsesYahooBeforeRakutenWithoutLocalYahooClientId() async throws {
+    func testBackendConfiguredUsesYahooWithoutLocalYahooClientId() async throws {
         let yahooProduct = ProductInfo(
             name: "バックエンドの水",
             description: nil,
@@ -165,23 +127,9 @@ final class ProductSearchServiceTests: XCTestCase {
 
         try await withEnvironment([
             "YAHOO_CLIENT_ID": nil,
-            "BACKEND_BASE_URL": "https://example.com",
-            "RAKUTEN_APP_ID": "local-app-id",
-            "RAKUTEN_ACCESS_KEY": "local-access-key"
+            "BACKEND_BASE_URL": "https://example.com"
         ]) {
             let service = ProductSearchService(
-                rakutenBackendOperation: { _ in
-                    XCTFail("Rakuten backend should be skipped when Yahoo backend is available")
-                    return nil
-                },
-                rakutenProductOperation: { _ in
-                    XCTFail("Direct Rakuten product search should be skipped when Yahoo backend is available")
-                    return nil
-                },
-                rakutenKeywordOperation: { _ in
-                    XCTFail("Direct Rakuten keyword search should be skipped when Yahoo backend is available")
-                    return nil
-                },
                 yahooOperation: { _ in
                     yahooProduct
                 }
@@ -221,9 +169,7 @@ final class ProductSearchServiceTests: XCTestCase {
 
         try await withEnvironment([
             "YAHOO_CLIENT_ID": "test-client-id",
-            "BACKEND_BASE_URL": "YOUR_BACKEND_BASE_URL_HERE",
-            "RAKUTEN_APP_ID": nil,
-            "RAKUTEN_ACCESS_KEY": nil
+            "BACKEND_BASE_URL": "YOUR_BACKEND_BASE_URL_HERE"
         ]) {
             let session = makeStubbedSession { request in
                 guard let url = request.url,
@@ -267,15 +213,11 @@ final class ProductSearchServiceTests: XCTestCase {
         }
     }
 
-    func testBackendRateLimitedWithoutFallbackSurfacesFriendlyRateLimitError() async throws {
+    func testYahooRateLimitedWithoutFallbackSurfacesFriendlyRateLimitError() async throws {
         try await withEnvironment([
             "BACKEND_BASE_URL": "https://example.com"
         ]) {
             let service = ProductSearchService(
-                rakutenBackendOperation: { _ in
-                    XCTFail("Rakuten backend should be skipped when Yahoo backend is available")
-                    return nil
-                },
                 openFoodFactsOperation: { _ in
                     nil
                 },
@@ -321,10 +263,6 @@ final class ProductSearchServiceTests: XCTestCase {
             "BACKEND_BASE_URL": "https://example.com"
         ]) {
             let service = ProductSearchService(
-                rakutenBackendOperation: { _ in
-                    XCTFail("Rakuten backend should be skipped when Yahoo backend is available")
-                    return nil
-                },
                 openFoodFactsOperation: { _ in
                     throw URLError(.timedOut)
                 },

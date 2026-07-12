@@ -1,16 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resetRateLimitBuckets } from "../rakuten/search.js";
 import { handleYahooSearch } from "./search.js";
 
 const env = {
-  YAHOO_CLIENT_ID: "test-yahoo-client-id"
+  YAHOO_CLIENT_ID: "test-yahoo-client-id",
+  PRODUCT_SEARCH_RATE_LIMITER: {
+    limit: async () => ({ success: true })
+  }
 };
-
-test.beforeEach(() => {
-  resetRateLimitBuckets();
-});
 
 function createRequest(query = {}, headers = {}) {
   return {
@@ -41,10 +39,13 @@ function createResponseRecorder() {
 }
 
 test("handleYahooSearch returns 429 with retryAfter when backend rate limit is exceeded", async () => {
-  const headers = { "x-forwarded-for": "2001:db8::10" };
+  const headers = { "cf-connecting-ip": "2001:db8::10" };
+  let calls = 0;
   const limitedEnv = {
     ...env,
-    RATE_LIMIT_MAX_REQUESTS_PER_MINUTE: "1"
+    PRODUCT_SEARCH_RATE_LIMITER: {
+      limit: async () => ({ success: calls++ === 0 })
+    }
   };
 
   const firstResponse = createResponseRecorder();
@@ -76,7 +77,7 @@ test("handleYahooSearch returns 429 with retryAfter when backend rate limit is e
 
   assert.equal(secondResponse.statusCode, 429);
   assert.equal(secondResponse.headers["Cache-Control"], "no-store");
-  assert.ok(Number(secondResponse.headers["Retry-After"]) >= 1);
+  assert.equal(secondResponse.headers["Retry-After"], "60");
   assert.deepEqual(JSON.parse(secondResponse.body), {
     error: "rate_limited",
     retryAfterSeconds: Number(secondResponse.headers["Retry-After"])

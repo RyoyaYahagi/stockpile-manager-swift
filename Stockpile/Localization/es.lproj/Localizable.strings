@@ -162,7 +162,6 @@
 "JANコード" = "Código JAN";
 "JANコード: %@" = "Código JAN: %@";
 "手動入力" = "Entrada manual";
-"楽天" = "Rakuten";
 "無効なJANコードです" = "Código JAN no válido.";
 
 "共有完了メッセージを閉じる" = "Cerrar el mensaje de compartición completada";
@@ -211,9 +210,9 @@
 "通知単位" = "Unidad de recordatorio";
 "共有リンクを再送" = "Reenviar enlace compartido";
 "先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。" = "Primero crea un enlace de iCloud y después elige cómo enviarlo.";
-"先に iCloud の共有リンクを作成し、その後に共有方法を選んで送信できます。離脱した相手を再参加させる場合は「共有設定を管理」から招待し直してください。" = "Primero crea un enlace de iCloud y después elige cómo enviarlo. Si alguien necesita volver a unirse tras salir, invítalo de nuevo desde “Gestionar el uso compartido”.";
+"共有リンクの作成には時間がかかる場合があります。完了後に共有方法を選んで送信できます。" = "La creación del enlace compartido puede tardar un poco. Cuando esté listo, podrás elegir cómo enviarlo.";
 "作成済みの共有リンクを送信できます。参加者の管理や共有停止は「共有設定を管理」から行えます。" = "Puedes enviar el enlace ya creado. Gestiona a los participantes o detén el uso compartido desde “Gestionar el uso compartido”.";
-"このリンクは private share 用の共有リンクです。離脱した相手の再参加には使えない場合があるため、その場合は「共有設定を管理」から招待し直してください。" = "Este enlace es para un uso compartido privado. Si alguien no puede volver a unirse después de salir, invítalo de nuevo desde “Gestionar el uso compartido”.";
+"共有リンクを再送できます。以前にこの共有から離脱した人を再招待する場合は、「共有設定を管理」から招待してください。" = "Puedes volver a enviar el enlace compartido. Para volver a invitar a alguien que salió de este uso compartido, usa “Gestionar el uso compartido”.";
 "メンバー（%@人）" = "Miembros (%@)";
 "共有設定を管理" = "Gestionar el uso compartido";
 "共有方法" = "Método de uso compartido";
@@ -265,7 +264,6 @@
 "残り日数" = "Días restantes";
 "メモ" = "Notas";
 "登録日" = "Fecha de registro";
-"楽天市場で購入" = "Comprar en Rakuten";
 "この備蓄品を削除しますか？" = "¿Eliminar este artículo almacenado?";
 "品名（例: 水、缶詰、乾電池）" = "Nombre del artículo (p. ej. agua, comida enlatada, pilas)";
 "バーコードで登録" = "Añadir mediante código de barras";
@@ -286,10 +284,6 @@
 "商品価格ナビAPIのJSONを解析できませんでした" = "No se pudo analizar el JSON de la API Product Price Navi";
 "商品価格ナビAPIのレスポンスに Products が含まれていません" = "La respuesta de la API Product Price Navi no incluye Products";
 "商品価格ナビAPIの productName を取得できませんでした" = "No se pudo obtener productName de la API Product Price Navi";
-"楽天市場検索APIのURLを生成できませんでした" = "No se pudo crear la URL de la API de búsqueda de Rakuten Ichiba";
-"楽天市場検索APIのHTTPレスポンスを取得できませんでした" = "No se pudo obtener la respuesta HTTP de la API de búsqueda de Rakuten Ichiba";
-"楽天市場検索APIのJSONを解析できませんでした" = "No se pudo analizar el JSON de la API de búsqueda de Rakuten Ichiba";
-"楽天市場検索APIの itemName を取得できませんでした" = "No se pudo obtener itemName de la API de búsqueda de Rakuten Ichiba";
 "Yahoo検索APIのURLを生成できませんでした" = "No se pudo crear la URL de la API de búsqueda de Yahoo";
 "Yahoo検索APIのHTTPレスポンスを取得できませんでした" = "No se pudo obtener la respuesta HTTP de la API de búsqueda de Yahoo";
 "Yahoo検索APIのJSONを解析できませんでした" = "No se pudo analizar el JSON de la API de búsqueda de Yahoo";
