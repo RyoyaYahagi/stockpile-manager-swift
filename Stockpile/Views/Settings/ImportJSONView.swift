@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
-private struct BackupImportPayload: Decodable {
+struct BackupImportPayload: Decodable {
     let name: String
     let janCode: String?
     let quantity: Int?
@@ -39,6 +39,85 @@ private struct BackupImportPayload: Decodable {
         case bagname
         case bag_name
         case storageName
+    }
+}
+
+enum BackupImportValidator {
+    static let maximumFileSize = 5 * 1_024 * 1_024
+    static let maximumItemCount = 5_000
+    static let maximumNameLength = 200
+    static let maximumJANLength = 32
+    static let maximumBagNameLength = 200
+    static let maximumLocationNoteLength = 2_000
+    static let validQuantityRange = 1...999_999
+
+    enum ValidationError: LocalizedError {
+        case fileTooLarge
+        case tooManyItems
+        case emptyName(index: Int)
+        case fieldTooLong(field: String, index: Int)
+        case invalidQuantity(index: Int)
+        case invalidExpiryDate(index: Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .fileTooLarge:
+                return "バックアップファイルは5MB以下にしてください"
+            case .tooManyItems:
+                return "一度に復元できるアイテムは5,000件までです"
+            case .emptyName(let index):
+                return "\(index + 1)件目のアイテム名が空です"
+            case .fieldTooLong(let field, let index):
+                return "\(index + 1)件目の\(field)が長すぎます"
+            case .invalidQuantity(let index):
+                return "\(index + 1)件目の数量は1から999,999の範囲で指定してください"
+            case .invalidExpiryDate(let index):
+                return "\(index + 1)件目の期限はyyyy-MM-dd形式で指定してください"
+            }
+        }
+    }
+
+    static func decodeAndValidate(_ data: Data) throws -> [BackupImportPayload] {
+        guard data.count <= maximumFileSize else {
+            throw ValidationError.fileTooLarge
+        }
+
+        let payloads = try JSONDecoder().decode([BackupImportPayload].self, from: data)
+        guard payloads.count <= maximumItemCount else {
+            throw ValidationError.tooManyItems
+        }
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.isLenient = false
+
+        for (index, payload) in payloads.enumerated() {
+            let name = payload.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { throw ValidationError.emptyName(index: index) }
+            guard name.count <= maximumNameLength else {
+                throw ValidationError.fieldTooLong(field: "アイテム名", index: index)
+            }
+            if let janCode = payload.janCode, janCode.count > maximumJANLength {
+                throw ValidationError.fieldTooLong(field: "JANコード", index: index)
+            }
+            if let bagName = payload.bagName, bagName.count > maximumBagNameLength {
+                throw ValidationError.fieldTooLong(field: "収納場所名", index: index)
+            }
+            if let locationNote = payload.locationNote,
+               locationNote.count > maximumLocationNoteLength {
+                throw ValidationError.fieldTooLong(field: "位置メモ", index: index)
+            }
+            if let quantity = payload.quantity, !validQuantityRange.contains(quantity) {
+                throw ValidationError.invalidQuantity(index: index)
+            }
+            if let expiryDate = payload.expiryDate,
+               dateFormatter.date(from: expiryDate) == nil {
+                throw ValidationError.invalidExpiryDate(index: index)
+            }
+        }
+
+        return payloads
     }
 }
 
@@ -350,8 +429,7 @@ struct ImportJSONView: View {
     }
 
     private func decodeImportPayloads(from data: Data) throws -> [BackupImportPayload] {
-        let decoder = JSONDecoder()
-        return try decoder.decode([BackupImportPayload].self, from: data)
+        try BackupImportValidator.decodeAndValidate(data)
     }
 
     private func restoreImportPayloads(

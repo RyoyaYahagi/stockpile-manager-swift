@@ -2613,7 +2613,7 @@ enum CloudKitSharingDiagnostics {
 
     static func log(event: String, details: [String: String] = [:]) {
         var entries = loadEntries()
-        entries.append(Entry(timestamp: Date(), event: event, details: details))
+        entries.append(Entry(timestamp: Date(), event: event, details: sanitized(details)))
         if entries.count > maximumEntryCount {
             entries.removeFirst(entries.count - maximumEntryCount)
         }
@@ -2629,6 +2629,22 @@ enum CloudKitSharingDiagnostics {
             details["ckCode"] = String(ckError.code.rawValue)
         }
         log(event: context, details: details)
+    }
+
+    private static func sanitized(_ details: [String: String]) -> [String: String] {
+        #if DEBUG
+        details
+        #else
+        let exactAllowedKeys: Set<String> = [
+            "attempt", "ckCode", "databaseScope", "errorType", "operation",
+            "scope", "shareState", "status"
+        ]
+        return details.filter { key, _ in
+            exactAllowedKeys.contains(key)
+                || key.hasSuffix("Count")
+                || key.hasSuffix("Duration")
+        }
+        #endif
     }
 
     static func clear() {

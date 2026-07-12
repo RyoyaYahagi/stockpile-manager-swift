@@ -66,6 +66,28 @@ final class AppLocalizationTests: XCTestCase {
     }
 }
 
+final class BackupImportValidatorTests: XCTestCase {
+    func testAcceptsValidBackup() throws {
+        let data = Data("[{\"name\":\"Water\",\"quantity\":3,\"expiryDate\":\"2027-01-31\"}]".utf8)
+        XCTAssertEqual(try BackupImportValidator.decodeAndValidate(data).count, 1)
+    }
+
+    func testRejectsInvalidQuantityBeforeImport() {
+        let data = Data("[{\"name\":\"Water\",\"quantity\":0}]".utf8)
+        XCTAssertThrowsError(try BackupImportValidator.decodeAndValidate(data))
+    }
+
+    func testRejectsInvalidDateBeforeImport() {
+        let data = Data("[{\"name\":\"Water\",\"expiryDate\":\"2027-02-30\"}]".utf8)
+        XCTAssertThrowsError(try BackupImportValidator.decodeAndValidate(data))
+    }
+
+    func testRejectsOversizedBackupBeforeDecoding() {
+        let data = Data(repeating: 0x20, count: BackupImportValidator.maximumFileSize + 1)
+        XCTAssertThrowsError(try BackupImportValidator.decodeAndValidate(data))
+    }
+}
+
 final class FirstLaunchTutorialPresentationPolicyTests: XCTestCase {
     func testPresentsOnceAfterInitialLanguageSelection() {
         XCTAssertTrue(

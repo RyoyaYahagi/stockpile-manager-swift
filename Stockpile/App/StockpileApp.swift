@@ -3,6 +3,37 @@ import SwiftData
 import UIKit
 import UserNotifications
 
+@MainActor
+@Observable
+final class ModelContainerStartup {
+    private(set) var container: ModelContainer?
+    private(set) var errorDescription: String?
+
+    init() {
+        retry()
+    }
+
+    func retry() {
+        StockpileApp.prepareProtectedApplicationSupportDirectory()
+        let configuration = ModelConfiguration(cloudKitDatabase: .none)
+        do {
+            container = try ModelContainer(
+                for: Family.self,
+                User.self,
+                Bag.self,
+                Item.self,
+                CloudKitDeletionMarker.self,
+                NotificationSettings.self,
+                configurations: configuration
+            )
+            errorDescription = nil
+        } catch {
+            container = nil
+            errorDescription = error.localizedDescription
+        }
+    }
+}
+
 final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
     func application(
         _ application: UIApplication,
@@ -61,45 +92,29 @@ struct StockpileApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var localizationController = LocalizationController()
     @State private var premiumAccessManager = PremiumAccessManager.shared
-    
-    private let sharedModelContainer: ModelContainer = {
-        prepareProtectedApplicationSupportDirectory()
-        
-        let configuration = ModelConfiguration(cloudKitDatabase: .none)
-        
-        do {
-            return try ModelContainer(
-                for: Family.self,
-                User.self,
-                Bag.self,
-                Item.self,
-                CloudKitDeletionMarker.self,
-                NotificationSettings.self,
-                configurations: configuration
-            )
-        } catch {
-            fatalError("Failed to create ModelContainer: \(error)")
-        }
-    }()
-
-    init() {
-        CloudKitSyncRuntime.shared.configure(container: sharedModelContainer)
-    }
+    @State private var modelStartup = ModelContainerStartup()
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(localizationController)
-                .environment(premiumAccessManager)
-                .environment(\.locale, localizationController.locale)
-                .task {
-                    CloudKitSyncRuntime.shared.configure(container: sharedModelContainer)
-                }
+            if let container = modelStartup.container {
+                ContentView()
+                    .environment(localizationController)
+                    .environment(premiumAccessManager)
+                    .environment(\.locale, localizationController.locale)
+                    .modelContainer(container)
+                    .task {
+                        CloudKitSyncRuntime.shared.configure(container: container)
+                    }
+            } else {
+                ModelContainerRecoveryView(
+                    diagnostics: modelStartup.errorDescription,
+                    retry: modelStartup.retry
+                )
+            }
         }
-        .modelContainer(sharedModelContainer)
     }
 
-    private static func prepareProtectedApplicationSupportDirectory() {
+    static func prepareProtectedApplicationSupportDirectory() {
         guard let appSupportURL = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
@@ -120,6 +135,34 @@ struct StockpileApp: App {
             #if DEBUG
             print("⚠️ Application Support directory preparation failed: \(error)")
             #endif
+        }
+    }
+}
+
+private struct ModelContainerRecoveryView: View {
+    let diagnostics: String?
+    let retry: @MainActor () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ContentUnavailableView {
+                Label("データを開けませんでした", systemImage: "externaldrive.badge.exclamationmark")
+            } description: {
+                Text("端末の空き容量とiOSの状態を確認して再試行してください。アプリを削除すると端末内データも失われるため、削除せずサポートへご連絡ください。")
+            } actions: {
+                Button("再試行", action: retry)
+                    .buttonStyle(.borderedProminent)
+                if let supportURL = APIConfig.supportURL {
+                    Link("サポートを開く", destination: supportURL)
+                }
+                if let diagnostics, !diagnostics.isEmpty {
+                    Text("診断情報: \(diagnostics)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+            .padding()
         }
     }
 }
