@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stockpile-product-search-api",
+  "main": "worker.js",
+  "compatibility_date": "2026-07-12",
+  "workers_dev": true,
+  "secrets": {
+    "required": [
+      "YAHOO_CLIENT_ID",
+      "RAKUTEN_APP_ID",
+      "RAKUTEN_ACCESS_KEY"
+    ]
+  },
+  "ratelimits": [
+    {
+      "name": "PRODUCT_SEARCH_RATE_LIMITER",
+      "namespace_id": "20260712",
+      "simple": {
+        "limit": 30,
+        "period": 60
+      }
+    }
+  ]
+}

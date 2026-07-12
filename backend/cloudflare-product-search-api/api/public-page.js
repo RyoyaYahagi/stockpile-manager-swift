@@ -29,13 +29,13 @@ function escapeHTML(value) {
   });
 }
 
-function configuredOperatorName() {
-  const name = process.env.OPERATOR_NAME?.trim() ?? "";
+function configuredOperatorName(env = {}) {
+  const name = typeof env.OPERATOR_NAME === "string" ? env.OPERATOR_NAME.trim() : "";
   return name ? escapeHTML(name) : "Stockpile開発者";
 }
 
-function configuredSupportContact() {
-  const email = process.env.SUPPORT_EMAIL?.trim() ?? "";
+function configuredSupportContact(env = {}) {
+  const email = typeof env.SUPPORT_EMAIL === "string" ? env.SUPPORT_EMAIL.trim() : "";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return `<p>お問い合わせ先は、App Store Connectに掲載しているサポートURLの案内をご確認ください。</p>`;
   }
@@ -43,16 +43,17 @@ function configuredSupportContact() {
   return `<p>お問い合わせ先: <a href="mailto:${safeEmail}">${safeEmail}</a></p>`;
 }
 
-export const privacyPage = htmlPage(
-  "プライバシーポリシー",
+export function privacyPage(env = {}) {
+  return htmlPage(
+    "プライバシーポリシー",
   `<p class="updated">制定日・最終更新日: 2026年7月12日</p>
-  <p><strong>運営者:</strong> ${configuredOperatorName()}（以下「運営者」）</p>
+  <p><strong>運営者:</strong> ${configuredOperatorName(env)}（以下「運営者」）</p>
   <p>Stockpile（以下「本アプリ」）は、備蓄品の管理、期限通知、商品検索、利用者が選択した家族とのデータ共有を提供します。本ポリシーは、本アプリと本ページで取り扱う情報を説明します。</p>
   <h2>取得・保存する情報</h2>
   <ul>
     <li><strong>ユーザーコンテンツ:</strong> 家族名、表示名、メールアドレス（入力した場合）、収納場所、備蓄品名、JANコード、数量、期限、メモ。</li>
     <li><strong>iCloud共有情報:</strong> iCloud共有を有効にした場合、上記の共有対象データとCloudKitの共有参加者情報がAppleのCloudKitに保存されます。共有は招待制です。</li>
-    <li><strong>商品検索:</strong> 検索に使ったJANコードと、入力した場合の商品名。検索結果を返すため、Vercel上の本アプリサーバーを経由して楽天、Yahoo! JAPAN、Open Food Factsへ送信されます。</li>
+    <li><strong>商品検索:</strong> 検索に使ったJANコードと、入力した場合の商品名。検索結果を返すため、Cloudflare Workers上の本アプリサーバーを経由して楽天、Yahoo! JAPAN、Open Food Factsへ送信されます。</li>
     <li><strong>カメラ:</strong> バーコード読み取りと端末上のOCRに使用します。カメラ映像・画像を運営者のサーバーへ保存しません。</li>
     <li><strong>通知・購入:</strong> 期限通知の設定、Apple Push Notificationの登録、StoreKitによる購入・復元状態の確認。</li>
     <li><strong>技術情報:</strong> 不正利用防止のため、商品検索APIでは接続元IPをレート制限の識別に一時的に使用します。検索語や商品データを運営者が独自のデータベースへ保存する設計ではありません。</li>
@@ -68,7 +69,7 @@ export const privacyPage = htmlPage(
   <ul>
     <li><strong>Apple iCloud / CloudKit:</strong> 利用者が有効にした家族共有データの保存・同期。</li>
     <li><strong>Apple StoreKit / Push Notification:</strong> 購入状態と通知の提供。</li>
-    <li><strong>Vercel:</strong> 商品検索APIの実行基盤。通信元の技術情報はVercelのサービスログで処理される場合があります。</li>
+    <li><strong>Cloudflare Workers:</strong> 商品検索APIの実行基盤。通信元の技術情報はCloudflareのサービスログで処理される場合があります。</li>
     <li><strong>楽天、Yahoo! JAPAN、Open Food Facts:</strong> 商品検索結果の提供。各サービスのプライバシー方針も確認してください。</li>
   </ul>
   <p>広告目的の追跡、行動履歴の広告利用、個人データの販売は行いません。商品検索サービスへの送信は、検索機能を利用した場合に限られます。</p>
@@ -86,12 +87,14 @@ export const privacyPage = htmlPage(
   <h2>ポリシーの変更</h2>
   <p>法令や機能変更に応じて本ポリシーを更新することがあります。重要な変更は本ページの更新日でお知らせします。</p>
   <h2>お問い合わせ</h2>
-  ${configuredSupportContact()}
+  ${configuredSupportContact(env)}
   <p>データの取扱いや削除については<a href="/support">サポートページ</a>もご確認ください。</p>`
-);
+  );
+}
 
-export const supportPage = htmlPage(
-  "サポート",
+export function supportPage(env = {}) {
+  return htmlPage(
+    "サポート",
   `<p class="updated">最終更新日: 2026年7月12日</p>
   <p>Stockpileは、備蓄品の登録、期限通知、商品検索、家族共有を提供するiOSアプリです。対応OSはiOS 17以降です。</p>
   <h2>よくある質問</h2>
@@ -111,9 +114,10 @@ export const supportPage = htmlPage(
   <p>本アプリには独自アカウントはありません。端末内の備蓄品はアプリ内で削除できます。iCloud共有データは共有所有者が家族共有設定から削除してください。JSONバックアップを保存している場合は、ファイルアプリやクラウドストレージ側のコピーも削除してください。</p>
   <h2>お問い合わせ</h2>
   <p>お問い合わせの際は、アプリバージョン、iOSバージョン、端末名、発生した操作、再現手順を記載してください。備蓄品の内容、共有URL、APIキー、Apple ID、認証コード、パスワードは送らないでください。</p>
-  ${configuredSupportContact()}
+  ${configuredSupportContact(env)}
   <p><a href="/privacy">プライバシーポリシーを読む</a></p>`
-);
+  );
+}
 
 export function sendPublicPage(request, response, page) {
   if (request.method !== "GET" && request.method !== "HEAD") {

@@ -2,8 +2,8 @@ const PRODUCT_SEARCH_URL =
   "https://openapi.rakuten.co.jp/ichibaproduct/api/Product/Search/20250801";
 const ITEM_SEARCH_URL =
   "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601";
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 30;
+export const RATE_LIMIT_MAX_REQUESTS = 30;
+export const RATE_LIMIT_RETRY_AFTER_SECONDS = 60;
 export const SEARCH_CACHE_CONTROL =
   "public, max-age=0, s-maxage=86400, stale-while-revalidate=3600";
 export const DEFAULT_REQUEST_HEADERS = {
@@ -14,17 +14,8 @@ export const DEFAULT_UPSTREAM_TIMEOUTS_MS = Object.freeze({
   item: 3_000,
   keyword: 3_000
 });
-const rateLimitBuckets = globalThis.__stockpileRateLimitBuckets || new Map();
 
-if (!globalThis.__stockpileRateLimitBuckets) {
-  globalThis.__stockpileRateLimitBuckets = rateLimitBuckets;
-}
-
-export function resetRateLimitBuckets() {
-  rateLimitBuckets.clear();
-}
-
-export function readEnv(name, env = process.env) {
+export function readEnv(name, env = {}) {
   const value = env[name];
   if (typeof value !== "string") {
     return "";
@@ -78,85 +69,50 @@ function mergeProductName(brandName, productName) {
   return `${normalizedBrand} ${normalizedProductName}`;
 }
 
-function rateLimitMaxRequests(env = process.env) {
-  const configuredValue = Number.parseInt(
-    readEnv("RATE_LIMIT_MAX_REQUESTS_PER_MINUTE", env),
-    10
-  );
-  return Number.isFinite(configuredValue) && configuredValue > 0
-    ? configuredValue
-    : DEFAULT_RATE_LIMIT_MAX_REQUESTS;
-}
-
 function clientAddress(request) {
-  // Vercel sets this header after normalizing the inbound connection. Do not
-  // trust the generic x-forwarded-for/x-real-ip headers supplied by clients.
-  const forwardedFor = request.headers["x-vercel-forwarded-for"];
-  const forwardedValue = Array.isArray(forwardedFor)
-    ? forwardedFor[0]
-    : forwardedFor;
-  if (typeof forwardedValue === "string" && forwardedValue.trim()) {
-    return forwardedValue.split(",")[0].trim();
-  }
-
-  const remoteAddress = request.socket?.remoteAddress ?? request.remoteAddress;
-  if (typeof remoteAddress === "string" && remoteAddress.trim()) {
-    return remoteAddress.trim();
-  }
-
-  return "unknown";
+  const headers = request.headers;
+  const rawValue = typeof headers?.get === "function"
+    ? headers.get("CF-Connecting-IP")
+    : headers?.["cf-connecting-ip"] ?? headers?.["CF-Connecting-IP"];
+  return typeof rawValue === "string" && rawValue.trim()
+    ? rawValue.trim()
+    : "unknown";
 }
 
-function pruneRateLimitBuckets(now) {
-  for (const [key, bucket] of rateLimitBuckets.entries()) {
-    bucket.timestamps = bucket.timestamps.filter(
-      (timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS
-    );
-
-    if (bucket.timestamps.length === 0) {
-      rateLimitBuckets.delete(key);
-    }
-  }
-}
-
-export function consumeRateLimit(request, env = process.env) {
-  const now = Date.now();
-  pruneRateLimitBuckets(now);
-
-  const limit = rateLimitMaxRequests(env);
-  const bucketKey = clientAddress(request);
-  const bucket = rateLimitBuckets.get(bucketKey) || { timestamps: [] };
-  bucket.timestamps = bucket.timestamps.filter(
-    (timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS
-  );
-
-  if (bucket.timestamps.length >= limit) {
-    const retryAfterSeconds = Math.max(
-      1,
-      Math.ceil((RATE_LIMIT_WINDOW_MS - (now - bucket.timestamps[0])) / 1000)
-    );
-    rateLimitBuckets.set(bucketKey, bucket);
+export async function consumeRateLimit(request, env = {}) {
+  const limiter = env.PRODUCT_SEARCH_RATE_LIMITER;
+  if (!limiter || typeof limiter.limit !== "function") {
     return {
       allowed: false,
-      limit,
-      remaining: 0,
-      retryAfterSeconds
+      configured: false,
+      limit: RATE_LIMIT_MAX_REQUESTS,
+      retryAfterSeconds: RATE_LIMIT_RETRY_AFTER_SECONDS
     };
   }
 
-  bucket.timestamps.push(now);
-  rateLimitBuckets.set(bucketKey, bucket);
-  return {
-    allowed: true,
-    limit,
-    remaining: Math.max(0, limit - bucket.timestamps.length),
-    retryAfterSeconds: 0
-  };
+  try {
+    const result = await limiter.limit({ key: clientAddress(request) });
+    return {
+      allowed: Boolean(result?.success),
+      configured: true,
+      limit: RATE_LIMIT_MAX_REQUESTS,
+      retryAfterSeconds: RATE_LIMIT_RETRY_AFTER_SECONDS
+    };
+  } catch (error) {
+    console.error("Cloudflare rate limiter failed", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return {
+      allowed: false,
+      configured: false,
+      limit: RATE_LIMIT_MAX_REQUESTS,
+      retryAfterSeconds: RATE_LIMIT_RETRY_AFTER_SECONDS
+    };
+  }
 }
 
 export function setRateLimitHeaders(response, rateLimit) {
   response.setHeader("X-RateLimit-Limit", String(rateLimit.limit));
-  response.setHeader("X-RateLimit-Remaining", String(rateLimit.remaining));
 
   if (!rateLimit.allowed) {
     response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
@@ -407,7 +363,7 @@ export function classifyUpstreamResult(result) {
 }
 
 export async function handleRakutenSearch(request, response, dependencies = {}) {
-  const env = dependencies.env ?? process.env;
+  const env = dependencies.env ?? {};
   const fetchImpl = dependencies.fetchImpl ?? fetch;
   const timeouts = mergeTimeouts(dependencies.timeouts);
 
@@ -418,8 +374,14 @@ export async function handleRakutenSearch(request, response, dependencies = {}) 
     });
   }
 
-  const rateLimit = consumeRateLimit(request, env);
+  const rateLimit = await consumeRateLimit(request, env);
   setRateLimitHeaders(response, rateLimit);
+  if (!rateLimit.configured) {
+    return sendJSON(response, 500, {
+      error: "server_not_configured"
+    });
+  }
+
   if (!rateLimit.allowed) {
     return sendJSON(response, 429, {
       error: "rate_limited",
@@ -534,6 +496,6 @@ export async function handleRakutenSearch(request, response, dependencies = {}) 
   }
 }
 
-export default async function handler(request, response) {
-  return handleRakutenSearch(request, response);
+export default async function handler(request, response, env = {}) {
+  return handleRakutenSearch(request, response, { env });
 }

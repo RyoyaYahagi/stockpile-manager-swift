@@ -3,18 +3,16 @@ import test from "node:test";
 
 import {
   fetchUpstream,
-  handleRakutenSearch,
-  resetRateLimitBuckets
+  handleRakutenSearch
 } from "./search.js";
 
 const env = {
   RAKUTEN_APP_ID: "test-app-id",
-  RAKUTEN_ACCESS_KEY: "test-access-key"
+  RAKUTEN_ACCESS_KEY: "test-access-key",
+  PRODUCT_SEARCH_RATE_LIMITER: {
+    limit: async () => ({ success: true })
+  }
 };
-
-test.beforeEach(() => {
-  resetRateLimitBuckets();
-});
 
 function createRequest(query = {}, headers = {}) {
   return {
@@ -68,10 +66,13 @@ test("fetchUpstream marks timed out requests", async () => {
 });
 
 test("handleRakutenSearch returns 429 with retryAfter when backend rate limit is exceeded", async () => {
-  const headers = { "x-vercel-forwarded-for": "2001:db8::10" };
+  const headers = { "cf-connecting-ip": "2001:db8::10" };
+  let calls = 0;
   const limitedEnv = {
     ...env,
-    RATE_LIMIT_MAX_REQUESTS_PER_MINUTE: "1"
+    PRODUCT_SEARCH_RATE_LIMITER: {
+      limit: async () => ({ success: calls++ === 0 })
+    }
   };
 
   const firstResponse = createResponseRecorder();
@@ -99,7 +100,7 @@ test("handleRakutenSearch returns 429 with retryAfter when backend rate limit is
 
   assert.equal(secondResponse.statusCode, 429);
   assert.equal(secondResponse.headers["Cache-Control"], "no-store");
-  assert.ok(Number(secondResponse.headers["Retry-After"]) >= 1);
+  assert.equal(secondResponse.headers["Retry-After"], "60");
   assert.deepEqual(JSON.parse(secondResponse.body), {
     error: "rate_limited",
     retryAfterSeconds: Number(secondResponse.headers["Retry-After"])

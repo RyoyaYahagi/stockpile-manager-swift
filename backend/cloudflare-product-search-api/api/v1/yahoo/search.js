@@ -83,7 +83,7 @@ function logUpstreamResult(result) {
 }
 
 export async function handleYahooSearch(request, response, dependencies = {}) {
-  const env = dependencies.env ?? process.env;
+  const env = dependencies.env ?? {};
   const fetchImpl = dependencies.fetchImpl ?? fetch;
   const timeoutMs = dependencies.timeoutMs ?? DEFAULT_UPSTREAM_TIMEOUT_MS;
 
@@ -94,8 +94,14 @@ export async function handleYahooSearch(request, response, dependencies = {}) {
     });
   }
 
-  const rateLimit = consumeRateLimit(request, env);
+  const rateLimit = await consumeRateLimit(request, env);
   setRateLimitHeaders(response, rateLimit);
+  if (!rateLimit.configured) {
+    return sendJSON(response, 500, {
+      error: "server_not_configured"
+    });
+  }
+
   if (!rateLimit.allowed) {
     return sendJSON(response, 429, {
       error: "rate_limited",
@@ -158,6 +164,6 @@ export async function handleYahooSearch(request, response, dependencies = {}) {
   );
 }
 
-export default function yahooSearchHandler(request, response) {
-  return handleYahooSearch(request, response);
+export default function yahooSearchHandler(request, response, env = {}) {
+  return handleYahooSearch(request, response, { env });
 }

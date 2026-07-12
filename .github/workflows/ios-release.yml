@@ -61,7 +61,10 @@ jobs:
         run: bash scripts/release_security_preflight.sh
 
       - name: Test backend
-        run: npm test --prefix backend/vercel-product-search-api
+        run: |
+          npm ci --prefix backend/cloudflare-product-search-api
+          npm run check --prefix backend/cloudflare-product-search-api
+          npm test --prefix backend/cloudflare-product-search-api
 
       - name: Test iOS
         run: |

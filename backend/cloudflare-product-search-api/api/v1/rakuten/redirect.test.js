@@ -1,17 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resetRateLimitBuckets } from "./search.js";
 import { handleRakutenRedirect } from "./redirect.js";
 
 const env = {
   RAKUTEN_APP_ID: "test-app-id",
-  RAKUTEN_ACCESS_KEY: "test-access-key"
+  RAKUTEN_ACCESS_KEY: "test-access-key",
+  PRODUCT_SEARCH_RATE_LIMITER: {
+    limit: async () => ({ success: true })
+  }
 };
-
-test.beforeEach(() => {
-  resetRateLimitBuckets();
-});
 
 function createRequest(query = {}, headers = {}) {
   return {
