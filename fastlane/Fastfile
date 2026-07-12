@@ -11,6 +11,7 @@ end
 
 CLOUDKIT_SCHEMA_VERIFIER = File.expand_path("../scripts/verify_cloudkit_schema.rb", __dir__)
 CLOUDKIT_IPA_VERIFIER = File.expand_path("../scripts/verify_cloudkit_ipa.sh", __dir__)
+RELEASE_SECURITY_PREFLIGHT = File.expand_path("../scripts/release_security_preflight.sh", __dir__)
 
 def env_boolean(key, default: false)
   value = ENV[key].to_s.strip
@@ -91,6 +92,12 @@ def verify_cloudkit_release_ipa(ipa_path)
   sh("bash", CLOUDKIT_IPA_VERIFIER, ipa_path)
 end
 
+def verify_release_security(ipa_path = nil)
+  command = ["bash", RELEASE_SECURITY_PREFLIGHT]
+  command << ipa_path if ipa_path
+  sh(*command)
+end
+
 def apply_versioning
   version_number = ENV["VERSION_NUMBER"].to_s.strip
   unless version_number.empty?
@@ -150,6 +157,7 @@ platform :ios do
   desc "Archive an App Store build without uploading (ASC key not required)"
   lane :build do
     configure_ci_environment
+    verify_release_security
     verify_cloudkit_production_schema
     sync_release_signing
     apply_versioning
@@ -165,6 +173,7 @@ platform :ios do
     sync_release_signing
     apply_versioning
     ipa_path = build_release_artifacts
+    verify_release_security(ipa_path)
     verify_cloudkit_release_ipa(ipa_path)
 
     upload_options = {
@@ -194,6 +203,7 @@ platform :ios do
     ipa_path = File.expand_path(options[:ipa] || "../build/#{SCHEME}.ipa", __dir__)
 
     verify_cloudkit_production_schema
+    verify_release_security(ipa_path)
     verify_cloudkit_release_ipa(ipa_path)
 
     upload_options = {
@@ -218,6 +228,7 @@ platform :ios do
     sync_release_signing
     apply_versioning
     ipa_path = build_release_artifacts
+    verify_release_security(ipa_path)
     verify_cloudkit_release_ipa(ipa_path)
 
     upload_to_app_store(
