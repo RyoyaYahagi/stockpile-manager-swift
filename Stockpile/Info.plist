@@ -7,7 +7,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>バーコードの読み取りと賞味期限ラベルの文字認識にカメラを使用します。</string>
 	<key>BackendBaseURL</key>
-	<string>https://stockpile-rakuten-proxy.vercel.app</string>
+	<string>https://stockpile-product-search-api.yhgry.workers.dev</string>
 	<key>CKSharingSupported</key>
 	<true/>
 	<key>InternalPremiumEnabled</key>

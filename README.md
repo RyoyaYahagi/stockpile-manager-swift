@@ -19,7 +19,7 @@ SwiftUI / SwiftData / CloudKit / AVFoundation / Vision / UserNotifications
 ## Configuration
 
 - iOS app に秘密情報を bundle しない運用へ変更しています
-- `BackendBaseURL` は公開設定として app bundle に含めてもよい値で、Cloudflare Workers の専用 `workers.dev` URL を使用します
+- `BackendBaseURL` は公開設定として app bundle に含めてもよい値で、`https://stockpile-product-search-api.yhgry.workers.dev` を使用します
 - 必要に応じて `Info.plist` かビルド環境変数 `BACKEND_BASE_URL` で Worker URL を上書きできます
 - `YAHOO_CLIENT_ID` は backend 側の環境変数を優先し、配布物には含めません
 - `YAHOO_CLIENT_ID` のローカル環境変数は backend なしで Yahoo API を直接確認したい場合の開発用フォールバックです

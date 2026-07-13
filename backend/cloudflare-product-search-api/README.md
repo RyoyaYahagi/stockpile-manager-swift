@@ -68,6 +68,8 @@ npx wrangler secret put SUPPORT_EMAIL
 npm run deploy
 ```
 
-デプロイ後に表示された `workers.dev` URL で `/health`、`/privacy`、`/support`、`HEAD`、不正JAN、Yahoo検索、429レスポンスを確認してください。
+現在の公開URLは `https://stockpile-product-search-api.yhgry.workers.dev` です。デプロイ後はこのURLで `/health`、`/privacy`、`/support`、`HEAD`、不正JAN、Yahoo検索、429レスポンスを確認してください。
 
-確認完了後、iOS の `BackendBaseURL` と App Store Connect の Privacy Policy URL / Support URL を Worker URL に切り替えます。
+iOS の `BackendBaseURL` と App Store Connect の Privacy Policy URL / Support URL は、次のWorker URLに揃えます。
+
+`https://stockpile-product-search-api.yhgry.workers.dev`
