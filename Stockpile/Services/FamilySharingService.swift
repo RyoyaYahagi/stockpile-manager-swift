@@ -933,6 +933,7 @@ final class CloudKitFamilySharingService {
     /// Ensures that CloudKit can notify every device participating in a family.
     /// The operation is idempotent and safe to call at launch and after accepting a share.
     func ensureAutomaticSyncSubscriptions(for families: [Family]) async throws {
+        guard families.contains(where: \.isCloudKitSharedFamily) else { return }
         try await ensureCloudKitAccountAvailable()
         try await backend.ensureAutomaticSyncSubscriptions(for: families)
     }

@@ -26,6 +26,20 @@ final class CloudKitFamilySharingServiceTests: XCTestCase {
         XCTAssertEqual(backend.automaticSubscriptionFamilyIDs, [family.id])
     }
 
+    func testAutomaticSyncSubscriptionSkipsCloudKitWhenNoSharedFamiliesExist() async throws {
+        let harness = try TestHarness()
+        let backend = FakeCloudKitFamilySharingBackend()
+        backend.accountStatusValue = .noAccount
+        let service = CloudKitFamilySharingService(
+            modelContext: harness.context,
+            backend: backend
+        )
+
+        try await service.ensureAutomaticSyncSubscriptions(for: [])
+
+        XCTAssertEqual(backend.automaticSubscriptionFamilyIDs, [])
+    }
+
     func testReleaseEntitlementsAllowInProcessOneTimeShareLinks() throws {
         let testFileURL = URL(fileURLWithPath: #filePath)
         let repositoryRootURL = testFileURL
