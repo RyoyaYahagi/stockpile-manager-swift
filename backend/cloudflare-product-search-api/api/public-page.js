@@ -46,7 +46,7 @@ function configuredSupportContact(env = {}) {
 export function privacyPage(env = {}) {
   return htmlPage(
     "プライバシーポリシー",
-  `<p class="updated">制定日・最終更新日: 2026年7月12日</p>
+  `<p class="updated">制定日・最終更新日: 2026年7月16日</p>
   <p><strong>運営者:</strong> ${configuredOperatorName(env)}（以下「運営者」）</p>
   <p>Stockpile（以下「本アプリ」）は、備蓄品の管理、期限通知、商品検索、利用者が選択した家族とのデータ共有を提供します。本ポリシーは、本アプリと本ページで取り扱う情報を説明します。</p>
   <h2>取得・保存する情報</h2>
@@ -55,20 +55,19 @@ export function privacyPage(env = {}) {
     <li><strong>iCloud共有情報:</strong> iCloud共有を有効にした場合、上記の共有対象データとCloudKitの共有参加者情報がAppleのCloudKitに保存されます。共有は招待制です。</li>
     <li><strong>商品検索:</strong> 検索に使ったJANコードと、入力した場合の商品名。検索結果を返すため、Cloudflare Workers上の本アプリサーバーを経由してYahoo! JAPAN、Open Food Factsへ送信されます。</li>
     <li><strong>カメラ:</strong> バーコード読み取りと端末上のOCRに使用します。カメラ映像・画像を運営者のサーバーへ保存しません。</li>
-    <li><strong>通知・購入:</strong> 期限通知の設定、Apple Push Notificationの登録、StoreKitによる購入・復元状態の確認。</li>
+    <li><strong>通知:</strong> 期限通知の設定とApple Push Notificationの登録。</li>
     <li><strong>技術情報:</strong> 不正利用防止のため、商品検索APIでは接続元IPをレート制限の識別に一時的に使用します。検索語や商品データを運営者が独自のデータベースへ保存する設計ではありません。</li>
   </ul>
   <h2>利用目的</h2>
   <ul>
     <li>備蓄品、家族共有、期限通知など本アプリの機能を提供するため。</li>
     <li>商品情報を検索し、検索結果を表示するため。</li>
-    <li>購入状態を確認し、有料機能を提供するため。</li>
     <li>障害調査、不正利用防止、サービスの安定運用のため。</li>
   </ul>
   <h2>第三者サービス</h2>
   <ul>
     <li><strong>Apple iCloud / CloudKit:</strong> 利用者が有効にした家族共有データの保存・同期。</li>
-    <li><strong>Apple StoreKit / Push Notification:</strong> 購入状態と通知の提供。</li>
+    <li><strong>Apple Push Notification:</strong> 期限通知の提供。</li>
     <li><strong>Cloudflare Workers:</strong> 商品検索APIの実行基盤。通信元の技術情報はCloudflareのサービスログで処理される場合があります。</li>
     <li><strong>Yahoo! JAPAN、Open Food Facts:</strong> 商品検索結果の提供。各サービスのプライバシー方針も確認してください。</li>
   </ul>
@@ -95,7 +94,7 @@ export function privacyPage(env = {}) {
 export function supportPage(env = {}) {
   return htmlPage(
     "サポート",
-  `<p class="updated">最終更新日: 2026年7月12日</p>
+  `<p class="updated">最終更新日: 2026年7月16日</p>
   <p>Stockpileは、備蓄品の登録、期限通知、商品検索、家族共有を提供するiOSアプリです。対応OSはiOS 17以降です。</p>
   <h2>よくある質問</h2>
   <h3>家族共有ができません</h3>
@@ -106,8 +105,6 @@ export function supportPage(env = {}) {
   <p>iOSの設定でStockpileの通知を許可し、アプリ内の通知設定と期限日を確認してください。集中モードや通知の要約によって表示が遅れる場合があります。</p>
   <h3>商品検索が失敗します</h3>
   <p>有効な8桁または13桁のJANコード、通信状態、商品検索サービスの一時障害を確認してください。検索サービス側に商品情報がない場合もあります。</p>
-  <h3>購入を復元したいです</h3>
-  <p>購入したApple IDでApp Storeにサインインし、アプリ内の購入画面から「購入を復元」を実行してください。返金はAppleのサポート窓口へご相談ください。</p>
   <h3>バックアップを復元したいです</h3>
   <p>設定の「バックアップから復元」からJSONファイルを選択してください。JSONバックアップは暗号化されていないため、信頼できるファイルだけを選択してください。</p>
   <h2>データの削除</h2>

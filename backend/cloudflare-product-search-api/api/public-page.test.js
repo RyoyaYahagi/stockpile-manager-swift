@@ -13,14 +13,15 @@ test("privacy page describes the app data flows and deletion", () => {
   assert.match(page, /Cloudflare Workers/);
   assert.doesNotMatch(page, /Vercel/);
   assert.doesNotMatch(page, /楽天/);
+  assert.doesNotMatch(page, /購入|課金|StoreKit|有料機能|返金/);
 });
 
 test("support page contains actionable troubleshooting and safe-contact guidance", () => {
   const page = supportPage({ SUPPORT_EMAIL: "support@example.com" });
   assert.match(page, /家族共有ができません/);
   assert.match(page, /通知が届きません/);
-  assert.match(page, /購入を復元/);
   assert.match(page, /認証コード、パスワードは送らないでください/);
   assert.match(page, /プライバシーポリシーを読む/);
   assert.match(page, /mailto:support@example.com/);
+  assert.doesNotMatch(page, /購入|課金|StoreKit|有料機能|返金/);
 });
