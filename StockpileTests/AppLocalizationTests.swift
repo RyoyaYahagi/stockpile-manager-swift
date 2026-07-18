@@ -64,6 +64,23 @@ final class AppLocalizationTests: XCTestCase {
             }
         }
     }
+
+    func testInviteCodeShareMessageKeyExistsForSupportedInAppLanguages() throws {
+        let key = "備蓄管理アプリ「らくストック」に参加しよう！\n招待コード: %@\nまたはこちらのリンクから: stockpile://join?code=%@"
+        let supportedLanguages = AppLanguage.allCases.filter { $0 != .system }
+
+        for language in supportedLanguages {
+            let bundle = AppLocalization.bundle(for: language)
+            let stringsPath = try XCTUnwrap(
+                bundle.path(forResource: "Localizable", ofType: "strings")
+            )
+            let entries = try XCTUnwrap(
+                NSDictionary(contentsOfFile: stringsPath) as? [String: String]
+            )
+
+            XCTAssertNotNil(entries[key], "Missing localization for invite code sharing in \(language.rawValue)")
+        }
+    }
 }
 
 final class BackupImportValidatorTests: XCTestCase {

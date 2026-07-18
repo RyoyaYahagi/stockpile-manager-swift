@@ -10,6 +10,14 @@ struct InviteCodeView: View {
         QRCodeGenerator.generateInviteQR(inviteCode: code, size: CGSize(width: 200, height: 200))
     }
 
+    private var shareMessage: String {
+        L10n.format(
+            "備蓄管理アプリ「らくストック」に参加しよう！\n招待コード: %@\nまたはこちらのリンクから: stockpile://join?code=%@",
+            code,
+            code
+        )
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -41,7 +49,7 @@ struct InviteCodeView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
 
-                    ShareLink(item: "備蓄品管理アプリ「Stockpile」に参加しよう！\n招待コード: \(code)\nまたはこちらのリンクから: stockpile://join?code=\(code)") {
+                    ShareLink(item: shareMessage) {
                         Label("招待を共有", systemImage: "square.and.arrow.up")
                             .font(.headline)
                             .frame(maxWidth: .infinity)

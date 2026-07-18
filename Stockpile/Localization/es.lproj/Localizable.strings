@@ -132,6 +132,7 @@
 "備蓄品を追加" = "Añadir artículo";
 "備蓄品を編集" = "Editar artículo";
 "備蓄品管理" = "Stockpile";
+"備蓄管理アプリ「らくストック」に参加しよう！\n招待コード: %@\nまたはこちらのリンクから: stockpile://join?code=%@" = "¡Únete a la app de gestión de artículos almacenados Stockpile!\nCódigo de invitación: %@\nO abre este enlace: stockpile://join?code=%@";
 "復元に失敗しました: %@" = "No se pudo restaurar: %@";
 "当日" = "El mismo día";
 "当日に通知" = "Notificar el mismo día";
