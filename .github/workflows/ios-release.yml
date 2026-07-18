@@ -12,7 +12,7 @@ on:
           - beta
           - release
       build_number:
-        description: "任意の build number。空なら GitHub run number を使用"
+        description: "任意の build number。空なら App Store Connect の最新値 + 1 を使用"
         required: false
         type: string
       submit_for_review:
