@@ -245,6 +245,26 @@ platform :ios do
     upload_to_testflight(**upload_options)
   end
 
+  desc "Upload marketing screenshots (screenshots/marketing) to App Store Connect without a binary"
+  lane :upload_screenshots do |options|
+    api_key = api_key_for_app_store_connect!
+
+    screenshots_path = File.expand_path("../screenshots/marketing", __dir__)
+    UI.user_error!("screenshots/marketing が見つかりません。先に scripts/capture_screenshots.sh と scripts/generate_marketing_images.py を実行してください。") unless Dir.exist?(screenshots_path)
+
+    upload_to_app_store(
+      api_key: api_key,
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_screenshots: false,
+      screenshots_path: screenshots_path,
+      overwrite_screenshots: true,
+      submit_for_review: false,
+      force: true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+
   desc "Build and upload the app to App Store Connect"
   lane :release do |options|
     api_key = api_key_for_app_store_connect!

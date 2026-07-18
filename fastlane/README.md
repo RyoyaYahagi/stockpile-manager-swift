@@ -39,6 +39,14 @@ Build and upload the app to TestFlight
 
 Verify and upload an existing IPA to TestFlight without rebuilding
 
+### ios upload_screenshots
+
+```sh
+[bundle exec] fastlane ios upload_screenshots
+```
+
+Upload marketing screenshots (screenshots/marketing) to App Store Connect without a binary
+
 ### ios release
 
 ```sh

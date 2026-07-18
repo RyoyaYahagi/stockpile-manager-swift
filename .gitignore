@@ -25,6 +25,9 @@ fastlane/test_output/
 *.swp
 *~
 
+# App Store screenshots (generated locally)
+/screenshots/
+
 # Node / Cloudflare Workers
 node_modules/
 .wrangler/

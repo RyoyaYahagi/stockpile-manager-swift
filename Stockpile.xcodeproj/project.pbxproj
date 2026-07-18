@@ -42,6 +42,8 @@
 		038 /* CloudKitDeletionMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146 /* CloudKitDeletionMarker.swift */; };
 		039 /* PremiumAccessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 147 /* PremiumAccessManager.swift */; };
 		040 /* PremiumPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 148 /* PremiumPlanView.swift */; };
+		160 /* ScreenshotMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 162 /* ScreenshotMode.swift */; };
+		161 /* ScreenshotFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 163 /* ScreenshotFixtures.swift */; };
 		A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000002 /* ProductSearchServiceTests.swift */; };
 		A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */; };
 		A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000004 /* PremiumAccessManagerTests.swift */; };
@@ -105,6 +107,8 @@
 		147 /* PremiumAccessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumAccessManager.swift; sourceTree = "<group>"; };
 		148 /* PremiumPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumPlanView.swift; sourceTree = "<group>"; };
 		149 /* StockpilePremium.storekit */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = StockpilePremium.storekit; sourceTree = "<group>"; };
+		162 /* ScreenshotMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotMode.swift; sourceTree = "<group>"; };
+		163 /* ScreenshotFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotFixtures.swift; sourceTree = "<group>"; };
 		A4B100000000000000000001 /* StockpileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StockpileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A4B100000000000000000002 /* ProductSearchServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchServiceTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitFamilySharingServiceTests.swift; sourceTree = "<group>"; };
@@ -225,6 +229,8 @@
 			children = (
 				107 /* Router.swift */,
 				FB0000000000000000000001 /* QRCodeGenerator.swift */,
+				162 /* ScreenshotMode.swift */,
+				163 /* ScreenshotFixtures.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -463,6 +469,8 @@
 				038 /* CloudKitDeletionMarker.swift in Sources */,
 				039 /* PremiumAccessManager.swift in Sources */,
 				040 /* PremiumPlanView.swift in Sources */,
+				160 /* ScreenshotMode.swift in Sources */,
+				161 /* ScreenshotFixtures.swift in Sources */,
 				FB0000000000000000000101 /* QRCodeGenerator.swift in Sources */,
 				FB0000000000000000000102 /* InviteCodeView.swift in Sources */,
 				FB0000000000000000000103 /* QRScannerView.swift in Sources */,
@@ -650,7 +658,7 @@
 				CODE_SIGN_ENTITLEMENTS = Stockpile/Stockpile.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2026071623091;
+				CURRENT_PROJECT_VERSION = 202607181617;
 				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -672,7 +680,7 @@
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1";
 			};
 			name = Debug;
 		};
@@ -685,7 +693,7 @@
 				CODE_SIGN_ENTITLEMENTS = Stockpile/StockpileRelease.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2026071623091;
+				CURRENT_PROJECT_VERSION = 202607181617;
 				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -707,7 +715,7 @@
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1";
 			};
 			name = Release;
 		};
@@ -717,7 +725,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2026071623091;
+				CURRENT_PROJECT_VERSION = 202607181617;
 				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -735,7 +743,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stockpile.app/Stockpile";
 			};
 			name = Debug;
@@ -746,7 +754,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2026071623091;
+				CURRENT_PROJECT_VERSION = 202607181617;
 				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -764,7 +772,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stockpile.app/Stockpile";
 			};
 			name = Release;

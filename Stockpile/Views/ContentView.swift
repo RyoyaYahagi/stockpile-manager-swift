@@ -103,6 +103,7 @@ struct ContentView: View {
     @State private var cloudKitShareSuccessMessage: String?
     @State private var cloudKitShareSuccessToken = UUID()
     @State private var pendingSharedFamilyRefreshTask: Task<Void, Never>?
+    @State private var showScreenshotAddItemFullScreen = false
     
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
@@ -175,6 +176,11 @@ struct ContentView: View {
                 )
             }
 
+            if ScreenshotMode.isActive {
+                presentScreenshotTarget()
+                return
+            }
+
             await refreshCloudKitSharedFamilies()
 
             presentPendingFirstLaunchFlowIfNeeded()
@@ -183,13 +189,15 @@ struct ContentView: View {
             startTutorial(at: 0)
         }
         .task(id: currentFamily?.id) {
+            guard !ScreenshotMode.isActive else { return }
             NotificationManager.shared.requestReschedule(using: modelContext)
         }
         .task(id: notificationRescheduleSignature) {
+            guard !ScreenshotMode.isActive else { return }
             requestRescheduleForCurrentData()
         }
         .onChange(of: scenePhase) { _, newValue in
-            guard newValue == .active else { return }
+            guard newValue == .active, !ScreenshotMode.isActive else { return }
             LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
             premiumAccessManager.refreshUsageState()
             requestRescheduleForCurrentData()
@@ -240,6 +248,11 @@ struct ContentView: View {
             guard cloudKitShareSuccessMessage != nil else { return }
             try? await Task.sleep(for: .seconds(3))
             dismissCloudKitShareSuccessBanner()
+        }
+        .fullScreenCover(isPresented: $showScreenshotAddItemFullScreen) {
+            sheetContent(for: .addItem())
+                .environment(router)
+                .id(refreshToken)
         }
         .fullScreenCover(isPresented: $showInitialLanguageSelection) {
             InitialLanguageSelectionView(
@@ -316,7 +329,29 @@ struct ContentView: View {
         showFirstLaunchTutorial = true
     }
 
+    private func presentScreenshotTarget() {
+        guard let screen = ScreenshotMode.requestedScreen else { return }
+        switch screen {
+        case "dashboard":
+            break
+        case "add-item":
+            // 通常のシート表示だと背後の暗転が写り込むため、撮影時は全画面で提示する
+            showScreenshotAddItemFullScreen = true
+        case "bags":
+            router.push(.bagList)
+        case "family":
+            if let family = currentFamily {
+                router.push(.familySettings(family))
+            }
+        case "notifications":
+            router.push(.notificationSettings)
+        default:
+            break
+        }
+    }
+
     private func presentPendingFirstLaunchFlowIfNeeded() {
+        guard !ScreenshotMode.isActive else { return }
         guard !showInitialLanguageSelection else { return }
         guard !showFirstLaunchTutorial else { return }
 
@@ -450,7 +485,7 @@ struct ContentView: View {
     }
 
     private func refreshCloudKitSharedFamilies() async {
-        guard !Self.isRunningUnderXCTest else { return }
+        guard !Self.isRunningUnderXCTest, !ScreenshotMode.isActive else { return }
 
         let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
 

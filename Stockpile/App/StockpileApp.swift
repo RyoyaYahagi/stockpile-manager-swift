@@ -10,6 +10,13 @@ final class ModelContainerStartup {
     private(set) var errorDescription: String?
 
     init() {
+#if DEBUG
+        if ScreenshotMode.isActive {
+            container = ScreenshotFixtures.makeContainer()
+            errorDescription = nil
+            return
+        }
+#endif
         retry()
     }
 

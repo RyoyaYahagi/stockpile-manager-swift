@@ -1,0 +1,24 @@
+{
+  "ja": {
+    "01_dashboard": {
+      "title": "家族の備蓄を、ひと目で",
+      "subtitle": "期限と在庫をまとめて管理"
+    },
+    "02_add-item": {
+      "title": "登録はかんたん",
+      "subtitle": "バーコード読み取りで商品名を自動入力"
+    },
+    "03_bags": {
+      "title": "置き場所ごとに整理",
+      "subtitle": "非常袋・車載・キッチンを分けて管理"
+    },
+    "04_family": {
+      "title": "家族みんなで共有",
+      "subtitle": "iCloudで自動同期"
+    },
+    "05_notifications": {
+      "title": "期限切れの前にお知らせ",
+      "subtitle": "通知タイミングは自由に設定"
+    }
+  }
+}

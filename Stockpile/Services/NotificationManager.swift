@@ -52,6 +52,7 @@ final class NotificationManager: ObservableObject {
     
     /// 通知スケジュールに必要な権限を確認（未決定ならリクエスト）
     private func ensureAuthorizationForScheduling() async -> Bool {
+        guard !ScreenshotMode.isActive else { return false }
         await refreshAuthorizationStatus()
         if authorizationStatus == .notDetermined {
             _ = await requestAuthorization()

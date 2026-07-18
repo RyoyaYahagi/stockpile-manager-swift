@@ -32,28 +32,30 @@ struct NotificationSettingsView: View {
     var body: some View {
         Form {
             if let settings {
-                // 通知権限セクション
-                Section {
-                    authorizationStatusRow
-                    soundStatusRow
-                    
-                    if notificationManager.authorizationStatus == .notDetermined {
-                        Button("通知を許可する") {
-                            Task {
-                                _ = await notificationManager.requestAuthorization()
-                                await refreshSystemSettings()
+                // 通知権限セクション（スクリーンショット撮影時は未許可状態の警告表示を避けるため非表示）
+                if !ScreenshotMode.isActive {
+                    Section {
+                        authorizationStatusRow
+                        soundStatusRow
+
+                        if notificationManager.authorizationStatus == .notDetermined {
+                            Button("通知を許可する") {
+                                Task {
+                                    _ = await notificationManager.requestAuthorization()
+                                    await refreshSystemSettings()
+                                }
+                            }
+                        } else if notificationManager.authorizationStatus == .denied {
+                            Button("設定アプリを開く") {
+                                openSettings()
                             }
                         }
-                    } else if notificationManager.authorizationStatus == .denied {
-                        Button("設定アプリを開く") {
-                            openSettings()
+                    } header: {
+                        Text("通知権限")
+                    } footer: {
+                        if notificationManager.authorizationStatus == .denied {
+                            Text("通知を有効にするには、設定アプリから許可してください。")
                         }
-                    }
-                } header: {
-                    Text("通知権限")
-                } footer: {
-                    if notificationManager.authorizationStatus == .denied {
-                        Text("通知を有効にするには、設定アプリから許可してください。")
                     }
                 }
                 
