@@ -659,7 +659,7 @@ struct CloudKitSharingSheet: UIViewControllerRepresentable {
         }
 
         func itemTitle(for csc: UICloudSharingController) -> String? {
-            "Stockpile 家族共有"
+            L10n.string("Stockpile 家族共有")
         }
 
         func cloudSharingController(
