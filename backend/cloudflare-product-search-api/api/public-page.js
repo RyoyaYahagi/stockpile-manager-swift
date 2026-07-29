@@ -18,7 +18,7 @@ const pageStyle = `
 function htmlPage(title, content) {
   return `<!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title} - Stockpile</title><style>${pageStyle}</style></head>
+<title>${title} - らくストック</title><style>${pageStyle}</style></head>
 <body><main><h1>${title}</h1>${content}</main></body></html>`;
 }
 
@@ -31,7 +31,7 @@ function escapeHTML(value) {
 
 function configuredOperatorName(env = {}) {
   const name = typeof env.OPERATOR_NAME === "string" ? env.OPERATOR_NAME.trim() : "";
-  return name ? escapeHTML(name) : "Stockpile開発者";
+  return name ? escapeHTML(name) : "らくストック開発者";
 }
 
 function configuredSupportContact(env = {}) {
@@ -48,7 +48,7 @@ export function privacyPage(env = {}) {
     "プライバシーポリシー",
   `<p class="updated">制定日・最終更新日: 2026年7月16日</p>
   <p><strong>運営者:</strong> ${configuredOperatorName(env)}（以下「運営者」）</p>
-  <p>Stockpile（以下「本アプリ」）は、備蓄品の管理、期限通知、商品検索、利用者が選択した家族とのデータ共有を提供します。本ポリシーは、本アプリと本ページで取り扱う情報を説明します。</p>
+  <p>らくストック（以下「本アプリ」）は、備蓄品の管理、期限通知、商品検索、利用者が選択した家族とのデータ共有を提供します。本ポリシーは、本アプリと本ページで取り扱う情報を説明します。</p>
   <h2>取得・保存する情報</h2>
   <ul>
     <li><strong>ユーザーコンテンツ:</strong> 家族名、表示名、メールアドレス（入力した場合）、収納場所、備蓄品名、JANコード、数量、期限、メモ。</li>
@@ -95,14 +95,14 @@ export function supportPage(env = {}) {
   return htmlPage(
     "サポート",
   `<p class="updated">最終更新日: 2026年7月16日</p>
-  <p>Stockpileは、備蓄品の登録、期限通知、商品検索、家族共有を提供するiOSアプリです。対応OSはiOS 17以降です。</p>
+  <p>らくストックは、備蓄品の登録、期限通知、商品検索、家族共有を提供するiOSアプリです。対応OSはiOS 17以降です。</p>
   <h2>よくある質問</h2>
   <h3>家族共有ができません</h3>
   <p>所有者の端末でiCloudにサインインし、家族共有設定から共有を開始してください。招待を受ける側もiCloudにサインインし、受け取った共有リンクをiOSで開いてください。通信状態やiCloud容量も確認してください。</p>
   <h3>データが同期されません</h3>
   <p>両方の端末でiCloudが有効か確認し、アプリを前面に戻してしばらく待ってください。共有の所有者が共有を削除した場合、参加者側のデータ状態が変わることがあります。</p>
   <h3>通知が届きません</h3>
-  <p>iOSの設定でStockpileの通知を許可し、アプリ内の通知設定と期限日を確認してください。集中モードや通知の要約によって表示が遅れる場合があります。</p>
+  <p>iOSの設定でらくストックの通知を許可し、アプリ内の通知設定と期限日を確認してください。集中モードや通知の要約によって表示が遅れる場合があります。</p>
   <h3>商品検索が失敗します</h3>
   <p>有効な8桁または13桁のJANコード、通信状態、商品検索サービスの一時障害を確認してください。検索サービス側に商品情報がない場合もあります。</p>
   <h3>バックアップを復元したいです</h3>
