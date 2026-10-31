@@ -20,7 +20,6 @@ struct ItemFormSheet: View {
     @Environment(PremiumAccessManager.self) private var premiumAccessManager
 
     let mode: Mode
-    let start: Router.AddItemStart
 
     @Query private var bags: [Bag]
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
@@ -37,7 +36,6 @@ struct ItemFormSheet: View {
     @State private var showBarcodeScanner = false
     @State private var showAddBag = false
     @State private var isSaving = false
-    @State private var didHandleStart = false
     @State private var autofillMessage: String?
     @FocusState private var focusedField: Field?
 
@@ -47,9 +45,8 @@ struct ItemFormSheet: View {
         case note
     }
 
-    init(mode: Mode, preselectedBagId: UUID? = nil, start: Router.AddItemStart = .manual) {
+    init(mode: Mode, preselectedBagId: UUID? = nil, prefill: Router.AddItemPrefill? = nil) {
         self.mode = mode
-        self.start = start
 
         // 編集モードの場合、初期値を設定
         if case .edit(let item) = mode {
@@ -61,8 +58,17 @@ struct ItemFormSheet: View {
             _selectedBagId = State(initialValue: item.bag?.id)
             _locationNote = State(initialValue: item.locationNote ?? "")
         } else {
-            // 追加モードの場合、プリセット収納場所を設定
+            // 追加モードの場合、プリセット収納場所と読み取り結果を設定
             _selectedBagId = State(initialValue: preselectedBagId)
+            if let prefill {
+                _name = State(initialValue: prefill.name ?? "")
+                _janCode = State(initialValue: prefill.janCode)
+                if let date = prefill.expiryDate {
+                    _expiryDate = State(initialValue: date)
+                    _hasExpiry = State(initialValue: true)
+                }
+                _autofillMessage = State(initialValue: prefill.message)
+            }
         }
     }
 
@@ -162,7 +168,6 @@ struct ItemFormSheet: View {
             }
         }
         .premiumPaywallSheet()
-        .onAppear(perform: handleStartIfNeeded)
     }
 
     // MARK: - Fields
@@ -331,23 +336,6 @@ struct ItemFormSheet: View {
     }
 
     // MARK: - Actions
-
-    /// ＋ボタンで選んだ読み取りを、最初に一度だけ開く
-    private func handleStartIfNeeded() {
-        guard !didHandleStart, isAddMode else { return }
-        didHandleStart = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            switch start {
-            case .manual:
-                break
-            case .barcode:
-                showBarcodeScanner = true
-            case .expiryPhoto:
-                hasExpiry = true
-                openOCRCamera()
-            }
-        }
-    }
 
     private func showAutofill(_ message: String) {
         withAnimation(AppTheme.riseAnimation) {

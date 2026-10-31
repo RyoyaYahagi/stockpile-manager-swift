@@ -29,6 +29,7 @@ struct FamilySettingsView: View {
     @State private var isLoadingParticipants = false
     @State private var isOpeningShareManagement = false
     @State private var showInvitePanel = false
+    @State private var showRenameSheet = false
 
     private var isParticipantFamily: Bool {
         family.cloudKitDatabaseScope == .sharedDatabase
@@ -107,18 +108,6 @@ struct FamilySettingsView: View {
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
-                SectionHeading(title: "家族情報")
-                    .padding(.top, 28)
-                    .padding(.bottom, 12)
-                familyNameCard
-                    .riseIn(index: 1)
-
-                SectionHeading(title: "iCloud同期")
-                    .padding(.top, 28)
-                    .padding(.bottom, 12)
-                syncCard
-                    .riseIn(index: 2)
-
                 SectionHeading(title: "共有データ")
                     .padding(.top, 28)
                     .padding(.bottom, 12)
@@ -135,10 +124,46 @@ struct FamilySettingsView: View {
             .padding(.top, 8)
             .padding(.bottom, 24)
         }
+        .refreshable {
+            // 下に引っ張ると、家族の備蓄と参加者を iCloud から読み直す
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            try? await sharingService.syncFamilyStateFromCloudKit(for: family)
+            await refreshParticipantDisplays(forceRefresh: true)
+        }
         .appScreenBackground()
         .tint(AppTheme.accent)
         .toolbar(.hidden, for: .navigationBar)
         .localizedRefresh()
+        .sheet(isPresented: $showRenameSheet) {
+            NavigationStack {
+                Form {
+                    Section {
+                        TextField("家族名", text: $editedName)
+                            .submitLabel(.done)
+                            .listRowBackground(AppTheme.card)
+                    }
+                }
+                .appScreenBackground()
+                .tint(AppTheme.accent)
+                .navigationTitle("家族名を変更")
+                .navigationBarTitleDisplayMode(.inline)
+                .localizedRefresh()
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("キャンセル") { showRenameSheet = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("保存") {
+                            saveChanges()
+                            showRenameSheet = false
+                        }
+                        .fontWeight(.bold)
+                        .disabled(editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+            .presentationDetents([.height(220)])
+        }
         .confirmationDialog(
             "家族共有から離脱しますか？",
             isPresented: $showLeaveConfirmation,
@@ -255,6 +280,21 @@ struct FamilySettingsView: View {
                         .font(.subheadline)
                         .foregroundStyle(AppTheme.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        editedName = family.name
+                        showRenameSheet = true
+                    } label: {
+                        Label("名前を変更", systemImage: "pencil")
+                            .font(.footnote.weight(.bold))
+                            .foregroundStyle(AppTheme.accentInk)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 32)
+                            .background(AppTheme.accentSoft, in: Capsule())
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(PressableButtonStyle())
+                    .padding(.top, 6)
+                    .frame(minHeight: 44)
                 }
                 Spacer(minLength: 8)
                 HStack(spacing: 5) {
@@ -395,115 +435,6 @@ struct FamilySettingsView: View {
     }
 
     // MARK: - Setting cards
-
-    private var familyNameCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if isEditing {
-                HStack(spacing: 12) {
-                    TextField("家族名", text: $editedName)
-                        .submitLabel(.done)
-                        .onSubmit { saveChanges() }
-                        .frame(minHeight: 44)
-                    Button("完了") { saveChanges() }
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(AppTheme.accentInk)
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-            } else {
-                Button {
-                    editedName = family.name
-                    isEditing = true
-                } label: {
-                    HStack(spacing: 12) {
-                        Label("家族名", systemImage: "person.3")
-                            .foregroundStyle(AppTheme.ink)
-                        Spacer(minLength: 8)
-                        Text(family.displayNameForCurrentState)
-                            .foregroundStyle(AppTheme.inkSecondary)
-                            .lineLimit(1)
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .cardSurface()
-    }
-
-    private var syncCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                Label("共有方法", systemImage: "icloud")
-                    .foregroundStyle(AppTheme.ink)
-                Spacer(minLength: 8)
-                Text(family.shareState.label)
-                    .foregroundStyle(AppTheme.inkSecondary)
-                    .lineLimit(1)
-            }
-            .frame(minHeight: 44)
-
-            Divider()
-
-            syncActionRow(
-                title: "iCloudに保存",
-                icon: "arrow.up.circle",
-                isLoading: isSavingFamilyDataToCloud,
-                action: saveFamilyDataToCloudKitNow
-            )
-
-            Divider()
-
-            syncActionRow(
-                title: "iCloudから最新化",
-                icon: "arrow.clockwise.icloud",
-                isLoading: isRefreshingFamilyData,
-                action: syncFamilyDataNow
-            )
-
-            if family.shareState == .preparing {
-                Text("共有受理後の同期を再試行できます。CloudKit の共有データを同期中です。")
-                    .font(.footnote)
-                    .foregroundStyle(AppTheme.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.vertical, 10)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .cardSurface()
-    }
-
-    private func syncActionRow(
-        title: LocalizedStringKey,
-        icon: String,
-        isLoading: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Label(title, systemImage: icon)
-                    .foregroundStyle(AppTheme.ink)
-                Spacer(minLength: 8)
-                if isLoading {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                }
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(isAnyCloudSyncInFlight || family.shareState == .localOnly)
-        .opacity(isAnyCloudSyncInFlight || family.shareState == .localOnly ? 0.5 : 1)
-    }
 
     private var dataCard: some View {
         VStack(alignment: .leading, spacing: 0) {

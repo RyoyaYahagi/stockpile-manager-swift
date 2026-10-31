@@ -201,21 +201,27 @@ struct BagRow: View {
     let bag: Bag
     
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Image(systemName: "bag")
-                .foregroundStyle(AppTheme.accent)
-                .frame(width: 32)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.accentInk)
+                .frame(width: 36, height: 36)
+                .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(bag.name)
                     .font(.body)
                     .foregroundStyle(AppTheme.ink)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
                 
                 Text(L10n.format("%@個のアイテム", String(bag.resolvedItems.count)))
                     .font(.caption)
                     .foregroundStyle(AppTheme.inkSecondary)
             }
+            Spacer(minLength: 0)
         }
+        .frame(minHeight: 44)
         .padding(.vertical, 4)
     }
 }
@@ -255,6 +261,8 @@ struct BagFormSheet: View {
             Form {
                 Section {
                     TextField("収納場所名", text: $name)
+                        .foregroundStyle(AppTheme.ink)
+                        .frame(minHeight: 44)
                         .listRowBackground(AppTheme.card)
                 } header: {
                     Text("収納場所名")
@@ -374,7 +382,7 @@ struct BagUndoSnackbar: View {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(AppTheme.inkSecondary)
-                    .frame(minWidth: 32, minHeight: 32)
+                    .frame(minWidth: 44, minHeight: 44)
             }
         }
         .padding(.horizontal, 16)

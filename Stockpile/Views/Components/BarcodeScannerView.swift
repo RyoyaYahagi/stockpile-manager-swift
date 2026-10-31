@@ -536,12 +536,18 @@ struct ManualJANEntryView: View {
                 Section {
                     TextField("JANコード（8桁または13桁）", text: $code)
                         .keyboardType(.numberPad)
+                        .font(.title3.monospacedDigit())
+                        .foregroundStyle(AppTheme.ink)
+                        .frame(minHeight: 44)
+                        .listRowBackground(AppTheme.card)
                 } header: {
                     Text("JANコード")
                 } footer: {
                     Text(manualEntryFooterText)
                 }
             }
+            .appScreenBackground()
+            .tint(AppTheme.accent)
             .navigationTitle("JANコード入力")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

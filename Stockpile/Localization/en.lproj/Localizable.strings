@@ -413,3 +413,20 @@
 "しまう場所" = "Store in";
 "新しい場所" = "New location";
 "備蓄に追加する" = "Add to stock";
+"家の備えを、ひと目で" = "See your home preparedness at a glance";
+"食べ物や日用品を登録すると、期限が近いものを教えてくれます。ホームでは備えの「安心度」が分かります。" = "Register food and daily items, and the app tells you what is close to expiring. Home shows your preparedness score.";
+"右下の ＋ で追加します" = "Add items with + at the bottom right";
+"＋ を押すと、バーコード、賞味期限の撮影、手入力から追加方法を選べます。" = "Tap + to choose how to add: scan a barcode, photograph the expiry date, or type it in.";
+"＋を押してみる" = "Try tapping +";
+"期限が近いものはホームで分かります" = "Home shows what is expiring soon";
+"「いま対応が必要」に、期限切れと7日以内の備蓄が並びます。使ったら「1つ使った」、買い替えたら「入れ替えた」を押します。" = "Expired items and items expiring within 7 days appear under \"Needs attention\". Tap \"Used one\" when you use one, or \"Replaced\" when you buy a new one.";
+"お知らせは設定タブで決めます" = "Set reminders in the Settings tab";
+"設定タブの「お知らせ」で、賞味期限のお知らせのオン・オフ、いつ知らせるか、時刻を決められます。" = "In the Reminders card of the Settings tab, you can turn expiry reminders on or off and choose when and at what time to be notified.";
+"家族タブから共有リンクを送ると、家族と同じ一覧を見られます。" = "Send a share link from the Family tab to see the same list with your family.";
+"家族タブで家族を作り、共有リンクで招待すると、同じ一覧を家族で共有できます。" = "Create a family in the Family tab and invite them with a share link to share the same list.";
+"家族タブを開く" = "Open the Family tab";
+"入れ替えたらここを押す" = "Tap here after replacing";
+"ここでお知らせを決める" = "Set reminders here";
+
+"名前を変更" = "Rename";
+"家族名を変更" = "Rename Family";

@@ -845,8 +845,9 @@ struct BulkMoveSheet: View {
                         onMove(nil)
                         dismiss()
                     } label: {
-                        Label("未分類に移動", systemImage: "tray")
+                        BulkDestinationLabel(title: "未分類に移動", systemImage: "tray")
                     }
+                    .listRowBackground(AppTheme.card)
                 }
                 
                 Section("収納場所を選択") {
@@ -855,11 +856,14 @@ struct BulkMoveSheet: View {
                             onMove(bag.id)
                             dismiss()
                         } label: {
-                            Label(bag.name, systemImage: "folder")
+                            BulkDestinationLabel(title: bag.name, systemImage: "bag", verbatim: true)
                         }
+                        .listRowBackground(AppTheme.card)
                     }
                 }
             }
+            .appScreenBackground()
+            .tint(AppTheme.accent)
             .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
             .localizedRefresh()
@@ -894,8 +898,9 @@ struct BulkCopySheet: View {
                         onCopy(nil)
                         dismiss()
                     } label: {
-                        Label("未分類にコピー", systemImage: "tray")
+                        BulkDestinationLabel(title: "未分類にコピー", systemImage: "tray")
                     }
+                    .listRowBackground(AppTheme.card)
                 }
                 
                 Section("収納場所を選択") {
@@ -904,11 +909,14 @@ struct BulkCopySheet: View {
                             onCopy(bag.id)
                             dismiss()
                         } label: {
-                            Label(bag.name, systemImage: "folder")
+                            BulkDestinationLabel(title: bag.name, systemImage: "bag", verbatim: true)
                         }
+                        .listRowBackground(AppTheme.card)
                     }
                 }
             }
+            .appScreenBackground()
+            .tint(AppTheme.accent)
             .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
             .localizedRefresh()
@@ -921,6 +929,38 @@ struct BulkCopySheet: View {
             }
         }
         .presentationDetents([.medium])
+    }
+}
+
+/// 一括移動・コピー先の行（アイコン付き）
+private struct BulkDestinationLabel: View {
+    let title: String
+    let systemImage: String
+    var verbatim = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.accentInk)
+                .frame(width: 32, height: 32)
+                .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Group {
+                if verbatim {
+                    Text(verbatim: title)
+                } else {
+                    Text(LocalizedStringKey(title))
+                }
+            }
+            .font(.body)
+            .foregroundStyle(AppTheme.ink)
+            .lineLimit(2)
+            .minimumScaleFactor(0.85)
+            .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }
 
@@ -945,27 +985,30 @@ struct UndoSnackbar: View {
         HStack(spacing: 12) {
             Text(message)
                 .font(.subheadline)
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.ink)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
             
-            Spacer()
+            Spacer(minLength: 8)
             
             Button("元に戻す") {
                 onUndo()
             }
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.yellow)
+            .foregroundStyle(AppTheme.accentInk)
             
             Button {
                 onDismiss()
             } label: {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(AppTheme.inkSecondary)
+                    .frame(minWidth: 32, minHeight: 32)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
+        .glassSurface(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 

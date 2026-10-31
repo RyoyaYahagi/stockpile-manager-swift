@@ -39,16 +39,6 @@ struct NotificationReminderCard: View {
                     }
                     .transition(.opacity)
                 }
-
-                SettingsDivider()
-                NavigationLink(value: Destination.notificationSettings) {
-                    SettingsRowLabel(
-                        symbol: "slider.horizontal.3",
-                        tint: AppTheme.inkSecondary,
-                        title: "詳しい設定"
-                    )
-                }
-                .buttonStyle(.plain)
             }
             .clipped()
             .animation(AppTheme.accordionAnimation, value: settings?.isEnabled ?? false)

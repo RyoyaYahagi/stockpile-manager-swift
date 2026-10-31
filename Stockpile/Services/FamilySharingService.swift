@@ -1437,6 +1437,17 @@ final class CloudKitFamilySharingService {
             return contact
         }
 
+        // 名前は相手が iCloud で「見つけられる」設定にしていないと返らないため、
+        // 招待に使ったメールアドレスや電話番号が分かればそれを出す
+        if let lookupInfo = participant.userIdentity.lookupInfo {
+            if let email = lookupInfo.emailAddress?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty {
+                return email
+            }
+            if let phone = lookupInfo.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines), !phone.isEmpty {
+                return phone
+            }
+        }
+
         return fallback
     }
 

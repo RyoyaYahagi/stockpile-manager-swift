@@ -68,7 +68,9 @@ final class Router {
 
     enum Sheet: Identifiable {
         case addMethod(bagId: UUID? = nil)
-        case addItem(bagId: UUID? = nil, start: AddItemStart = .manual)
+        case addItem(bagId: UUID? = nil, prefill: AddItemPrefill? = nil)
+        case scanBarcode(bagId: UUID?)
+        case scanExpiry(bagId: UUID?)
         case editItem(Item)
         case renewItem(Item)
         case addBag
@@ -81,6 +83,8 @@ final class Router {
             switch self {
             case .addMethod: return "addMethod"
             case .addItem: return "addItem"
+            case .scanBarcode: return "scanBarcode"
+            case .scanExpiry: return "scanExpiry"
             case .editItem(let item): return "editItem-\(item.id)"
             case .renewItem(let item): return "renewItem-\(item.id)"
             case .addBag: return "addBag"
@@ -92,11 +96,22 @@ final class Router {
         }
     }
 
-    /// 追加フォームを開いたときに最初に行う読み取り
-    enum AddItemStart {
-        case manual
-        case barcode
-        case expiryPhoto
+    /// 読み取り画面から追加フォームへ渡す内容
+    struct AddItemPrefill {
+        var name: String?
+        var janCode: String?
+        var expiryDate: Date?
+        /// フォームの上に出す「〜を入れました」
+        var message: String
+    }
+
+    /// シートを閉じ終わってから次のシートを出す（読み取り画面 → 追加フォーム）
+    @MainActor
+    func presentAfterDismiss(_ sheet: Sheet) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            presentedSheet = sheet
+        }
     }
 
     func path(for tab: AppTab) -> NavigationPath {
@@ -125,8 +140,8 @@ final class Router {
         case .familySetup, .familySettings:
             select(.family, resetPath: true)
         case .notificationSettings:
+            // 通知の設定は設定タブの「お知らせ」カードにまとめた
             select(.settings, resetPath: true)
-            settingsPath.append(destination)
         case .itemDetail, .bagList:
             path.append(destination)
         }

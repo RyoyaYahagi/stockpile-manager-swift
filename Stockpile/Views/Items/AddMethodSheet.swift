@@ -26,7 +26,7 @@ struct AddMethodSheet: View {
                     isRecommended: true,
                     index: 0
                 ) {
-                    router.present(.addItem(bagId: bagId, start: .barcode))
+                    router.present(.scanBarcode(bagId: bagId))
                 }
                 option(
                     title: "賞味期限を撮影する",
@@ -36,7 +36,7 @@ struct AddMethodSheet: View {
                     isRecommended: false,
                     index: 1
                 ) {
-                    router.present(.addItem(bagId: bagId, start: .expiryPhoto))
+                    openExpiryScanner()
                 }
                 option(
                     title: "手で入力する",
@@ -46,7 +46,7 @@ struct AddMethodSheet: View {
                     isRecommended: false,
                     index: 2
                 ) {
-                    router.present(.addItem(bagId: bagId, start: .manual))
+                    router.present(.addItem(bagId: bagId))
                 }
             }
             .padding(.top, 20)
@@ -58,6 +58,16 @@ struct AddMethodSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .localizedRefresh()
+    }
+
+    private func openExpiryScanner() {
+        if premiumAccessManager.canUseOCR() {
+            router.present(.scanExpiry(bagId: bagId))
+            return
+        }
+        premiumAccessManager.presentPaywall(for: .ocrQuota) {
+            router.present(.scanExpiry(bagId: bagId))
+        }
     }
 
     private var barcodeDetail: String {
