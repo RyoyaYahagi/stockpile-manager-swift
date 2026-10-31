@@ -326,6 +326,8 @@ struct ContentView: View {
             showScreenshotAddItemFullScreen = true
         case "bags":
             router.select(.stock)
+        case "settings":
+            router.select(.settings)
         case "family":
             if let family = currentFamily {
                 router.push(.familySettings(family))

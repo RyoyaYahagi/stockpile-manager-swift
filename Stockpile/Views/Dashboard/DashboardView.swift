@@ -96,6 +96,8 @@ struct DashboardView: View {
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
     @State private var collapsedGroupIds: Set<String> = []
+    @State private var showBagReorder = false
+    @AppStorage(BagOrderStore.revisionKey) private var bagOrderRevision = 0
     @State private var selectedItems: Set<UUID> = []
     @State private var isSelectionMode = false
     @State private var searchText = ""
@@ -187,8 +189,8 @@ struct DashboardView: View {
     }
 
     private func groups(for filtered: [Item]) -> [ItemGroup] {
-        var result = scopedBags
-            .sorted { $0.createdAt < $1.createdAt }
+        _ = bagOrderRevision
+        var result = BagOrderStore.sorted(scopedBags, family: currentFamily)
             .map { bag in
                 ItemGroup(
                     id: bag.id.uuidString,
@@ -305,6 +307,13 @@ struct DashboardView: View {
                             )
                         }
                     }
+                    if scopedBags.count > 1 {
+                        Button {
+                            showBagReorder = true
+                        } label: {
+                            Label("収納場所の並べ替え", systemImage: "arrow.up.arrow.down")
+                        }
+                    }
                     Button {
                         router.push(.bagList)
                     } label: {
@@ -385,6 +394,9 @@ struct DashboardView: View {
                 .padding(.bottom, isSelectionMode ? 60 : 100)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+        }
+        .sheet(isPresented: $showBagReorder) {
+            BagReorderSheet(bags: scopedBags, family: currentFamily)
         }
         .sheet(isPresented: $showMoveSheet) {
             BulkMoveSheet(

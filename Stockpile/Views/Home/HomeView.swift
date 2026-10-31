@@ -12,6 +12,7 @@ struct HomeView: View {
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
 
     @State private var displayedPercent = 0
+    @AppStorage(BagOrderStore.revisionKey) private var bagOrderRevision = 0
     @State private var toastMessage: String?
     @State private var toastToken = UUID()
 
@@ -24,8 +25,8 @@ struct HomeView: View {
     }
 
     private var scopedBags: [Bag] {
-        InventoryStore.scopedBags(bags, family: currentFamily)
-            .sorted { $0.createdAt < $1.createdAt }
+        _ = bagOrderRevision
+        return BagOrderStore.sorted(InventoryStore.scopedBags(bags, family: currentFamily), family: currentFamily)
     }
 
     var body: some View {

@@ -25,6 +25,7 @@
 		016 /* FamilySetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116 /* FamilySetupView.swift */; };
 		018 /* ImportJSONView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 118 /* ImportJSONView.swift */; };
 		019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 119 /* Assets.xcassets */; };
+		01A1571C50F83AB65E6342A7 /* ScannerFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF966BDA61B4847C53006459 /* ScannerFrame.swift */; };
 		020 /* StorageLocationPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120 /* StorageLocationPicker.swift */; };
 		023 /* NotificationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123 /* NotificationSettings.swift */; };
 		024 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124 /* NotificationManager.swift */; };
@@ -43,8 +44,10 @@
 		040 /* PremiumPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 148 /* PremiumPlanView.swift */; };
 		0C6BE04710093C48ADF09A47 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97FCE990186EE22BDE3CDC86 /* HomeView.swift */; };
 		150 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 151 /* InfoPlist.strings */; };
+		155C78591153663891B01EBC /* BagReorderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4603098024B69876AEEFDBBC /* BagReorderSheet.swift */; };
 		160 /* ScreenshotMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 162 /* ScreenshotMode.swift */; };
 		161 /* ScreenshotFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 163 /* ScreenshotFixtures.swift */; };
+		34555A1CA0E02BE2F40F6A61 /* NotificationReminderCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1258E2F415494C32B165F443 /* NotificationReminderCard.swift */; };
 		45042289DAA5CA22825E5C4A /* InventoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E49F77D9DD9670638E3672 /* InventoryStore.swift */; };
 		5D0DA87E3A08F4764558D187 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5512949143EA107848D0967 /* MainTabView.swift */; };
 		6A31489045949842FFBECE90 /* RenewExpirySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF14E1C1F18CC52D575E8FE7 /* RenewExpirySheet.swift */; };
@@ -56,6 +59,7 @@
 		A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */; };
 		A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000004 /* PremiumAccessManagerTests.swift */; };
 		A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000005 /* AppLocalizationTests.swift */; };
+		EE9AC988E11DE9142615E988 /* BagOrderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 550B015E6E8EE2950AB96F5C /* BagOrderStore.swift */; };
 		F407B78F25C635E46659D99C /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DB2DBA23A38C8171F569356 /* AppTheme.swift */; };
 		FB0000000000000000000101 /* QRCodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000001 /* QRCodeGenerator.swift */; };
 		FB0000000000000000000102 /* InviteCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000002 /* InviteCodeView.swift */; };
@@ -96,6 +100,7 @@
 		123 /* NotificationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettings.swift; sourceTree = "<group>"; };
 		124 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		125 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
+		1258E2F415494C32B165F443 /* NotificationReminderCard.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationReminderCard.swift; sourceTree = "<group>"; };
 		126 /* BarcodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
 		127 /* ProductSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchService.swift; sourceTree = "<group>"; };
 		128 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
@@ -118,6 +123,8 @@
 		162 /* ScreenshotMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotMode.swift; sourceTree = "<group>"; };
 		163 /* ScreenshotFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotFixtures.swift; sourceTree = "<group>"; };
 		1DB2DBA23A38C8171F569356 /* AppTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
+		4603098024B69876AEEFDBBC /* BagReorderSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BagReorderSheet.swift; sourceTree = "<group>"; };
+		550B015E6E8EE2950AB96F5C /* BagOrderStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BagOrderStore.swift; sourceTree = "<group>"; };
 		564A735767F5E04CD6781046 /* InventoryStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InventoryStoreTests.swift; sourceTree = "<group>"; };
 		97FCE990186EE22BDE3CDC86 /* HomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -129,6 +136,7 @@
 		A4B100000000000000000004 /* PremiumAccessManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumAccessManagerTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000005 /* AppLocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalizationTests.swift; sourceTree = "<group>"; };
 		AF14E1C1F18CC52D575E8FE7 /* RenewExpirySheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RenewExpirySheet.swift; sourceTree = "<group>"; };
+		AF966BDA61B4847C53006459 /* ScannerFrame.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScannerFrame.swift; sourceTree = "<group>"; };
 		C5512949143EA107848D0967 /* MainTabView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		D1E49F77D9DD9670638E3672 /* InventoryStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InventoryStore.swift; sourceTree = "<group>"; };
 		F4AED2AE49F5A5DCE187D40D /* QuantityStepper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuantityStepper.swift; sourceTree = "<group>"; };
@@ -267,6 +275,7 @@
 			isa = PBXGroup;
 			children = (
 				114 /* BagListView.swift */,
+				4603098024B69876AEEFDBBC /* BagReorderSheet.swift */,
 			);
 			path = Bags;
 			sourceTree = "<group>";
@@ -280,6 +289,7 @@
 				118 /* ImportJSONView.swift */,
 				125 /* NotificationSettingsView.swift */,
 				148 /* PremiumPlanView.swift */,
+				1258E2F415494C32B165F443 /* NotificationReminderCard.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -302,6 +312,7 @@
 				FB0000000000000000000002 /* InviteCodeView.swift */,
 				FB0000000000000000000003 /* QRScannerView.swift */,
 				F4AED2AE49F5A5DCE187D40D /* QuantityStepper.swift */,
+				AF966BDA61B4847C53006459 /* ScannerFrame.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -314,6 +325,7 @@
 				131 /* FamilySharingService.swift */,
 				147 /* PremiumAccessManager.swift */,
 				D1E49F77D9DD9670638E3672 /* InventoryStore.swift */,
+				550B015E6E8EE2950AB96F5C /* BagOrderStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -526,6 +538,10 @@
 				816D845BB53C1501986FCC0F /* AddMethodSheet.swift in Sources */,
 				6A31489045949842FFBECE90 /* RenewExpirySheet.swift in Sources */,
 				7ABB455D7988E0661FD74064 /* QuantityStepper.swift in Sources */,
+				EE9AC988E11DE9142615E988 /* BagOrderStore.swift in Sources */,
+				155C78591153663891B01EBC /* BagReorderSheet.swift in Sources */,
+				01A1571C50F83AB65E6342A7 /* ScannerFrame.swift in Sources */,
+				34555A1CA0E02BE2F40F6A61 /* NotificationReminderCard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

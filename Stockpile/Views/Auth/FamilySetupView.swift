@@ -19,63 +19,121 @@ struct FamilySetupView: View {
     }
     
     var body: some View {
-        Form {
-            Section {
-                Label("家族共有はiCloud共有リンクで行われます", systemImage: "person.3.sequence")
-                    .listRowBackground(AppTheme.card)
-            } footer: {
-                Text("家族を作成したあと、設定画面から共有リンクを送れます。参加側はそのリンクを開くと共有を受理できます。")
-            }
-            
-            createFamilySection
-            
-            if let error = errorMessage {
-                Section {
-                    HStack {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("家族")
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                    .accessibilityAddTraits(.isHeader)
+
+                introCard
+                    .padding(.top, 20)
+                    .riseIn()
+
+                SectionHeading(title: "家族名")
+                    .padding(.top, 28)
+                    .padding(.bottom, 12)
+
+                createFamilyCard
+                    .riseIn(index: 1)
+
+                if let error = errorMessage {
+                    HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(AppTheme.color(for: .imminent))
                         Text(error)
+                            .font(.subheadline)
                             .foregroundStyle(AppTheme.color(for: .expired))
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .listRowBackground(AppTheme.card)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .cardSurface()
+                    .padding(.top, 12)
                 }
-            }
-            
-            Section {
+
                 Button(action: submit) {
                     if isSubmitting {
                         ProgressView()
                             .progressViewStyle(.circular)
                             .tint(.white)
                     } else {
-                        Text("家族を作成")
+                        Label("家族を作成", systemImage: "plus")
                     }
                 }
                 .buttonStyle(PrimaryActionButtonStyle())
                 .disabled(!isValid || isSubmitting)
                 .opacity(isValid && !isSubmitting ? 1 : 0.5)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .padding(.top, 16)
+                .riseIn(index: 2)
+
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "envelope.open")
+                        .foregroundStyle(AppTheme.accentInk)
+                        .accessibilityHidden(true)
+                    Text("招待を受けた方は、届いた共有リンクを開くと参加できます。")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .cardSurface()
+                .padding(.top, 28)
+                .riseIn(index: 3)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
         }
         .appScreenBackground()
         .tint(AppTheme.accent)
-        .navigationTitle("家族セットアップ")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .scrollDismissesKeyboard(.interactively)
         .localizedRefresh()
     }
-    
-    private var createFamilySection: some View {
-        Section {
-            TextField("家族名", text: $familyName)
-                .listRowBackground(AppTheme.card)
-        } header: {
-            Text("家族名")
-        } footer: {
-            Text("家族グループの名前を入力してください（例: 山田家）")
+
+    private var introCard: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: "person.3.sequence")
+                .font(.title2)
+                .foregroundStyle(AppTheme.accentInk)
+                .frame(width: 44, height: 44)
+                .background(AppTheme.accentSoft, in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("家族共有はiCloud共有リンクで行われます")
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(AppTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("家族を作成したあと、設定画面から共有リンクを送れます。参加側はそのリンクを開くと共有を受理できます。")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface()
     }
-    
+
+    private var createFamilyCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("家族名", text: $familyName)
+                .frame(minHeight: 44)
+                .submitLabel(.done)
+            Text("家族グループの名前を入力してください（例: 山田家）")
+                .font(.footnote)
+                .foregroundStyle(AppTheme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 4)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface()
+    }
+
     private func submit() {
         Task {
             await createFamily()

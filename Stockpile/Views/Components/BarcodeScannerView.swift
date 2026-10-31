@@ -51,9 +51,7 @@ struct BarcodeScannerView: View {
                         Spacer()
                         
                         // スキャン枠ガイド
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white, lineWidth: 3)
-                            .frame(width: 280, height: 150)
+                        ScannerFrame(width: 290, height: 180, isScanning: searchState == .idle)
                             .overlay {
                                 if searchState == .searching {
                                     ProgressView()
@@ -63,9 +61,13 @@ struct BarcodeScannerView: View {
                             }
                         
                         Text("バーコードを枠内に合わせてください")
-                            .font(.subheadline)
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
-                            .padding(.top, 8)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .glassSurface(in: Capsule())
+                            .padding(.top, 20)
                         
                         Spacer()
                         
@@ -84,9 +86,14 @@ struct BarcodeScannerView: View {
                                 showManualEntry = true
                             } label: {
                                 Label("手動でJANコードを入力", systemImage: "keyboard")
-                                    .font(.footnote)
-                                    .foregroundStyle(.white.opacity(0.8))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 18)
+                                    .frame(minHeight: 44)
+                                    .contentShape(Capsule())
                             }
+                            .buttonStyle(PressableButtonStyle())
+                            .glassSurface(in: Capsule(), interactive: true)
                             if let quotaText = barcodeQuotaText {
                                 Text(quotaText)
                                     .font(.caption)
@@ -116,15 +123,21 @@ struct BarcodeScannerView: View {
                                 UIApplication.shared.open(url)
                             }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PrimaryActionButtonStyle())
+                        .frame(maxWidth: 240)
                         
                         Button("手動で入力") {
                             showManualEntry = true
                         }
+                        .foregroundStyle(.white)
+                        .frame(minHeight: 44)
                     }
-                    .padding()
+                    .foregroundStyle(.white)
+                    .padding(24)
                 }
             }
+            .background(Color(red: 0.1, green: 0.09, blue: 0.08).ignoresSafeArea())
+            .environment(\.colorScheme, .dark)
             .navigationTitle("バーコードスキャン")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -204,18 +217,18 @@ struct BarcodeScannerView: View {
                     onProductSelected(product)
                     dismiss()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryActionButtonStyle())
                 
                 Button("再スキャン") {
                     resetState()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(SecondaryActionButtonStyle())
             }
         }
-        .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal)
-        .padding(.bottom, 8)
+        .padding(20)
+        .glassSurface(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
     }
     
     private var notFoundCard: some View {
@@ -233,18 +246,18 @@ struct BarcodeScannerView: View {
                 Button("手動で入力") {
                     showManualEntry = true
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryActionButtonStyle())
                 
                 Button("再スキャン") {
                     resetState()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(SecondaryActionButtonStyle())
             }
         }
-        .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal)
-        .padding(.bottom, 8)
+        .padding(20)
+        .glassSurface(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
     }
     
     private func errorCard(_ message: String) -> some View {
@@ -261,18 +274,18 @@ struct BarcodeScannerView: View {
                 Button("手動で入力") {
                     showManualEntry = true
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryActionButtonStyle())
 
                 Button("再スキャン") {
                     resetState()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(SecondaryActionButtonStyle())
             }
         }
-        .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal)
-        .padding(.bottom, 8)
+        .padding(20)
+        .glassSurface(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
     }
     
     // MARK: - Helper Methods

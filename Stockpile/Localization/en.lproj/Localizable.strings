@@ -392,3 +392,24 @@
 "バーコードから品名を入れました" = "Filled in the name from the barcode";
 "選択中" = "Selected";
 "未選択" = "Not selected";
+"%@人で備蓄を共有中" = "Sharing supplies with %@ people";
+"家族を招待する" = "Invite Family";
+"同期済み" = "Synced";
+"招待を受けた方は、届いた共有リンクを開くと参加できます。" = "If you received an invitation, open the shared link to join.";
+"お知らせ" = "Reminders";
+"賞味期限のお知らせ" = "Expiry reminders";
+"期限が近づく備蓄をお知らせします" = "We'll let you know before your stock expires";
+"いつ知らせる？（複数選べます）" = "When should we remind you? (Choose several)";
+"通知する時刻" = "Reminder time";
+"詳しい設定" = "Advanced settings";
+"収納場所の編集" = "Edit storage locations";
+"制限なしで、もっと便利に使えます" = "Use everything without limits";
+"ヘルプ" = "Help";
+"お問い合わせ" = "Contact us";
+
+"「賞味期限」の数字が枠に収まるように写してください" = "Fit the expiry date inside the frame";
+"収納場所の並べ替え" = "Reorder storage locations";
+"並び順はこの端末にだけ保存されます。" = "The order is saved on this device only.";
+"しまう場所" = "Store in";
+"新しい場所" = "New location";
+"備蓄に追加する" = "Add to stock";
