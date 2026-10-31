@@ -42,14 +42,15 @@ struct PremiumPlanView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label(planTitleText, systemImage: "crown.fill")
                         .font(.title2.bold())
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(AppTheme.color(for: .imminent))
 
                     Text(headlineText)
                         .font(.title3.weight(.semibold))
+                        .foregroundStyle(AppTheme.ink)
 
                     Text(descriptionText)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -68,17 +69,19 @@ struct PremiumPlanView: View {
                         if !productInfo.description.isEmpty {
                             Text(productInfo.description)
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppTheme.inkSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
-                .padding()
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .cardSurface()
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text(L10n.string("有料版でできること"))
                         .font(.headline)
+                        .foregroundStyle(AppTheme.ink)
 
                     ForEach(featureTexts, id: \.self) { text in
                         featureRow(text)
@@ -88,10 +91,10 @@ struct PremiumPlanView: View {
                 if case .error(let message) = premiumAccessManager.purchaseState {
                     Text(message)
                         .font(.subheadline)
-                        .foregroundStyle(.red)
-                        .padding()
+                        .foregroundStyle(AppTheme.color(for: .expired))
+                        .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                        .background(AppTheme.softColor(for: .expired), in: RoundedRectangle(cornerRadius: 12))
                 }
 
                 VStack(spacing: 12) {
@@ -100,29 +103,19 @@ struct PremiumPlanView: View {
                             await premiumAccessManager.purchasePremium()
                         }
                     } label: {
-                        HStack {
-                            Spacer()
-                            if premiumAccessManager.purchaseState == .purchaseInProgress {
-                                ProgressView()
-                                    .progressViewStyle(.circular)
-                                    .tint(.white)
-                            } else {
-                                Text(
-                                    premiumAccessManager.hasPremiumAccess
-                                        ? L10n.string("有料版")
-                                        : premiumAccessManager.purchaseButtonTitle
-                                )
-                                    .font(.headline)
-                            }
-                            Spacer()
+                        if premiumAccessManager.purchaseState == .purchaseInProgress {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(.white)
+                        } else {
+                            Text(
+                                premiumAccessManager.hasPremiumAccess
+                                    ? L10n.string("有料版")
+                                    : premiumAccessManager.purchaseButtonTitle
+                            )
                         }
-                        .padding()
-                        .background(
-                            premiumAccessManager.hasPremiumAccess ? Color.green : Color.blue,
-                            in: RoundedRectangle(cornerRadius: 14)
-                        )
-                        .foregroundStyle(.white)
                     }
+                    .buttonStyle(PrimaryActionButtonStyle())
                     .disabled(
                         premiumAccessManager.purchaseState == .purchaseInProgress
                             || premiumAccessManager.hasPremiumAccess
@@ -134,16 +127,19 @@ struct PremiumPlanView: View {
                         }
                     }
                     .disabled(premiumAccessManager.purchaseState == .purchaseInProgress)
+                    .tint(AppTheme.accent)
 
                     Button(L10n.string("閉じる")) {
                         premiumAccessManager.dismissPaywall()
                         dismiss()
                     }
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.inkSecondary)
                 }
             }
             .padding(24)
         }
+        .background { AppBackground() }
+        .tint(AppTheme.accent)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .navigationTitle(planTitleText)
@@ -155,11 +151,12 @@ struct PremiumPlanView: View {
     private func featureRow(_ text: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(AppTheme.accent)
                 .font(.body)
 
             Text(text)
                 .font(.subheadline)
+                .foregroundStyle(AppTheme.ink)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -170,7 +167,7 @@ struct PremiumPlanView: View {
             Text(title)
             Spacer()
             Text(value)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppTheme.inkSecondary)
         }
         .font(.subheadline)
     }

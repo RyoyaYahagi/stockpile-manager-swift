@@ -135,25 +135,8 @@ struct ContentView: View {
     var body: some View {
         let refreshToken = localizationController.uiRefreshToken
 
-        NavigationStack(path: $router.path) {
-            DashboardView()
-                .navigationDestination(for: Destination.self) { destination in
-                    switch destination {
-                    case .itemDetail(let item):
-                        ItemDetailView(item: item)
-                    case .bagList:
-                        BagListView()
-                    case .settings:
-                        SettingsView()
-                    case .familySetup:
-                        FamilySetupView()
-                    case .familySettings(let family):
-                        FamilySettingsView(family: family)
-                    case .notificationSettings:
-                        NotificationSettingsView()
-                    }
-                }
-        }
+        MainTabView()
+        .tint(AppTheme.accent)
         .id(refreshToken)
         .localizedRefresh()
         .environment(router)
@@ -277,8 +260,12 @@ struct ContentView: View {
     @ViewBuilder
     private func sheetContent(for sheet: Router.Sheet) -> some View {
         switch sheet {
-        case .addItem(let bagId):
-            ItemFormSheet(mode: .add, preselectedBagId: bagId)
+        case .addMethod(let bagId):
+            AddMethodSheet(bagId: bagId)
+        case .addItem(let bagId, let start):
+            ItemFormSheet(mode: .add, preselectedBagId: bagId, start: start)
+        case .renewItem(let item):
+            RenewExpirySheet(item: item)
         case .editItem(let item):
             ItemFormSheet(mode: .edit(item))
         case .addBag:
@@ -338,7 +325,7 @@ struct ContentView: View {
             // 通常のシート表示だと背後の暗転が写り込むため、撮影時は全画面で提示する
             showScreenshotAddItemFullScreen = true
         case "bags":
-            router.push(.bagList)
+            router.select(.stock)
         case "family":
             if let family = currentFamily {
                 router.push(.familySettings(family))
@@ -959,7 +946,7 @@ private struct TutorialLiveIllustrationPreview: View {
             preview(offsetY: -12) {
                 hostedPreview(container: TutorialPreviewFixtures.dashboardContainer(language: localizationController.selectedLanguage)) {
                     NavigationStack {
-                        DashboardView()
+                        HomeView()
                     }
                 }
             }
@@ -968,7 +955,12 @@ private struct TutorialLiveIllustrationPreview: View {
             preview(offsetY: -112, scale: 0.48) {
                 hostedPreview(container: TutorialPreviewFixtures.emptyDashboardContainer(language: localizationController.selectedLanguage)) {
                     NavigationStack {
-                        DashboardView()
+                        HomeView()
+                    }
+                    .overlay(alignment: .bottom) {
+                        GlassTabBar(selection: .constant(.home), onAdd: {})
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 4)
                     }
                 }
             } overlay: {

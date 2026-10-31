@@ -95,6 +95,7 @@ struct FamilySettingsView: View {
     var body: some View {
         List {
             Section {
+              Group {
                 if isEditing {
                     TextField("家族名", text: $editedName)
                         .onSubmit {
@@ -109,7 +110,7 @@ struct FamilySettingsView: View {
                             Label("家族名", systemImage: "person.3")
                             Spacer()
                             Text(family.displayNameForCurrentState)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppTheme.inkSecondary)
                             Image(systemName: "chevron.right")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.tertiary)
@@ -118,6 +119,8 @@ struct FamilySettingsView: View {
                     }
                     .buttonStyle(.plain)
                 }
+              }
+              .listRowBackground(AppTheme.card)
             } header: {
                 Text("家族情報")
             }
@@ -127,16 +130,21 @@ struct FamilySettingsView: View {
                     Button {
                         handleShareButtonTap()
                     } label: {
-                        HStack {
+                        HStack(spacing: 8) {
                             Label(shareButtonTitle, systemImage: "link")
-                            Spacer()
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.85)
                             if isStartingShare {
                                 ProgressView()
                                     .progressViewStyle(.circular)
+                                    .tint(.white)
                             }
                         }
                     }
+                    .buttonStyle(PrimaryActionButtonStyle())
                     .disabled(isStartingShare || isOpeningShareManagement)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
 
                     if canManageShare {
                         Button {
@@ -152,6 +160,7 @@ struct FamilySettingsView: View {
                             }
                         }
                         .disabled(isStartingShare || isOpeningShareManagement)
+                        .listRowBackground(AppTheme.card)
                     }
                 } header: {
                     Text("招待")
@@ -161,11 +170,12 @@ struct FamilySettingsView: View {
             }
 
             Section {
+              Group {
                 HStack {
                     Label("共有方法", systemImage: "icloud")
                     Spacer()
                     Text(family.shareState.label)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.inkSecondary)
                 }
 
                 Button {
@@ -195,6 +205,8 @@ struct FamilySettingsView: View {
                     }
                 }
                 .disabled(isAnyCloudSyncInFlight || family.shareState == .localOnly)
+              }
+              .listRowBackground(AppTheme.card)
             } header: {
                 Text("iCloud同期")
             } footer: {
@@ -204,19 +216,20 @@ struct FamilySettingsView: View {
             }
 
             Section {
+              Group {
                 if usesCloudKitParticipantList {
                     ForEach(participantDisplays) { participant in
                         HStack {
                             Image(systemName: participant.isOwner ? "person.crop.circle.badge.checkmark" : "person.circle.fill")
                                 .font(.title2)
-                                .foregroundStyle(participant.isOwner ? .orange : .blue)
+                                .foregroundStyle(participant.isOwner ? AppTheme.color(for: .imminent) : AppTheme.accent)
 
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(participant.displayName)
                                     .font(.body)
                                 Text(participant.statusLabel)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(AppTheme.inkSecondary)
                             }
                         }
                     }
@@ -225,7 +238,7 @@ struct FamilySettingsView: View {
                         HStack {
                             Image(systemName: "person.circle.fill")
                                 .font(.title2)
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(AppTheme.accent)
 
                             VStack(alignment: .leading) {
                                 Text(member.displayName)
@@ -233,7 +246,7 @@ struct FamilySettingsView: View {
                                 if let email = member.email {
                                     Text(email)
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(AppTheme.inkSecondary)
                                 }
                             }
                         }
@@ -243,11 +256,13 @@ struct FamilySettingsView: View {
                 if displayedMemberCount == 0 {
                     HStack {
                         Image(systemName: "person.badge.plus")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.inkSecondary)
                         Text(memberSectionFooter)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.inkSecondary)
                     }
                 }
+              }
+              .listRowBackground(AppTheme.card)
             } header: {
                 Text(memberSectionTitle)
             } footer: {
@@ -255,19 +270,22 @@ struct FamilySettingsView: View {
             }
 
             Section {
+              Group {
                 HStack {
                     Label("収納場所", systemImage: "bag")
                     Spacer()
                     Text(L10n.format("%@件", String(scopedBagsCount)))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.inkSecondary)
                 }
 
                 HStack {
                     Label("アイテム", systemImage: "archivebox")
                     Spacer()
                     Text(L10n.format("%@件", String(scopedItemsCount)))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.inkSecondary)
                 }
+              }
+              .listRowBackground(AppTheme.card)
             } header: {
                 Text("共有データ")
             }
@@ -279,11 +297,14 @@ struct FamilySettingsView: View {
                     } label: {
                         Label("共有家族から離脱", systemImage: "person.badge.minus")
                     }
+                    .listRowBackground(AppTheme.card)
                 } footer: {
                     Text("離脱すると、この家族の共有データにアクセスできなくなります")
                 }
             }
         }
+        .appScreenBackground()
+        .tint(AppTheme.accent)
         .navigationTitle("家族設定")
         .localizedRefresh()
         .toolbar {
@@ -317,12 +338,15 @@ struct FamilySettingsView: View {
                 Form {
                     Section {
                         TextField("家族名", text: $editedName)
+                            .listRowBackground(AppTheme.card)
                     } header: {
                         Text("家族名")
                     } footer: {
                         Text("最初に家族名を登録すると、その名前で共有リンクを送信できます。")
                     }
                 }
+                .appScreenBackground()
+                .tint(AppTheme.accent)
                 .navigationTitle("家族名を設定")
                 .navigationBarTitleDisplayMode(.inline)
                 .localizedRefresh()

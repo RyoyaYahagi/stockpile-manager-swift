@@ -44,13 +44,16 @@ struct SettingsView: View {
         List {
             // 家族セクション
             Section {
+                Group {
                 if let family = currentFamily {
                     NavigationLink(value: Destination.familySettings(family)) {
                         HStack {
                             Label("家族共有設定", systemImage: "person.3")
                             Spacer()
                             Text(family.displayNameForCurrentState)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(AppTheme.inkSecondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         }
                     }
                     
@@ -59,7 +62,7 @@ struct SettingsView: View {
                         Label("メンバー", systemImage: "person.2")
                         Spacer()
                         Text(displayedMemberCountText)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.inkSecondary)
                     }
                 } else {
                     Button {
@@ -68,6 +71,8 @@ struct SettingsView: View {
                         Label("家族を設定", systemImage: "person.3.fill")
                     }
                 }
+                }
+                .listRowBackground(AppTheme.card)
             } header: {
                 Text("家族")
             } footer: {
@@ -81,6 +86,7 @@ struct SettingsView: View {
                 NavigationLink(value: Destination.bagList) {
                     Label("収納場所", systemImage: "bag")
                 }
+                .listRowBackground(AppTheme.card)
             } header: {
                 Text("管理")
             }
@@ -90,6 +96,7 @@ struct SettingsView: View {
                 NavigationLink(value: Destination.notificationSettings) {
                     Label("通知", systemImage: "bell")
                 }
+                .listRowBackground(AppTheme.card)
             } header: {
                 Text("通知")
             }
@@ -102,9 +109,10 @@ struct SettingsView: View {
                         Label("言語", systemImage: "globe")
                         Spacer()
                         Text(selectedAppLanguage.displayName)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.inkSecondary)
                     }
                 }
+                .listRowBackground(AppTheme.card)
             } header: {
                 Text("表示")
             }
@@ -117,12 +125,14 @@ struct SettingsView: View {
                 } label: {
                     Label("はじめての使い方を見る", systemImage: "questionmark.circle")
                 }
+                .listRowBackground(AppTheme.card)
             } header: {
                 Text("ガイド")
             }
             
             // データセクション
             Section {
+                Group {
                 Button {
                     router.present(.exportJSON)
                 } label: {
@@ -134,17 +144,20 @@ struct SettingsView: View {
                 } label: {
                     Label("バックアップから復元", systemImage: "square.and.arrow.down")
                 }
+                }
+                .listRowBackground(AppTheme.card)
             } header: {
                 Text("データ")
             }
 
             // アプリ情報
             Section {
+                Group {
                 HStack {
                     Label("バージョン", systemImage: "info.circle")
                     Spacer()
                     Text(appVersion)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.inkSecondary)
                 }
 
                 if let privacyPolicyURL = APIConfig.privacyPolicyURL {
@@ -158,10 +171,14 @@ struct SettingsView: View {
                         Label("サポート", systemImage: "questionmark.circle")
                     }
                 }
+                }
+                .listRowBackground(AppTheme.card)
             } header: {
                 Text("アプリ情報")
             }
         }
+        .appScreenBackground()
+        .tint(AppTheme.accent)
         .navigationTitle("設定")
         .id(refreshToken)
         .localizedRefresh()

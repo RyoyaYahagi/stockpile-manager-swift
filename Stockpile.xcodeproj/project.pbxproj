@@ -38,17 +38,25 @@
 		035 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 135 /* AppLocalization.swift */; };
 		036 /* LanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136 /* LanguageSettingsView.swift */; };
 		037 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 137 /* Localizable.strings */; };
-		150 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 151 /* InfoPlist.strings */; };
 		038 /* CloudKitDeletionMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146 /* CloudKitDeletionMarker.swift */; };
 		039 /* PremiumAccessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 147 /* PremiumAccessManager.swift */; };
 		040 /* PremiumPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 148 /* PremiumPlanView.swift */; };
+		0C6BE04710093C48ADF09A47 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97FCE990186EE22BDE3CDC86 /* HomeView.swift */; };
+		150 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 151 /* InfoPlist.strings */; };
 		160 /* ScreenshotMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 162 /* ScreenshotMode.swift */; };
 		161 /* ScreenshotFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 163 /* ScreenshotFixtures.swift */; };
+		45042289DAA5CA22825E5C4A /* InventoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E49F77D9DD9670638E3672 /* InventoryStore.swift */; };
+		5D0DA87E3A08F4764558D187 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5512949143EA107848D0967 /* MainTabView.swift */; };
+		6A31489045949842FFBECE90 /* RenewExpirySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF14E1C1F18CC52D575E8FE7 /* RenewExpirySheet.swift */; };
+		7ABB455D7988E0661FD74064 /* QuantityStepper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AED2AE49F5A5DCE187D40D /* QuantityStepper.swift */; };
+		816D845BB53C1501986FCC0F /* AddMethodSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB6E6380788B34622BDD9E81 /* AddMethodSheet.swift */; };
+		90BE44AB14EF7E843FC7217F /* InventoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 564A735767F5E04CD6781046 /* InventoryStoreTests.swift */; };
+		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
 		A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000002 /* ProductSearchServiceTests.swift */; };
 		A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */; };
 		A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000004 /* PremiumAccessManagerTests.swift */; };
 		A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000005 /* AppLocalizationTests.swift */; };
-		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
+		F407B78F25C635E46659D99C /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DB2DBA23A38C8171F569356 /* AppTheme.swift */; };
 		FB0000000000000000000101 /* QRCodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000001 /* QRCodeGenerator.swift */; };
 		FB0000000000000000000102 /* InviteCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000002 /* InviteCodeView.swift */; };
 		FB0000000000000000000103 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000003 /* QRScannerView.swift */; };
@@ -102,24 +110,32 @@
 		140 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		141 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		142 /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ko; path = ko.lproj/Localizable.strings; sourceTree = "<group>"; };
-		152 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		146 /* CloudKitDeletionMarker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitDeletionMarker.swift; sourceTree = "<group>"; };
 		147 /* PremiumAccessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumAccessManager.swift; sourceTree = "<group>"; };
 		148 /* PremiumPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumPlanView.swift; sourceTree = "<group>"; };
 		149 /* StockpilePremium.storekit */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = StockpilePremium.storekit; sourceTree = "<group>"; };
+		152 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		162 /* ScreenshotMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotMode.swift; sourceTree = "<group>"; };
 		163 /* ScreenshotFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotFixtures.swift; sourceTree = "<group>"; };
+		1DB2DBA23A38C8171F569356 /* AppTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
+		564A735767F5E04CD6781046 /* InventoryStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InventoryStoreTests.swift; sourceTree = "<group>"; };
+		97FCE990186EE22BDE3CDC86 /* HomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockpileRelease.entitlements; sourceTree = "<group>"; };
+		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A4B100000000000000000001 /* StockpileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StockpileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A4B100000000000000000002 /* ProductSearchServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchServiceTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitFamilySharingServiceTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000004 /* PremiumAccessManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumAccessManagerTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000005 /* AppLocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalizationTests.swift; sourceTree = "<group>"; };
-		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockpileRelease.entitlements; sourceTree = "<group>"; };
-		A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		AF14E1C1F18CC52D575E8FE7 /* RenewExpirySheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RenewExpirySheet.swift; sourceTree = "<group>"; };
+		C5512949143EA107848D0967 /* MainTabView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		D1E49F77D9DD9670638E3672 /* InventoryStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InventoryStore.swift; sourceTree = "<group>"; };
+		F4AED2AE49F5A5DCE187D40D /* QuantityStepper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuantityStepper.swift; sourceTree = "<group>"; };
 		FB0000000000000000000001 /* QRCodeGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeGenerator.swift; sourceTree = "<group>"; };
 		FB0000000000000000000002 /* InviteCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCodeView.swift; sourceTree = "<group>"; };
 		FB0000000000000000000003 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
+		FB6E6380788B34622BDD9E81 /* AddMethodSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AddMethodSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -177,17 +193,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		A4B100000000000000000301 /* StockpileTests */ = {
-			isa = PBXGroup;
-			children = (
-				A4B100000000000000000005 /* AppLocalizationTests.swift */,
-				A4B100000000000000000004 /* PremiumAccessManagerTests.swift */,
-				A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */,
-				A4B100000000000000000002 /* ProductSearchServiceTests.swift */,
-			);
-			path = StockpileTests;
-			sourceTree = "<group>";
-		};
 		303 /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -220,6 +225,9 @@
 				310 /* Settings */,
 				311 /* Auth */,
 				312 /* Components */,
+				62DD8C67B244EC5A3C5F2192 /* Design */,
+				887B5C219BB188C04BD51037 /* Root */,
+				8F40B6AE1C4C02155CECE531 /* Home */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -249,6 +257,8 @@
 				109 /* ItemRow.swift */,
 				110 /* ItemDetailView.swift */,
 				111 /* ItemFormSheet.swift */,
+				FB6E6380788B34622BDD9E81 /* AddMethodSheet.swift */,
+				AF14E1C1F18CC52D575E8FE7 /* RenewExpirySheet.swift */,
 			);
 			path = Items;
 			sourceTree = "<group>";
@@ -291,6 +301,7 @@
 				126 /* BarcodeScannerView.swift */,
 				FB0000000000000000000002 /* InviteCodeView.swift */,
 				FB0000000000000000000003 /* QRScannerView.swift */,
+				F4AED2AE49F5A5DCE187D40D /* QuantityStepper.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -302,6 +313,7 @@
 				127 /* ProductSearchService.swift */,
 				131 /* FamilySharingService.swift */,
 				147 /* PremiumAccessManager.swift */,
+				D1E49F77D9DD9670638E3672 /* InventoryStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -325,6 +337,45 @@
 			path = Localization;
 			sourceTree = "<group>";
 		};
+		62DD8C67B244EC5A3C5F2192 /* Design */ = {
+			isa = PBXGroup;
+			children = (
+				1DB2DBA23A38C8171F569356 /* AppTheme.swift */,
+			);
+			name = Design;
+			path = Design;
+			sourceTree = "<group>";
+		};
+		887B5C219BB188C04BD51037 /* Root */ = {
+			isa = PBXGroup;
+			children = (
+				C5512949143EA107848D0967 /* MainTabView.swift */,
+			);
+			name = Root;
+			path = Root;
+			sourceTree = "<group>";
+		};
+		8F40B6AE1C4C02155CECE531 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				97FCE990186EE22BDE3CDC86 /* HomeView.swift */,
+			);
+			name = Home;
+			path = Home;
+			sourceTree = "<group>";
+		};
+		A4B100000000000000000301 /* StockpileTests */ = {
+			isa = PBXGroup;
+			children = (
+				A4B100000000000000000005 /* AppLocalizationTests.swift */,
+				A4B100000000000000000004 /* PremiumAccessManagerTests.swift */,
+				A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */,
+				A4B100000000000000000002 /* ProductSearchServiceTests.swift */,
+				564A735767F5E04CD6781046 /* InventoryStoreTests.swift */,
+			);
+			path = StockpileTests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -341,8 +392,6 @@
 			dependencies = (
 			);
 			name = Stockpile;
-			packageProductDependencies = (
-			);
 			productName = Stockpile;
 			productReference = 100 /* Stockpile.app */;
 			productType = "com.apple.product-type.application";
@@ -361,8 +410,6 @@
 				A4B100000000000000000502 /* PBXTargetDependency */,
 			);
 			name = StockpileTests;
-			packageProductDependencies = (
-			);
 			productName = StockpileTests;
 			productReference = A4B100000000000000000001 /* StockpileTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -399,8 +446,6 @@
 				"zh-Hant",
 			);
 			mainGroup = 300;
-			packageReferences = (
-			);
 			productRefGroup = 302 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -474,6 +519,13 @@
 				FB0000000000000000000101 /* QRCodeGenerator.swift in Sources */,
 				FB0000000000000000000102 /* InviteCodeView.swift in Sources */,
 				FB0000000000000000000103 /* QRScannerView.swift in Sources */,
+				F407B78F25C635E46659D99C /* AppTheme.swift in Sources */,
+				5D0DA87E3A08F4764558D187 /* MainTabView.swift in Sources */,
+				0C6BE04710093C48ADF09A47 /* HomeView.swift in Sources */,
+				45042289DAA5CA22825E5C4A /* InventoryStore.swift in Sources */,
+				816D845BB53C1501986FCC0F /* AddMethodSheet.swift in Sources */,
+				6A31489045949842FFBECE90 /* RenewExpirySheet.swift in Sources */,
+				7ABB455D7988E0661FD74064 /* QuantityStepper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -485,6 +537,7 @@
 				A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */,
 				A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */,
 				A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */,
+				90BE44AB14EF7E843FC7217F /* InventoryStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -680,7 +733,7 @@
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -715,7 +768,7 @@
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -737,13 +790,13 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
-					"XCTest",
+					XCTest,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.stockpile-manager.appTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stockpile.app/Stockpile";
 			};
 			name = Debug;
@@ -766,13 +819,13 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
-					"XCTest",
+					XCTest,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.stockpile-manager.appTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Stockpile.app/Stockpile";
 			};
 			name = Release;
@@ -808,8 +861,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-
 	};
 	rootObject = 600 /* Project object */;
 }

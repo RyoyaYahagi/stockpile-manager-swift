@@ -20,6 +20,7 @@ struct ItemFormSheet: View {
     @Environment(PremiumAccessManager.self) private var premiumAccessManager
     
     let mode: Mode
+    let start: Router.AddItemStart
     
     @Query private var bags: [Bag]
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
@@ -34,9 +35,12 @@ struct ItemFormSheet: View {
     @State private var showOCRCamera = false
     @State private var showBarcodeScanner = false
     @State private var isSaving = false
+    @State private var didHandleStart = false
+    @State private var autofillMessage: String?
     
-    init(mode: Mode, preselectedBagId: UUID? = nil) {
+    init(mode: Mode, preselectedBagId: UUID? = nil, start: Router.AddItemStart = .manual) {
         self.mode = mode
+        self.start = start
         
         // 編集モードの場合、初期値を設定
         if case .edit(let item) = mode {
@@ -75,6 +79,16 @@ struct ItemFormSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let autofillMessage {
+                    Section {
+                        Label(autofillMessage, systemImage: "checkmark.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppTheme.accentInk)
+                    }
+                    .listRowBackground(AppTheme.accentSoft)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
                 // 基本情報
                 Section {
                     TextField("品名（例: 水、缶詰、乾電池）", text: $name)
@@ -103,9 +117,10 @@ struct ItemFormSheet: View {
                             if quantity > 1 { quantity -= 1 }
                         } label: {
                             Image(systemName: "minus")
-                                .frame(width: 28, height: 28)
-                                .background(Color(.systemGray5))
-                                .clipShape(Circle())
+                                .font(.system(size: 14, weight: .bold))
+                                .frame(width: 36, height: 36)
+                                .contentShape(Circle())
+                                .glassSurface(in: Circle(), interactive: true)
                         }
                         .buttonStyle(.plain)
                         
@@ -115,8 +130,7 @@ struct ItemFormSheet: View {
                             .multilineTextAlignment(.center)
                             .frame(width: 50)
                             .padding(.vertical, 4)
-                            .background(Color(.systemGray6))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .background(AppTheme.ink.opacity(0.06), in: Capsule())
                             .onChange(of: quantity) { oldValue, newValue in
                                 if newValue < 1 { quantity = 1 }
                                 if newValue > 9999 { quantity = 9999 }
@@ -127,15 +141,17 @@ struct ItemFormSheet: View {
                             if quantity < 9999 { quantity += 1 }
                         } label: {
                             Image(systemName: "plus")
-                                .frame(width: 28, height: 28)
-                                .background(Color(.systemGray5))
-                                .clipShape(Circle())
+                                .font(.system(size: 14, weight: .bold))
+                                .frame(width: 36, height: 36)
+                                .contentShape(Circle())
+                                .glassSurface(in: Circle(), interactive: true)
                         }
                         .buttonStyle(.plain)
                     }
                 } header: {
                     Text("基本情報")
                 }
+                .listRowBackground(AppTheme.card)
                 
                 // 賞味期限
                 Section {
@@ -163,6 +179,7 @@ struct ItemFormSheet: View {
                 } header: {
                     Text("賞味期限")
                 }
+                .listRowBackground(AppTheme.card)
                 
                 // 収納場所
                 Section {
@@ -178,7 +195,10 @@ struct ItemFormSheet: View {
                 } header: {
                     Text("収納場所")
                 }
+                .listRowBackground(AppTheme.card)
             }
+            .appScreenBackground()
+            .tint(AppTheme.accent)
             .navigationTitle(mode.title)
             .navigationBarTitleDisplayMode(.inline)
             .localizedRefresh()
@@ -203,6 +223,7 @@ struct ItemFormSheet: View {
                     if let date = detectedDate {
                         expiryDate = date
                         hasExpiry = true
+                        showAutofill(L10n.string("パッケージから賞味期限を読み取りました"))
                     }
                 }
             }
@@ -211,10 +232,35 @@ struct ItemFormSheet: View {
                     // スキャン結果を品名に反映
                     name = product.name
                     janCode = product.janCode
+                    showAutofill(L10n.string("バーコードから品名を入れました"))
                 }
             }
         }
         .premiumPaywallSheet()
+        .onAppear(perform: handleStartIfNeeded)
+    }
+
+    /// ＋ボタンで選んだ読み取りを、最初に一度だけ開く
+    private func handleStartIfNeeded() {
+        guard !didHandleStart, case .add = mode else { return }
+        didHandleStart = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            switch start {
+            case .manual:
+                break
+            case .barcode:
+                showBarcodeScanner = true
+            case .expiryPhoto:
+                hasExpiry = true
+                openOCRCamera()
+            }
+        }
+    }
+
+    private func showAutofill(_ message: String) {
+        withAnimation(AppTheme.riseAnimation) {
+            autofillMessage = message
+        }
     }
     
     private func save() {

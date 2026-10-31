@@ -22,6 +22,7 @@ struct FamilySetupView: View {
         Form {
             Section {
                 Label("家族共有はiCloud共有リンクで行われます", systemImage: "person.3.sequence")
+                    .listRowBackground(AppTheme.card)
             } footer: {
                 Text("家族を作成したあと、設定画面から共有リンクを送れます。参加側はそのリンクを開くと共有を受理できます。")
             }
@@ -32,30 +33,33 @@ struct FamilySetupView: View {
                 Section {
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(AppTheme.color(for: .imminent))
                         Text(error)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(AppTheme.color(for: .expired))
                     }
+                    .listRowBackground(AppTheme.card)
                 }
             }
             
             Section {
                 Button(action: submit) {
-                    HStack {
-                        Spacer()
-                        if isSubmitting {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                        } else {
-                            Text("家族を作成")
-                                .fontWeight(.semibold)
-                        }
-                        Spacer()
+                    if isSubmitting {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white)
+                    } else {
+                        Text("家族を作成")
                     }
                 }
+                .buttonStyle(PrimaryActionButtonStyle())
                 .disabled(!isValid || isSubmitting)
+                .opacity(isValid && !isSubmitting ? 1 : 0.5)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
             }
         }
+        .appScreenBackground()
+        .tint(AppTheme.accent)
         .navigationTitle("家族セットアップ")
         .navigationBarTitleDisplayMode(.inline)
         .localizedRefresh()
@@ -64,6 +68,7 @@ struct FamilySetupView: View {
     private var createFamilySection: some View {
         Section {
             TextField("家族名", text: $familyName)
+                .listRowBackground(AppTheme.card)
         } header: {
             Text("家族名")
         } footer: {
