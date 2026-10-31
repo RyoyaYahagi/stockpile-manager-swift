@@ -76,4 +76,36 @@ final class InventoryStoreTests: XCTestCase {
             }
         }
     }
+
+    func testNotificationLedgerSkipsDeliveredNotificationsOnly() {
+        let now = Date()
+        let rule = NotificationTimingRule(amount: 1, unit: .week)
+        let delivered = NotificationLedger.key(itemId: UUID(), rule: rule, thresholdDate: now)
+        let upcoming = NotificationLedger.key(itemId: UUID(), rule: rule, thresholdDate: now)
+        var ledger = NotificationLedger()
+        ledger.record(delivered, fireDate: now.addingTimeInterval(-60))
+        ledger.record(upcoming, fireDate: now.addingTimeInterval(3_600))
+
+        XCTAssertTrue(ledger.hasDelivered(delivered, now: now))
+        XCTAssertFalse(ledger.hasDelivered(upcoming, now: now))
+
+        ledger.forgetPending(after: now)
+        ledger.record(upcoming, fireDate: now.addingTimeInterval(7_200))
+        XCTAssertFalse(ledger.hasDelivered(upcoming, now: now.addingTimeInterval(3_700)))
+    }
+
+    func testNotificationLedgerKeyChangesWhenExpiryChanges() {
+        let id = UUID()
+        let rule = NotificationTimingRule(amount: 3, unit: .day)
+        let base = Calendar.current.startOfDay(for: Date())
+        let next = Calendar.current.date(byAdding: .day, value: 30, to: base)!
+        XCTAssertEqual(
+            NotificationLedger.key(itemId: id, rule: rule, thresholdDate: base),
+            NotificationLedger.key(itemId: id, rule: rule, thresholdDate: base)
+        )
+        XCTAssertNotEqual(
+            NotificationLedger.key(itemId: id, rule: rule, thresholdDate: base),
+            NotificationLedger.key(itemId: id, rule: rule, thresholdDate: next)
+        )
+    }
 }
