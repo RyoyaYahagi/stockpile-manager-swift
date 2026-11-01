@@ -35,6 +35,7 @@ struct FamilySetupView: View {
                     .padding(.bottom, 12)
 
                 createFamilyCard
+                    .tutorialTarget(.familyAction)
                     .riseIn(index: 1)
 
                 if let error = errorMessage {

@@ -34,6 +34,7 @@ struct HomeView: View {
         let attention = InventoryStore.attentionItems(in: items)
         let readiness = InventoryStore.readinessPercent(of: items)
 
+        TutorialScrollReader {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
@@ -43,10 +44,12 @@ struct HomeView: View {
                         .padding(.top, 20)
                 } else {
                     readinessCard(items: items, attentionCount: attention.count)
+                        .tutorialTarget(.homeReadiness)
                         .padding(.top, 20)
                         .riseIn()
 
                     SectionHeading(title: "いま対応が必要", count: attention.count)
+                        .tutorialTarget(.homeAttention, isEnabled: !attention.isEmpty, scrollID: true)
                         .padding(.top, 28)
                         .padding(.bottom, 12)
 
@@ -62,6 +65,7 @@ struct HomeView: View {
                                     onUseOne: { useOne(item) },
                                     onRenew: { router.present(.renewItem(item)) }
                                 )
+                                .tutorialTarget(.homeAttention, isEnabled: index == 0)
                                 .riseIn(index: index + 1)
                             }
                         }
@@ -78,6 +82,7 @@ struct HomeView: View {
             .padding(.horizontal, 20)
             .padding(.top, 8)
             .padding(.bottom, 24)
+        }
         }
         .appScreenBackground()
         .toolbar(.hidden, for: .navigationBar)

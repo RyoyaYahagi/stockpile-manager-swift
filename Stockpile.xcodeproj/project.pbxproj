@@ -59,6 +59,7 @@
 		A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */; };
 		A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000004 /* PremiumAccessManagerTests.swift */; };
 		A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000005 /* AppLocalizationTests.swift */; };
+		B281281E57B9DD9075C40E56 /* CoachMarkOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A5A570208BBAEBF6310C00 /* CoachMarkOverlay.swift */; };
 		EE9AC988E11DE9142615E988 /* BagOrderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 550B015E6E8EE2950AB96F5C /* BagOrderStore.swift */; };
 		F407B78F25C635E46659D99C /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DB2DBA23A38C8171F569356 /* AppTheme.swift */; };
 		FB0000000000000000000101 /* QRCodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000001 /* QRCodeGenerator.swift */; };
@@ -139,6 +140,7 @@
 		AF966BDA61B4847C53006459 /* ScannerFrame.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScannerFrame.swift; sourceTree = "<group>"; };
 		C5512949143EA107848D0967 /* MainTabView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		D1E49F77D9DD9670638E3672 /* InventoryStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InventoryStore.swift; sourceTree = "<group>"; };
+		F4A5A570208BBAEBF6310C00 /* CoachMarkOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CoachMarkOverlay.swift; sourceTree = "<group>"; };
 		F4AED2AE49F5A5DCE187D40D /* QuantityStepper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuantityStepper.swift; sourceTree = "<group>"; };
 		FB0000000000000000000001 /* QRCodeGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeGenerator.swift; sourceTree = "<group>"; };
 		FB0000000000000000000002 /* InviteCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCodeView.swift; sourceTree = "<group>"; };
@@ -164,6 +166,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0D5CCE87A10CD929AE31294A /* Tutorial */ = {
+			isa = PBXGroup;
+			children = (
+				F4A5A570208BBAEBF6310C00 /* CoachMarkOverlay.swift */,
+			);
+			name = Tutorial;
+			path = Tutorial;
+			sourceTree = "<group>";
+		};
 		300 = {
 			isa = PBXGroup;
 			children = (
@@ -236,6 +247,7 @@
 				62DD8C67B244EC5A3C5F2192 /* Design */,
 				887B5C219BB188C04BD51037 /* Root */,
 				8F40B6AE1C4C02155CECE531 /* Home */,
+				0D5CCE87A10CD929AE31294A /* Tutorial */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -542,6 +554,7 @@
 				155C78591153663891B01EBC /* BagReorderSheet.swift in Sources */,
 				01A1571C50F83AB65E6342A7 /* ScannerFrame.swift in Sources */,
 				34555A1CA0E02BE2F40F6A61 /* NotificationReminderCard.swift in Sources */,
+				B281281E57B9DD9075C40E56 /* CoachMarkOverlay.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

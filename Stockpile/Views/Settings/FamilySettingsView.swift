@@ -102,6 +102,7 @@ struct FamilySettingsView: View {
                     .accessibilityAddTraits(.isHeader)
 
                 familyCard
+                    .tutorialTarget(.familyAction)
                     .padding(.top, 20)
                     .riseIn()
 

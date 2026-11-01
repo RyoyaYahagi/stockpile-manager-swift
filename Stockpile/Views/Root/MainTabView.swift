@@ -4,6 +4,7 @@ import SwiftData
 /// 4つのタブと、ガラスのタブバー＋追加ボタンを持つ画面の土台
 struct MainTabView: View {
     @Environment(Router.self) private var router
+    @Environment(TutorialCoordinator.self) private var tutorial
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
 
     private var currentFamily: Family? {
@@ -45,6 +46,16 @@ struct MainTabView: View {
             }
         }
         .animation(AppTheme.indicatorAnimation, value: router.path.isEmpty && !router.isTabBarHidden)
+        // 「はじめての使い方」: 実画面の部品を照らす案内を、タブバーより上に重ねる
+        .overlayPreferenceValue(TutorialTargetKey.self) { targets in
+            if tutorial.isActive {
+                CoachMarkOverlay(
+                    targets: targets,
+                    didSetUpFamily: currentFamily != nil
+                )
+            }
+        }
+        .animation(AppTheme.indicatorAnimation, value: tutorial.isActive)
     }
 
     /// 各タブの NavigationStack。非表示のタブも状態を保つため ZStack に重ねて切り替える
@@ -145,6 +156,7 @@ struct GlassTabBar: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .tutorialTarget(.tab(tab))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -158,6 +170,7 @@ struct GlassTabBar: View {
         }
         .buttonStyle(PressableButtonStyle(scale: 0.92))
         .glassSurface(in: Circle(), tint: AppTheme.accent, interactive: true)
+        .tutorialTarget(.addButton)
         .accessibilityLabel(Text("備蓄品を追加"))
     }
 }

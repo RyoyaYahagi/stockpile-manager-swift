@@ -127,12 +127,12 @@
 "離脱すると、この家族の共有データにアクセスできなくなります" = "Leaving will remove access to this family's shared data.";
 "離脱すると、この家族の共有データにアクセスできなくなります。" = "Leaving will remove access to this family's shared data.";
 "備蓄品 (%@)" = "Items (%@)";
-"備蓄品の期限通知" = "Stockpile Expiry Reminder";
-"備蓄品の期限通知（%@件）" = "Stockpile Expiry Reminder (%@)";
+"備蓄品の期限通知" = "RakuStock Expiry Reminder";
+"備蓄品の期限通知（%@件）" = "RakuStock Expiry Reminder (%@)";
 "備蓄品を追加" = "Add Item";
 "備蓄品を編集" = "Edit Item";
-"備蓄品管理" = "Stockpile";
-"備蓄管理アプリ「らくストック」に参加しよう！\n招待コード: %@\nまたはこちらのリンクから: stockpile://join?code=%@" = "Join the Stockpile inventory app!\nInvitation code: %@\nOr open this link: stockpile://join?code=%@";
+"備蓄品管理" = "RakuStock";
+"備蓄管理アプリ「らくストック」に参加しよう！\n招待コード: %@\nまたはこちらのリンクから: stockpile://join?code=%@" = "Join the RakuStock inventory app!\nInvitation code: %@\nOr open this link: stockpile://join?code=%@";
 "復元に失敗しました: %@" = "Restore failed: %@";
 "当日" = "Same Day";
 "当日に通知" = "Notify on the Day";
@@ -143,7 +143,7 @@
 "無効" = "Disabled";
 "現在の備蓄品データをバックアップファイルとして書き出します" = "Export current stockpile data as a backup file.";
 "管理" = "Manage";
-"「%@」の Stockpile 家族共有リンクです。" = "This is the Stockpile family sharing link for %@.";
+"「%@」の Stockpile 家族共有リンクです。" = "This is the RakuStock family sharing link for %@.";
 "「%@」の期限が近づいています（%@のお知らせ）" = "%@ is nearing its expiry date (%@ reminder).";
 "「%@」の期限は本日です" = "%@ expires today.";
 "「%@」を削除しました" = "Deleted %@.";
@@ -155,7 +155,7 @@
 "iCloud アカウントの状態を確認できませんでした。しばらくしてからもう一度お試しください。" = "We couldn't verify your iCloud account status. Please try again shortly.";
 "このデバイスでは iCloud 共有を利用できません。" = "iCloud sharing isn't available on this device.";
 "招待用の共有リンクを作成できませんでした。" = "Couldn't create an invitation share link.";
-"Stockpile の家族共有リンクです。" = "This is a Stockpile family sharing link.";
+"Stockpile の家族共有リンクです。" = "This is a RakuStock family sharing link.";
 "Yahoo" = "Yahoo";
 "APIキーが設定されていません" = "API key is not configured.";
 "APIリクエストに失敗しました" = "API request failed.";
@@ -177,7 +177,6 @@
 "まずは右下の + を押します" = "First, tap the + button at the bottom right.";
 "右下の + を押すと、登録画面が開きます。" = "Tap the + button at the bottom right to open the add screen.";
 "+ボタンを開く" = "Open the add screen";
-"今は説明だけ見る" = "Just view the guide for now";
 "登録できました" = "Item added";
 "名前だけでも保存できます" = "You can save it with just a name.";
 "一覧に1件増えていれば、最初の登録は完了です。" = "If the list has one more item, your first entry is complete.";
@@ -188,7 +187,6 @@
 "通知は必要になってから設定できます" = "You can set up reminders later when you need them.";
 "通知を開くと、いつお知らせするかを決められます。" = "Open notifications to choose when you'd like to be reminded.";
 "通知を開く" = "Open notifications";
-"今は設定しない" = "Not now";
 "家族共有の準備もできます" = "You can also prepare family sharing.";
 "家族と使うときは共有を設定できます" = "You can set up sharing when using it with family.";
 "家族設定から、家族に共有リンクを送れる状態です。" = "From family settings, you're ready to send a share link to your family.";
@@ -239,7 +237,7 @@
 "家族共有はiCloud共有リンクで行われます" = "Family sharing uses iCloud sharing links.";
 "家族セットアップ" = "Family Setup";
 "%@件のアイテムを削除しますか？" = "Delete %@ items?";
-"備蓄品（%@）" = "Stockpile Items (%@)";
+"備蓄品（%@）" = "RakuStock Items (%@)";
 "合計" = "Total";
 "備蓄品がありません" = "No stockpile items";
 "品名で検索" = "Search by name";
@@ -280,7 +278,7 @@
 "収納場所がありません" = "No storage locations";
 "例: 玄関用、車載用、寝室" = "Example: Entryway, Car, Bedroom";
 "収納場所を追加" = "Add Storage Location";
-"Stockpile 家族共有" = "Stockpile Family Sharing";
+"Stockpile 家族共有" = "RakuStock Family Sharing";
 "HTTPレスポンスを取得できませんでした" = "Could not retrieve the HTTP response";
 "JSONを解析できませんでした" = "Could not parse the JSON response";
 "status が含まれていません" = "The response does not include status";
@@ -295,7 +293,7 @@
 "Yahoo検索APIのJSONを解析できませんでした" = "Could not parse the Yahoo Search API JSON";
 "Yahoo検索APIの name を取得できませんでした" = "Could not retrieve name from the Yahoo Search API";
 "編集" = "Edit";
-"Stockpileへようこそ" = "Welcome to Stockpile";
+"Stockpileへようこそ" = "Welcome to RakuStock";
 "最初に表示する言語" = "Language to use first";
 "システムの言語のままでも進められます" = "You can continue with the system language as is.";
 "ここを押す" = "Tap here";
@@ -417,14 +415,12 @@
 "食べ物や日用品を登録すると、期限が近いものを教えてくれます。ホームでは備えの「安心度」が分かります。" = "Register food and daily items, and the app tells you what is close to expiring. Home shows your preparedness score.";
 "右下の ＋ で追加します" = "Add items with + at the bottom right";
 "＋ を押すと、バーコード、賞味期限の撮影、手入力から追加方法を選べます。" = "Tap + to choose how to add: scan a barcode, photograph the expiry date, or type it in.";
-"＋を押してみる" = "Try tapping +";
 "期限が近いものはホームで分かります" = "Home shows what is expiring soon";
 "「いま対応が必要」に、期限切れと7日以内の備蓄が並びます。使ったら「1つ使った」、買い替えたら「入れ替えた」を押します。" = "Expired items and items expiring within 7 days appear under \"Needs attention\". Tap \"Used one\" when you use one, or \"Replaced\" when you buy a new one.";
 "お知らせは設定タブで決めます" = "Set reminders in the Settings tab";
 "設定タブの「お知らせ」で、賞味期限のお知らせのオン・オフ、いつ知らせるか、時刻を決められます。" = "In the Reminders card of the Settings tab, you can turn expiry reminders on or off and choose when and at what time to be notified.";
 "家族タブから共有リンクを送ると、家族と同じ一覧を見られます。" = "Send a share link from the Family tab to see the same list with your family.";
 "家族タブで家族を作り、共有リンクで招待すると、同じ一覧を家族で共有できます。" = "Create a family in the Family tab and invite them with a share link to share the same list.";
-"家族タブを開く" = "Open the Family tab";
 "入れ替えたらここを押す" = "Tap here after replacing";
 "ここでお知らせを決める" = "Set reminders here";
 

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>Stockpile</string>
+	<string>RakuStock</string>
 	<key>NSCameraUsageDescription</key>
 	<string>バーコードの読み取りと賞味期限ラベルの文字認識にカメラを使用します。</string>
 	<key>BackendBaseURL</key>

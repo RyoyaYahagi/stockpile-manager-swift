@@ -27,6 +27,7 @@ struct SettingsView: View {
     var body: some View {
         let refreshToken = localizationController.uiRefreshToken
 
+        TutorialScrollReader {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text("設定")
@@ -38,6 +39,7 @@ struct SettingsView: View {
                     .padding(.top, 24)
                     .padding(.bottom, 12)
                 NotificationReminderCard()
+                    .tutorialTarget(.notificationCard, scrollID: true)
                     .riseIn()
 
                 SectionHeading(title: "管理")
@@ -70,6 +72,7 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             .padding(.top, 8)
             .padding(.bottom, 24)
+        }
         }
         .appScreenBackground()
         .tint(AppTheme.accent)

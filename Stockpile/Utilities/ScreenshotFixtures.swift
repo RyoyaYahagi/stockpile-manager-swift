@@ -43,11 +43,11 @@ enum ScreenshotFixtures {
         items[5].bag = emergency
         items.forEach { context.insert($0) }
 
-        let family = Family(name: "やはぎ家")
+        let family = Family(name: "ひなた家")
         let members = [
-            User(displayName: "自分", email: "me@example.com"),
-            User(displayName: "配偶者", email: "partner@example.com"),
-            User(displayName: "長女", email: "daughter@example.com")
+            User(displayName: "ゆうき", email: "yuki@example.com"),
+            User(displayName: "みさき", email: "misaki@example.com"),
+            User(displayName: "はると", email: "haruto@example.com")
         ]
         members.forEach { $0.family = family }
         context.insert(family)

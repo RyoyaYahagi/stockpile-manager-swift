@@ -131,8 +131,8 @@
 "備蓄品の期限通知（%@件）" = "Rappel d’expiration des stocks (%@)";
 "備蓄品を追加" = "Ajouter un article";
 "備蓄品を編集" = "Modifier l’article";
-"備蓄品管理" = "Stockpile";
-"備蓄管理アプリ「らくストック」に参加しよう！\n招待コード: %@\nまたはこちらのリンクから: stockpile://join?code=%@" = "Rejoignez l’application de gestion des stocks Stockpile !\nCode d’invitation : %@\nOu ouvrez ce lien : stockpile://join?code=%@";
+"備蓄品管理" = "RakuStock";
+"備蓄管理アプリ「らくストック」に参加しよう！\n招待コード: %@\nまたはこちらのリンクから: stockpile://join?code=%@" = "Rejoignez l’application de gestion des stocks RakuStock !\nCode d’invitation : %@\nOu ouvrez ce lien : stockpile://join?code=%@";
 "復元に失敗しました: %@" = "Échec de la restauration : %@";
 "当日" = "Le jour même";
 "当日に通知" = "Notifier le jour même";
@@ -143,14 +143,14 @@
 "無効" = "Désactivé";
 "現在の備蓄品データをバックアップファイルとして書き出します" = "Exporter les données actuelles de stock dans un fichier de sauvegarde.";
 "管理" = "Gestion";
-"「%@」の Stockpile 家族共有リンクです。" = "Voici le lien de partage familial Stockpile de %@.";
+"「%@」の Stockpile 家族共有リンクです。" = "Voici le lien de partage familial RakuStock de %@.";
 "「%@」の期限が近づいています（%@のお知らせ）" = "%@ approche de sa date d’expiration (%@).";
 "「%@」の期限は本日です" = "%@ expire aujourd’hui.";
 "「%@」を削除しました" = "%@ a été supprimé.";
 "CloudKit上のレコードが見つかりません。" = "L’enregistrement CloudKit est introuvable.";
 "CloudKit共有メタデータの読み取りに失敗しました。" = "Échec de la lecture des métadonnées de partage CloudKit.";
 "CloudKit共有レコードの作成に失敗しました。" = "Échec de la création de l’enregistrement de partage CloudKit.";
-"Stockpile の家族共有リンクです。" = "Voici un lien de partage familial Stockpile.";
+"Stockpile の家族共有リンクです。" = "Voici un lien de partage familial RakuStock.";
 "Yahoo" = "Yahoo";
 "APIキーが設定されていません" = "La clé API n’est pas configurée.";
 "APIリクエストに失敗しました" = "La requête API a échoué.";
@@ -172,7 +172,6 @@
 "まずは右下の + を押します" = "Commencez par toucher le bouton + en bas à droite.";
 "右下の + を押すと、登録画面が開きます。" = "Touchez le bouton + en bas à droite pour ouvrir l'écran d'ajout.";
 "+ボタンを開く" = "Ouvrir l'écran d'ajout";
-"今は説明だけ見る" = "Voir seulement les explications pour l'instant";
 "登録できました" = "Élément ajouté";
 "名前だけでも保存できます" = "Vous pouvez l'enregistrer avec son nom seulement.";
 "一覧に1件増えていれば、最初の登録は完了です。" = "Si la liste contient un élément de plus, votre premier enregistrement est terminé.";
@@ -183,7 +182,6 @@
 "通知は必要になってから設定できます" = "Vous pourrez configurer les rappels plus tard si besoin.";
 "通知を開くと、いつお知らせするかを決められます。" = "Ouvrez les notifications pour choisir quand vous souhaitez être averti.";
 "通知を開く" = "Ouvrir les notifications";
-"今は設定しない" = "Pas maintenant";
 "家族共有の準備もできます" = "Vous pouvez aussi préparer le partage familial.";
 "家族と使うときは共有を設定できます" = "Vous pouvez configurer le partage pour l'utiliser en famille.";
 "家族設定から、家族に共有リンクを送れる状態です。" = "Depuis les réglages de la famille, vous pouvez désormais envoyer un lien de partage à votre famille.";
@@ -275,7 +273,7 @@
 "収納場所がありません" = "Aucun emplacement de stockage";
 "例: 玄関用、車載用、寝室" = "Exemple : entrée, voiture, chambre";
 "収納場所を追加" = "Ajouter un emplacement de stockage";
-"Stockpile 家族共有" = "Partage familial Stockpile";
+"Stockpile 家族共有" = "Partage familial RakuStock";
 "HTTPレスポンスを取得できませんでした" = "Impossible de récupérer la réponse HTTP";
 "JSONを解析できませんでした" = "Impossible d’analyser la réponse JSON";
 "status が含まれていません" = "La réponse ne contient pas status";
@@ -290,7 +288,7 @@
 "Yahoo検索APIのJSONを解析できませんでした" = "Impossible d’analyser le JSON de l’API Yahoo Search";
 "Yahoo検索APIの name を取得できませんでした" = "Impossible de récupérer name depuis l’API Yahoo Search";
 "編集" = "Modifier";
-"Stockpileへようこそ" = "Bienvenue dans Stockpile";
+"Stockpileへようこそ" = "Bienvenue dans RakuStock";
 "最初に表示する言語" = "Langue affichée au démarrage";
 "システムの言語のままでも進められます" = "Vous pouvez continuer avec la langue du système.";
 "ここを押す" = "Touchez ici";
