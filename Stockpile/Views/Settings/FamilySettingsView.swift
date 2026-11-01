@@ -27,6 +27,7 @@ struct FamilySettingsView: View {
     @State private var sharePayload: ShareActivityPayload?
     @State private var participantDisplays: [CloudKitFamilySharingService.ShareParticipantDisplay] = []
     @State private var isLoadingParticipants = false
+    @State private var participantLoadError: String?
     @State private var isOpeningShareManagement = false
     @State private var showInvitePanel = false
     @State private var showRenameSheet = false
@@ -67,7 +68,9 @@ struct FamilySettingsView: View {
     }
 
     private var displayedMemberCount: Int {
-        usesCloudKitParticipantList ? participantDisplays.count : displayedLocalMembers.count
+        usesCloudKitParticipantList
+            ? participantDisplays.filter { $0.status != .pending }.count
+            : displayedLocalMembers.count
     }
 
     private var scopedItemsCount: Int {
@@ -321,6 +324,17 @@ struct FamilySettingsView: View {
                             index: index
                         )
                     }
+                    if let participantLoadError {
+                        participantNotice(participantLoadError, symbol: "exclamationmark.icloud")
+                    } else if !isLoadingParticipants,
+                              !isParticipantFamily,
+                              !participantDisplays.isEmpty,
+                              participantDisplays.allSatisfy({ $0.isOwner }) {
+                        participantNotice(
+                            L10n.string("まだ参加している家族はいません。招待を受けた人が共有リンクを開いて参加すると、ここに表示されます。"),
+                            symbol: "person.badge.clock"
+                        )
+                    }
                 } else {
                     ForEach(Array(displayedLocalMembers.enumerated()), id: \.element.id) { index, member in
                         memberRow(
@@ -377,6 +391,19 @@ struct FamilySettingsView: View {
         }
         .frame(minHeight: 44)
         .accessibilityElement(children: .combine)
+    }
+
+    private func participantNotice(_ message: String, symbol: String) -> some View {
+        Label {
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(AppTheme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: symbol)
+                .foregroundStyle(AppTheme.inkSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func toggleInvitePanel() {
@@ -692,6 +719,7 @@ struct FamilySettingsView: View {
     private func refreshParticipantDisplays(forceRefresh: Bool = false) async {
         guard usesCloudKitParticipantList else {
             participantDisplays = []
+            participantLoadError = nil
             isLoadingParticipants = false
             return
         }
@@ -701,12 +729,16 @@ struct FamilySettingsView: View {
 
         do {
             let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            // 招待したのにまだ参加していない人も「招待中」として見せる
             participantDisplays = try await sharingService.fetchShareParticipants(
                 for: family,
-                forceRefresh: forceRefresh
+                forceRefresh: forceRefresh,
+                includingPending: !isParticipantFamily
             )
+            participantLoadError = nil
         } catch {
             participantDisplays = []
+            participantLoadError = L10n.format("家族の一覧を読み込めませんでした（%@）", error.localizedDescription)
         }
     }
 

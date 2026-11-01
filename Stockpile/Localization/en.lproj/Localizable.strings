@@ -430,3 +430,6 @@
 
 "名前を変更" = "Rename";
 "家族名を変更" = "Rename Family";
+
+"まだ参加している家族はいません。招待を受けた人が共有リンクを開いて参加すると、ここに表示されます。" = "No family members have joined yet. They will appear here after opening the share link and joining.";
+"家族の一覧を読み込めませんでした（%@）" = "Couldn't load family members (%@)";
