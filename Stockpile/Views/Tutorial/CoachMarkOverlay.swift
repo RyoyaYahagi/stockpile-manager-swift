@@ -323,7 +323,7 @@ struct CoachMarkOverlay: View {
 
     private func scrim(hole: CGRect, radius: CGFloat, blocksHole: Bool) -> some View {
         SpotlightShape(hole: hole, radius: radius, coversScreen: true)
-            .fill(Color.black.opacity(0.62), style: FillStyle(eoFill: true))
+            .fill(Color.black.opacity(0.7), style: FillStyle(eoFill: true))
             .contentShape(
                 SpotlightShape(hole: blocksHole ? .zero : hole, radius: radius, coversScreen: true),
                 eoFill: true
@@ -446,8 +446,19 @@ struct CoachMarkOverlay: View {
         }
         .padding(18)
         .frame(maxWidth: 520, alignment: .leading)
-        .cardSurface()
+        .background {
+            // 下の画面が透けて文字が読みにくくならないよう、半透明のカードではなく不透明な面にする
+            RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
+                .fill(Self.cardFill)
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
+                        .strokeBorder(AppTheme.cardStroke, lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.35), radius: 24, x: 0, y: 10)
+        }
     }
+
+    private static let cardFill = Color(light: 0xFFFCF7, dark: 0x22272A)
 
     // MARK: Behavior
 
