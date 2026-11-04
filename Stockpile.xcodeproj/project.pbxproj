@@ -40,42 +40,42 @@
 		036 /* LanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 136 /* LanguageSettingsView.swift */; };
 		037 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 137 /* Localizable.strings */; };
 		038 /* CloudKitDeletionMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146 /* CloudKitDeletionMarker.swift */; };
+		03801CD6A7D29297A317FF63 /* LegacyLanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4142A5B0226A4B20BC4ECCA4 /* LegacyLanguageSettingsView.swift */; };
 		039 /* PremiumAccessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 147 /* PremiumAccessManager.swift */; };
 		040 /* PremiumPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 148 /* PremiumPlanView.swift */; };
 		0C6BE04710093C48ADF09A47 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97FCE990186EE22BDE3CDC86 /* HomeView.swift */; };
+		14685B0F2D0C2833FCEC6396 /* LegacyItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91BEF1926AF5D3583F59EEFF /* LegacyItemDetailView.swift */; };
 		150 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 151 /* InfoPlist.strings */; };
 		155C78591153663891B01EBC /* BagReorderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4603098024B69876AEEFDBBC /* BagReorderSheet.swift */; };
 		160 /* ScreenshotMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 162 /* ScreenshotMode.swift */; };
 		161 /* ScreenshotFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 163 /* ScreenshotFixtures.swift */; };
+		2F1CF689B3FC96E0216335AD /* LegacyDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26ED072693C6509C3A35EA78 /* LegacyDashboardView.swift */; };
+		33577CDE8B144F15A5874BD7 /* LegacyFamilySetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B2C666EE1F8A570F1B36B46 /* LegacyFamilySetupView.swift */; };
 		34555A1CA0E02BE2F40F6A61 /* NotificationReminderCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1258E2F415494C32B165F443 /* NotificationReminderCard.swift */; };
 		45042289DAA5CA22825E5C4A /* InventoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E49F77D9DD9670638E3672 /* InventoryStore.swift */; };
+		577B888FEA5A44B54E00D4AD /* LegacyItemRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB185DCF642921A174F85679 /* LegacyItemRow.swift */; };
 		5D0DA87E3A08F4764558D187 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5512949143EA107848D0967 /* MainTabView.swift */; };
 		6A31489045949842FFBECE90 /* RenewExpirySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF14E1C1F18CC52D575E8FE7 /* RenewExpirySheet.swift */; };
+		6C0081EE497E11DB8EC51EFE /* LegacyFamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A3E79D844A32A64BE90B7E /* LegacyFamilySettingsView.swift */; };
 		7ABB455D7988E0661FD74064 /* QuantityStepper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AED2AE49F5A5DCE187D40D /* QuantityStepper.swift */; };
 		816D845BB53C1501986FCC0F /* AddMethodSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB6E6380788B34622BDD9E81 /* AddMethodSheet.swift */; };
 		90BE44AB14EF7E843FC7217F /* InventoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 564A735767F5E04CD6781046 /* InventoryStoreTests.swift */; };
+		920899C191E926BC967CC7FD /* LegacyItemFormSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C176BB208A4D750919424EB0 /* LegacyItemFormSheet.swift */; };
+		9BB35240E9B6C1FC07D692B6 /* AppDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C8C0D797BA5A57E50681C2 /* AppDesign.swift */; };
 		A3B7C1022F5A111100000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */; };
 		A4B100000000000000000101 /* ProductSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000002 /* ProductSearchServiceTests.swift */; };
 		A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */; };
 		A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000004 /* PremiumAccessManagerTests.swift */; };
 		A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000005 /* AppLocalizationTests.swift */; };
+		A659FF64C07B539D8D70E351 /* LegacyBagListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFB79FE50E938C11551F618C /* LegacyBagListView.swift */; };
 		B281281E57B9DD9075C40E56 /* CoachMarkOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A5A570208BBAEBF6310C00 /* CoachMarkOverlay.swift */; };
+		C15EEADB9F78E894C8C536A6 /* LegacyNotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 270A077E38BC490E48A37C64 /* LegacyNotificationSettingsView.swift */; };
 		EE9AC988E11DE9142615E988 /* BagOrderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 550B015E6E8EE2950AB96F5C /* BagOrderStore.swift */; };
 		F407B78F25C635E46659D99C /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DB2DBA23A38C8171F569356 /* AppTheme.swift */; };
 		FB0000000000000000000101 /* QRCodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000001 /* QRCodeGenerator.swift */; };
 		FB0000000000000000000102 /* InviteCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000002 /* InviteCodeView.swift */; };
 		FB0000000000000000000103 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000003 /* QRScannerView.swift */; };
-		A659FF64C07B539D8D70E351 /* LegacyBagListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFB79FE50E938C11551F618C /* LegacyBagListView.swift */; };
-		2F1CF689B3FC96E0216335AD /* LegacyDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26ED072693C6509C3A35EA78 /* LegacyDashboardView.swift */; };
-		6C0081EE497E11DB8EC51EFE /* LegacyFamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A3E79D844A32A64BE90B7E /* LegacyFamilySettingsView.swift */; };
-		33577CDE8B144F15A5874BD7 /* LegacyFamilySetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B2C666EE1F8A570F1B36B46 /* LegacyFamilySetupView.swift */; };
-		14685B0F2D0C2833FCEC6396 /* LegacyItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91BEF1926AF5D3583F59EEFF /* LegacyItemDetailView.swift */; };
-		920899C191E926BC967CC7FD /* LegacyItemFormSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C176BB208A4D750919424EB0 /* LegacyItemFormSheet.swift */; };
-		577B888FEA5A44B54E00D4AD /* LegacyItemRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB185DCF642921A174F85679 /* LegacyItemRow.swift */; };
-		03801CD6A7D29297A317FF63 /* LegacyLanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4142A5B0226A4B20BC4ECCA4 /* LegacyLanguageSettingsView.swift */; };
-		C15EEADB9F78E894C8C536A6 /* LegacyNotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 270A077E38BC490E48A37C64 /* LegacyNotificationSettingsView.swift */; };
 		FC624F96BC1E6423F23EF4FC /* LegacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48B7AD0049515CECAF0B4D02 /* LegacySettingsView.swift */; };
-		9BB35240E9B6C1FC07D692B6 /* AppDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C8C0D797BA5A57E50681C2 /* AppDesign.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -89,6 +89,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0B2C666EE1F8A570F1B36B46 /* LegacyFamilySetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyFamilySetupView.swift; sourceTree = "<group>"; };
 		100 /* Stockpile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Stockpile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		101 /* StockpileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StockpileApp.swift; sourceTree = "<group>"; };
 		102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -135,9 +136,15 @@
 		162 /* ScreenshotMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotMode.swift; sourceTree = "<group>"; };
 		163 /* ScreenshotFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotFixtures.swift; sourceTree = "<group>"; };
 		1DB2DBA23A38C8171F569356 /* AppTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
+		26ED072693C6509C3A35EA78 /* LegacyDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyDashboardView.swift; sourceTree = "<group>"; };
+		270A077E38BC490E48A37C64 /* LegacyNotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyNotificationSettingsView.swift; sourceTree = "<group>"; };
+		4142A5B0226A4B20BC4ECCA4 /* LegacyLanguageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyLanguageSettingsView.swift; sourceTree = "<group>"; };
 		4603098024B69876AEEFDBBC /* BagReorderSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BagReorderSheet.swift; sourceTree = "<group>"; };
+		48B7AD0049515CECAF0B4D02 /* LegacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacySettingsView.swift; sourceTree = "<group>"; };
+		48C8C0D797BA5A57E50681C2 /* AppDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Design/AppDesign.swift; sourceTree = "<group>"; };
 		550B015E6E8EE2950AB96F5C /* BagOrderStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BagOrderStore.swift; sourceTree = "<group>"; };
 		564A735767F5E04CD6781046 /* InventoryStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InventoryStoreTests.swift; sourceTree = "<group>"; };
+		91BEF1926AF5D3583F59EEFF /* LegacyItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemDetailView.swift; sourceTree = "<group>"; };
 		97FCE990186EE22BDE3CDC86 /* HomeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		A3325EAE2F40023100E83F43 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A3B7C1012F5A111100000001 /* StockpileRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StockpileRelease.entitlements; sourceTree = "<group>"; };
@@ -149,25 +156,18 @@
 		A4B100000000000000000005 /* AppLocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalizationTests.swift; sourceTree = "<group>"; };
 		AF14E1C1F18CC52D575E8FE7 /* RenewExpirySheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RenewExpirySheet.swift; sourceTree = "<group>"; };
 		AF966BDA61B4847C53006459 /* ScannerFrame.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScannerFrame.swift; sourceTree = "<group>"; };
+		C176BB208A4D750919424EB0 /* LegacyItemFormSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemFormSheet.swift; sourceTree = "<group>"; };
 		C5512949143EA107848D0967 /* MainTabView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		D1E49F77D9DD9670638E3672 /* InventoryStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InventoryStore.swift; sourceTree = "<group>"; };
+		E0A3E79D844A32A64BE90B7E /* LegacyFamilySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyFamilySettingsView.swift; sourceTree = "<group>"; };
+		EB185DCF642921A174F85679 /* LegacyItemRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemRow.swift; sourceTree = "<group>"; };
+		EFB79FE50E938C11551F618C /* LegacyBagListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyBagListView.swift; sourceTree = "<group>"; };
 		F4A5A570208BBAEBF6310C00 /* CoachMarkOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CoachMarkOverlay.swift; sourceTree = "<group>"; };
 		F4AED2AE49F5A5DCE187D40D /* QuantityStepper.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuantityStepper.swift; sourceTree = "<group>"; };
 		FB0000000000000000000001 /* QRCodeGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeGenerator.swift; sourceTree = "<group>"; };
 		FB0000000000000000000002 /* InviteCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCodeView.swift; sourceTree = "<group>"; };
 		FB0000000000000000000003 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
 		FB6E6380788B34622BDD9E81 /* AddMethodSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AddMethodSheet.swift; sourceTree = "<group>"; };
-		EFB79FE50E938C11551F618C /* LegacyBagListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyBagListView.swift; sourceTree = "<group>"; };
-		26ED072693C6509C3A35EA78 /* LegacyDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyDashboardView.swift; sourceTree = "<group>"; };
-		E0A3E79D844A32A64BE90B7E /* LegacyFamilySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyFamilySettingsView.swift; sourceTree = "<group>"; };
-		0B2C666EE1F8A570F1B36B46 /* LegacyFamilySetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyFamilySetupView.swift; sourceTree = "<group>"; };
-		91BEF1926AF5D3583F59EEFF /* LegacyItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemDetailView.swift; sourceTree = "<group>"; };
-		C176BB208A4D750919424EB0 /* LegacyItemFormSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemFormSheet.swift; sourceTree = "<group>"; };
-		EB185DCF642921A174F85679 /* LegacyItemRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemRow.swift; sourceTree = "<group>"; };
-		4142A5B0226A4B20BC4ECCA4 /* LegacyLanguageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyLanguageSettingsView.swift; sourceTree = "<group>"; };
-		270A077E38BC490E48A37C64 /* LegacyNotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyNotificationSettingsView.swift; sourceTree = "<group>"; };
-		48B7AD0049515CECAF0B4D02 /* LegacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacySettingsView.swift; sourceTree = "<group>"; };
-		48C8C0D797BA5A57E50681C2 /* AppDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Design/AppDesign.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -784,7 +784,7 @@
 				CODE_SIGN_ENTITLEMENTS = Stockpile/Stockpile.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202607181813;
+				CURRENT_PROJECT_VERSION = 202607181814;
 				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -800,7 +800,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.stockpile-manager.app";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -819,7 +819,7 @@
 				CODE_SIGN_ENTITLEMENTS = Stockpile/StockpileRelease.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202607181813;
+				CURRENT_PROJECT_VERSION = 202607181814;
 				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -835,7 +835,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.stockpile-manager.app";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -851,7 +851,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202607181813;
+				CURRENT_PROJECT_VERSION = 202607181814;
 				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -880,7 +880,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202607181813;
+				CURRENT_PROJECT_VERSION = 202607181814;
 				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
