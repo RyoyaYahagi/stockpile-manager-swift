@@ -61,6 +61,8 @@ struct ContentView: View {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
     @State private var router = Router()
+    @AppStorage(AppDesign.storageKey) private var design: AppDesign = .modern
+    @State private var showLegacyGuide = false
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Environment(LocalizationController.self) private var localizationController
@@ -114,8 +116,14 @@ struct ContentView: View {
     var body: some View {
         let refreshToken = localizationController.uiRefreshToken
 
-        MainTabView()
-        .tint(AppTheme.accent)
+        Group {
+            if design == .legacy {
+                LegacyRootView()
+            } else {
+                MainTabView()
+                    .tint(AppTheme.accent)
+            }
+        }
         .id(refreshToken)
         .localizedRefresh()
         .environment(router)
@@ -150,6 +158,11 @@ struct ContentView: View {
         }
         .onChange(of: tutorialReplayRequestToken) { _, _ in
             startTutorial(at: 0)
+        }
+        .onChange(of: design) { _, newValue in
+            tutorial.close()
+            showLegacyGuide = false
+            router.switchDesign(to: newValue)
         }
         .onChange(of: tutorial.finishCount) { _, _ in
             hasCompletedFirstLaunchTutorial = true
@@ -223,6 +236,12 @@ struct ContentView: View {
             .id(refreshToken)
             .interactiveDismissDisabled()
         }
+        .sheet(isPresented: $showLegacyGuide) {
+            LegacyDesignGuide {
+                hasCompletedFirstLaunchTutorial = true
+                showLegacyGuide = false
+            }
+        }
     }
     
     @ViewBuilder
@@ -231,7 +250,11 @@ struct ContentView: View {
         case .addMethod(let bagId):
             AddMethodSheet(bagId: bagId)
         case .addItem(let bagId, let prefill):
-            ItemFormSheet(mode: .add, preselectedBagId: bagId, prefill: prefill)
+            if design == .legacy {
+                LegacyItemFormSheet(mode: .add, preselectedBagId: bagId)
+            } else {
+                ItemFormSheet(mode: .add, preselectedBagId: bagId, prefill: prefill)
+            }
         case .scanBarcode(let bagId):
             BarcodeScannerView { product in
                 router.presentAfterDismiss(.addItem(
@@ -257,9 +280,17 @@ struct ContentView: View {
         case .renewItem(let item):
             RenewExpirySheet(item: item)
         case .editItem(let item):
-            ItemFormSheet(mode: .edit(item))
+            if design == .legacy {
+                LegacyItemFormSheet(mode: .edit(item))
+            } else {
+                ItemFormSheet(mode: .edit(item))
+            }
         case .addBag:
-            BagFormSheet()
+            if design == .legacy {
+                LegacyBagFormSheet()
+            } else {
+                BagFormSheet()
+            }
         case .inviteCode(let code):
             InviteCodeView(code: code)
         case .importJSON:
@@ -298,6 +329,11 @@ struct ContentView: View {
     
     private func startTutorial(at index: Int) {
         hasPresentedFirstLaunchTutorial = true
+        if design == .legacy {
+            router.dismissSheet()
+            showLegacyGuide = true
+            return
+        }
         // 実際の画面の上に案内を重ねるので、開いている画面を閉じてホームから始める
         router.dismissSheet()
         router.homePath = NavigationPath()

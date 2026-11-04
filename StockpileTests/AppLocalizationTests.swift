@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Stockpile
 
 final class AppLocalizationTests: XCTestCase {
@@ -129,5 +130,82 @@ final class FirstLaunchTutorialPresentationPolicyTests: XCTestCase {
                 isTutorialPresented: false
             )
         )
+    }
+}
+
+final class AppDesignTests: XCTestCase {
+    func testPreferenceSurvivesReloadAndUnknownValuesUseModernDesign() throws {
+        let suite = "AppDesignTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(AppDesign.stored(in: defaults), .modern)
+        defaults.set(AppDesign.legacy.rawValue, forKey: AppDesign.storageKey)
+        XCTAssertEqual(AppDesign.stored(in: try XCTUnwrap(UserDefaults(suiteName: suite))), .legacy)
+        defaults.set("unknown", forKey: AppDesign.storageKey)
+        XCTAssertEqual(AppDesign.stored(in: defaults), .modern)
+    }
+
+    func testSwitchToLegacyClearsModernNavigationAndKeepsSettingsReachable() {
+        let router = Router(design: .modern)
+        router.homePath.append(Destination.bagList)
+        router.stockPath.append(Destination.bagList)
+        router.familyPath.append(Destination.familySetup)
+        router.settingsPath.append(Destination.notificationSettings)
+        router.present(.addItem())
+        router.isTabBarHidden = true
+        router.showStock(focusing: UUID())
+
+        router.switchDesign(to: .legacy)
+
+        XCTAssertEqual(router.design, .legacy)
+        XCTAssertEqual(router.legacyPath.count, 1)
+        XCTAssertEqual(router.path, router.legacyPath)
+        XCTAssertTrue(router.homePath.isEmpty)
+        XCTAssertTrue(router.stockPath.isEmpty)
+        XCTAssertTrue(router.familyPath.isEmpty)
+        XCTAssertTrue(router.settingsPath.isEmpty)
+        XCTAssertNil(router.presentedSheet)
+        XCTAssertNil(router.stockFocusRequest)
+        XCTAssertFalse(router.isTabBarHidden)
+        router.pop()
+        XCTAssertTrue(router.path.isEmpty)
+    }
+
+    func testLegacyDestinationsUseTheSingleNavigationStack() {
+        let router = Router(design: .legacy)
+        router.push(.settings)
+        router.push(.familySetup)
+        router.push(.notificationSettings)
+        XCTAssertEqual(router.legacyPath.count, 3)
+        XCTAssertTrue(router.settingsPath.isEmpty)
+        XCTAssertTrue(router.familyPath.isEmpty)
+        router.popToRoot()
+        XCTAssertTrue(router.legacyPath.isEmpty)
+    }
+
+    func testSwitchBackToModernOpensSettingsAndRestoresTabRouting() {
+        let router = Router(design: .legacy)
+        router.push(.settings)
+        router.push(.notificationSettings)
+        router.switchDesign(to: .modern)
+        XCTAssertEqual(router.design, .modern)
+        XCTAssertEqual(router.selectedTab, .settings)
+        XCTAssertTrue(router.legacyPath.isEmpty)
+        XCTAssertTrue(router.path.isEmpty)
+        router.push(.bagList)
+        XCTAssertEqual(router.settingsPath.count, 1)
+        router.push(.familySetup)
+        XCTAssertEqual(router.selectedTab, .family)
+    }
+
+    func testDesignLabelsExistInEverySupportedLanguage() throws {
+        for language in AppLanguage.allCases where language != .system {
+            let bundle = AppLocalization.bundle(for: language)
+            let path = try XCTUnwrap(bundle.path(forResource: "Localizable", ofType: "strings"))
+            let entries = try XCTUnwrap(NSDictionary(contentsOfFile: path) as? [String: String])
+            for key in ["デザイン", "新デザイン", "旧デザイン"] {
+                XCTAssertNotNil(entries[key], "Missing \(key) in \(language.rawValue)")
+            }
+        }
     }
 }

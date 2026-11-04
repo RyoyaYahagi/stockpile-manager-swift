@@ -714,6 +714,7 @@ struct DashboardView: View {
     }
 
     private func autoSyncFromCloudKitIfNeeded() async {
+        guard !ScreenshotMode.isActive else { return }
         guard let family = currentFamily else { return }
         guard autoSyncedFamilyID != family.id else { return }
         autoSyncedFamilyID = family.id

@@ -86,6 +86,11 @@ struct SettingsView: View {
     private var managementCard: some View {
         SettingsCard {
             VStack(spacing: 0) {
+                AppDesignPicker()
+                    .padding(16)
+
+                SettingsDivider()
+
                 NavigationLink(value: Destination.bagList) {
                     SettingsRowLabel(
                         symbol: "bag.fill",

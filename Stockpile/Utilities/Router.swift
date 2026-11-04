@@ -39,6 +39,8 @@ enum AppTab: Hashable, CaseIterable {
 /// アプリ全体のルーティングを管理
 @Observable
 final class Router {
+    private(set) var design: AppDesign
+    var legacyPath = NavigationPath()
     var selectedTab: AppTab = .home
     var homePath = NavigationPath()
     var stockPath = NavigationPath()
@@ -49,6 +51,10 @@ final class Router {
     var stockFocusRequest: StockFocusRequest?
     /// 在庫の複数選択中など、下部のツールバーを使う画面でタブバーを隠す
     var isTabBarHidden = false
+
+    init(design: AppDesign = .stored()) {
+        self.design = design
+    }
 
     struct StockFocusRequest {
         let bagId: UUID?
@@ -62,8 +68,14 @@ final class Router {
 
     /// 選択中タブのナビゲーション履歴
     var path: NavigationPath {
-        get { path(for: selectedTab) }
-        set { setPath(newValue, for: selectedTab) }
+        get { design == .legacy ? legacyPath : path(for: selectedTab) }
+        set {
+            if design == .legacy {
+                legacyPath = newValue
+            } else {
+                setPath(newValue, for: selectedTab)
+            }
+        }
     }
 
     enum Sheet: Identifiable {
@@ -134,6 +146,10 @@ final class Router {
 
     /// タブのルートにあたる宛先はタブ切り替えに置き換え、それ以外は選択中タブに積む
     func push(_ destination: Destination) {
+        if design == .legacy {
+            legacyPath.append(destination)
+            return
+        }
         switch destination {
         case .settings:
             select(.settings, resetPath: true)
@@ -151,6 +167,23 @@ final class Router {
         selectedTab = tab
         if resetPath {
             setPath(NavigationPath(), for: tab)
+        }
+    }
+
+    /// Stay in settings after switching, with no destinations from the other layout.
+    func switchDesign(to design: AppDesign) {
+        dismissSheet()
+        self.design = design
+        legacyPath = NavigationPath()
+        homePath = NavigationPath()
+        stockPath = NavigationPath()
+        familyPath = NavigationPath()
+        settingsPath = NavigationPath()
+        selectedTab = .settings
+        isTabBarHidden = false
+        stockFocusRequest = nil
+        if design == .legacy {
+            legacyPath.append(Destination.settings)
         }
     }
 

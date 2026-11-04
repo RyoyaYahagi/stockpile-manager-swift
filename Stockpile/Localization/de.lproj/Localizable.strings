@@ -330,3 +330,7 @@
 "購入の確認に失敗しました。" = "Der Kauf konnte nicht bestätigt werden.";
 "購入処理は保留中です。承認後に自動で反映されます。" = "Der Kauf ist ausstehend. Nach der Genehmigung wird er automatisch übernommen.";
 "購入に失敗しました: %@" = "Kauf fehlgeschlagen: %@";
+
+"デザイン" = "Design";
+"新デザイン" = "Neues Design";
+"旧デザイン" = "Klassisches Design";

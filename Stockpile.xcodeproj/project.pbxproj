@@ -65,6 +65,17 @@
 		FB0000000000000000000101 /* QRCodeGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000001 /* QRCodeGenerator.swift */; };
 		FB0000000000000000000102 /* InviteCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000002 /* InviteCodeView.swift */; };
 		FB0000000000000000000103 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000003 /* QRScannerView.swift */; };
+		A659FF64C07B539D8D70E351 /* LegacyBagListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFB79FE50E938C11551F618C /* LegacyBagListView.swift */; };
+		2F1CF689B3FC96E0216335AD /* LegacyDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26ED072693C6509C3A35EA78 /* LegacyDashboardView.swift */; };
+		6C0081EE497E11DB8EC51EFE /* LegacyFamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A3E79D844A32A64BE90B7E /* LegacyFamilySettingsView.swift */; };
+		33577CDE8B144F15A5874BD7 /* LegacyFamilySetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B2C666EE1F8A570F1B36B46 /* LegacyFamilySetupView.swift */; };
+		14685B0F2D0C2833FCEC6396 /* LegacyItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91BEF1926AF5D3583F59EEFF /* LegacyItemDetailView.swift */; };
+		920899C191E926BC967CC7FD /* LegacyItemFormSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C176BB208A4D750919424EB0 /* LegacyItemFormSheet.swift */; };
+		577B888FEA5A44B54E00D4AD /* LegacyItemRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB185DCF642921A174F85679 /* LegacyItemRow.swift */; };
+		03801CD6A7D29297A317FF63 /* LegacyLanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4142A5B0226A4B20BC4ECCA4 /* LegacyLanguageSettingsView.swift */; };
+		C15EEADB9F78E894C8C536A6 /* LegacyNotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 270A077E38BC490E48A37C64 /* LegacyNotificationSettingsView.swift */; };
+		FC624F96BC1E6423F23EF4FC /* LegacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48B7AD0049515CECAF0B4D02 /* LegacySettingsView.swift */; };
+		9BB35240E9B6C1FC07D692B6 /* AppDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C8C0D797BA5A57E50681C2 /* AppDesign.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -146,6 +157,17 @@
 		FB0000000000000000000002 /* InviteCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteCodeView.swift; sourceTree = "<group>"; };
 		FB0000000000000000000003 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
 		FB6E6380788B34622BDD9E81 /* AddMethodSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AddMethodSheet.swift; sourceTree = "<group>"; };
+		EFB79FE50E938C11551F618C /* LegacyBagListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyBagListView.swift; sourceTree = "<group>"; };
+		26ED072693C6509C3A35EA78 /* LegacyDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyDashboardView.swift; sourceTree = "<group>"; };
+		E0A3E79D844A32A64BE90B7E /* LegacyFamilySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyFamilySettingsView.swift; sourceTree = "<group>"; };
+		0B2C666EE1F8A570F1B36B46 /* LegacyFamilySetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyFamilySetupView.swift; sourceTree = "<group>"; };
+		91BEF1926AF5D3583F59EEFF /* LegacyItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemDetailView.swift; sourceTree = "<group>"; };
+		C176BB208A4D750919424EB0 /* LegacyItemFormSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemFormSheet.swift; sourceTree = "<group>"; };
+		EB185DCF642921A174F85679 /* LegacyItemRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemRow.swift; sourceTree = "<group>"; };
+		4142A5B0226A4B20BC4ECCA4 /* LegacyLanguageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyLanguageSettingsView.swift; sourceTree = "<group>"; };
+		270A077E38BC490E48A37C64 /* LegacyNotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyNotificationSettingsView.swift; sourceTree = "<group>"; };
+		48B7AD0049515CECAF0B4D02 /* LegacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacySettingsView.swift; sourceTree = "<group>"; };
+		48C8C0D797BA5A57E50681C2 /* AppDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Design/AppDesign.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -187,6 +209,17 @@
 		301 /* Stockpile */ = {
 			isa = PBXGroup;
 			children = (
+				EFB79FE50E938C11551F618C /* LegacyBagListView.swift */,
+				26ED072693C6509C3A35EA78 /* LegacyDashboardView.swift */,
+				E0A3E79D844A32A64BE90B7E /* LegacyFamilySettingsView.swift */,
+				0B2C666EE1F8A570F1B36B46 /* LegacyFamilySetupView.swift */,
+				91BEF1926AF5D3583F59EEFF /* LegacyItemDetailView.swift */,
+				C176BB208A4D750919424EB0 /* LegacyItemFormSheet.swift */,
+				EB185DCF642921A174F85679 /* LegacyItemRow.swift */,
+				4142A5B0226A4B20BC4ECCA4 /* LegacyLanguageSettingsView.swift */,
+				270A077E38BC490E48A37C64 /* LegacyNotificationSettingsView.swift */,
+				48B7AD0049515CECAF0B4D02 /* LegacySettingsView.swift */,
+				48C8C0D797BA5A57E50681C2 /* AppDesign.swift */,
 				A3325EAE2F40023100E83F43 /* Info.plist */,
 				A3B7C1032F5A111100000003 /* PrivacyInfo.xcprivacy */,
 				303 /* App */,
@@ -506,6 +539,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A659FF64C07B539D8D70E351 /* LegacyBagListView.swift in Sources */,
+				2F1CF689B3FC96E0216335AD /* LegacyDashboardView.swift in Sources */,
+				6C0081EE497E11DB8EC51EFE /* LegacyFamilySettingsView.swift in Sources */,
+				33577CDE8B144F15A5874BD7 /* LegacyFamilySetupView.swift in Sources */,
+				14685B0F2D0C2833FCEC6396 /* LegacyItemDetailView.swift in Sources */,
+				920899C191E926BC967CC7FD /* LegacyItemFormSheet.swift in Sources */,
+				577B888FEA5A44B54E00D4AD /* LegacyItemRow.swift in Sources */,
+				03801CD6A7D29297A317FF63 /* LegacyLanguageSettingsView.swift in Sources */,
+				C15EEADB9F78E894C8C536A6 /* LegacyNotificationSettingsView.swift in Sources */,
+				FC624F96BC1E6423F23EF4FC /* LegacySettingsView.swift in Sources */,
+				9BB35240E9B6C1FC07D692B6 /* AppDesign.swift in Sources */,
 				001 /* StockpileApp.swift in Sources */,
 				034 /* CloudKitShareSceneDelegate.swift in Sources */,
 				002 /* ContentView.swift in Sources */,
@@ -740,7 +784,7 @@
 				CODE_SIGN_ENTITLEMENTS = Stockpile/Stockpile.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202607181812;
+				CURRENT_PROJECT_VERSION = 202607181813;
 				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -775,7 +819,7 @@
 				CODE_SIGN_ENTITLEMENTS = Stockpile/StockpileRelease.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202607181812;
+				CURRENT_PROJECT_VERSION = 202607181813;
 				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -807,7 +851,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202607181812;
+				CURRENT_PROJECT_VERSION = 202607181813;
 				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -836,7 +880,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202607181812;
+				CURRENT_PROJECT_VERSION = 202607181813;
 				DEVELOPMENT_TEAM = 2L6CD9CNHL;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
