@@ -88,10 +88,24 @@ enum SnapshotLinkSettings {
   private static let enabledKey = "snapshotLink.enabled"
   private static let endpointKey = "snapshotLink.endpointURL"
   private static let lastSentAtKey = "snapshotLink.lastSentAt"
+  private static let autoUploadEnabledKey = "snapshotLink.autoUploadEnabled"
+  private static let lastUploadedFingerprintKey = "snapshotLink.lastUploadedFingerprint"
 
   static var isEnabled: Bool {
     get { UserDefaults.standard.bool(forKey: enabledKey) }
     set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
+  }
+
+  /// 自動送信（S-05）の ON/OFF。手動送信とは別に切り替える。デフォルト OFF。
+  static var autoUploadEnabled: Bool {
+    get { UserDefaults.standard.bool(forKey: autoUploadEnabledKey) }
+    set { UserDefaults.standard.set(newValue, forKey: autoUploadEnabledKey) }
+  }
+
+  /// 最後に送信成功したスナップショットのフィンガープリント（変更検知用）
+  static var lastUploadedFingerprint: String? {
+    get { UserDefaults.standard.string(forKey: lastUploadedFingerprintKey) }
+    set { UserDefaults.standard.set(newValue, forKey: lastUploadedFingerprintKey) }
   }
 
   static var endpointURLString: String {
@@ -114,6 +128,24 @@ enum SnapshotLinkSettings {
       return nil
     }
     return url
+  }
+}
+
+// MARK: - 送信対象のスコープ（バックアップ書き出しと同じ規則）
+
+enum SnapshotLinkScope {
+  /// 現在のファミリーに属するアイテムと、そのファミリーを返す。
+  /// 設定画面と自動送信で同じ規則を使うための共通化。
+  static func resolved(items: [Item], families: [Family]) -> (items: [Item], family: Family?) {
+    let family = CurrentFamilyResolver.currentFamily(from: families)
+    guard let family else {
+      return (items.filter { $0.family == nil }, nil)
+    }
+    let familyItems = items.filter { $0.family?.id == family.id }
+    if !familyItems.isEmpty || family.prefersStrictCloudKitScoping {
+      return (familyItems, family)
+    }
+    return (items.filter { $0.family == nil }, family)
   }
 }
 

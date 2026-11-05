@@ -11,6 +11,7 @@ struct AILinkSettingsView: View {
   @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
 
   @State private var isEnabled = SnapshotLinkSettings.isEnabled
+  @State private var autoUploadEnabled = SnapshotLinkSettings.autoUploadEnabled
   @State private var endpointString = SnapshotLinkSettings.endpointURLString
   @State private var writeToken = SnapshotLinkKeychain.readWriteToken() ?? ""
   @State private var isSending = false
@@ -27,16 +28,15 @@ struct AILinkSettingsView: View {
     CurrentFamilyResolver.currentFamily(from: families)
   }
 
-  /// 書き出し（バックアップ）と同じスコープ規則
+  /// 書き出し（バックアップ）と同じスコープ規則（自動送信と共通）
   private var scopedItems: [Item] {
-    guard let family = currentFamily else {
-      return items.filter { $0.family == nil }
-    }
-    let familyItems = items.filter { $0.family?.id == family.id }
-    if !familyItems.isEmpty || family.prefersStrictCloudKitScoping {
-      return familyItems
-    }
-    return items.filter { $0.family == nil }
+    SnapshotLinkScope.resolved(items: items, families: families).items
+  }
+
+  /// 前回の送信成功時点から内容が変わっているか
+  private var hasUnsentChanges: Bool {
+    SnapshotFingerprint.compute(items: scopedItems, familyName: currentFamily?.name)
+      != SnapshotLinkSettings.lastUploadedFingerprint
   }
 
   private var isSharedFamily: Bool {
@@ -116,6 +116,9 @@ struct AILinkSettingsView: View {
       .onChange(of: isEnabled) { _, newValue in
         SnapshotLinkSettings.isEnabled = newValue
       }
+      .onChange(of: autoUploadEnabled) { _, newValue in
+        SnapshotLinkSettings.autoUploadEnabled = newValue
+      }
       .onChange(of: endpointString) { _, newValue in
         SnapshotLinkSettings.endpointURLString = newValue
       }
@@ -156,6 +159,16 @@ struct AILinkSettingsView: View {
             .font(.caption)
             .foregroundStyle(AppTheme.inkSecondary)
         }
+
+        Divider()
+
+        Toggle(isOn: $autoUploadEnabled) {
+          Text(L10n.string("自動送信"))
+            .font(.subheadline.weight(.semibold))
+        }
+        Text(L10n.string("アイテムの追加・変更・削除を検知して自動で送信します。バックグラウンドでの定期送信はiOSの制約のためできません。対象は、アプリを開いた時と開いている間の変更です。"))
+          .font(.caption)
+          .foregroundStyle(AppTheme.inkSecondary)
       }
     }
     .padding(16)
@@ -180,6 +193,12 @@ struct AILinkSettingsView: View {
 
       if let lastSentText {
         Text(L10n.format("最終送信: %@", lastSentText))
+          .font(.caption)
+          .foregroundStyle(AppTheme.inkSecondary)
+      }
+
+      if isEnabled && hasUnsentChanges {
+        Text(L10n.string("前回の送信から変更があります"))
           .font(.caption)
           .foregroundStyle(AppTheme.inkSecondary)
       }
@@ -252,6 +271,8 @@ struct AILinkSettingsView: View {
       let response = try await SnapshotUploader.upload(
         data: data, endpoint: endpoint, writeToken: token)
       SnapshotLinkSettings.lastSentAt = Date()
+      SnapshotLinkSettings.lastUploadedFingerprint = SnapshotFingerprint.compute(
+        items: scopedItems, familyName: currentFamily?.name)
       let count = (response["itemCount"] as? Int) ?? scopedItems.count
       sendResult = .success(L10n.format("%@件のアイテムを送信しました", String(count)))
     } catch let error as SnapshotUploadError {

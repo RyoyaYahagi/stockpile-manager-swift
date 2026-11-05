@@ -61,6 +61,66 @@ struct SnapshotLinkTests {
     }
 
     @Test
+    func fingerprintIsStableForSameContentAndChangesWithEdits() {
+        let item = Item(name: "水 2L", quantity: 12)
+        let first = SnapshotFingerprint.compute(items: [item], familyName: "テスト家")
+        let second = SnapshotFingerprint.compute(items: [item], familyName: "テスト家")
+        #expect(!first.isEmpty)
+        #expect(first == second)
+
+        item.quantity = 11
+        let afterEdit = SnapshotFingerprint.compute(items: [item], familyName: "テスト家")
+        #expect(afterEdit != first)
+
+        let otherFamily = SnapshotFingerprint.compute(items: [item], familyName: "別家")
+        #expect(otherFamily != afterEdit)
+    }
+
+    @Test
+    func autoUploadPolicyRequiresEverythingAndAChange() {
+        let url = URL(string: "https://example.workers.dev/v1/snapshot")
+        #expect(
+            SnapshotAutoUploadPolicy.shouldUpload(
+                isLinkEnabled: true, isAutoUploadEnabled: true, endpoint: url,
+                hasWriteToken: true, fingerprint: "abc", lastUploadedFingerprint: "xyz"))
+        #expect(
+            !SnapshotAutoUploadPolicy.shouldUpload(
+                isLinkEnabled: true, isAutoUploadEnabled: true, endpoint: url,
+                hasWriteToken: true, fingerprint: "abc", lastUploadedFingerprint: "abc"))
+        #expect(
+            !SnapshotAutoUploadPolicy.shouldUpload(
+                isLinkEnabled: false, isAutoUploadEnabled: true, endpoint: url,
+                hasWriteToken: true, fingerprint: "abc", lastUploadedFingerprint: nil))
+        #expect(
+            !SnapshotAutoUploadPolicy.shouldUpload(
+                isLinkEnabled: true, isAutoUploadEnabled: false, endpoint: url,
+                hasWriteToken: true, fingerprint: "abc", lastUploadedFingerprint: nil))
+        #expect(
+            !SnapshotAutoUploadPolicy.shouldUpload(
+                isLinkEnabled: true, isAutoUploadEnabled: true, endpoint: nil,
+                hasWriteToken: true, fingerprint: "abc", lastUploadedFingerprint: nil))
+        #expect(
+            !SnapshotAutoUploadPolicy.shouldUpload(
+                isLinkEnabled: true, isAutoUploadEnabled: true, endpoint: url,
+                hasWriteToken: false, fingerprint: "abc", lastUploadedFingerprint: nil))
+    }
+
+    @Test
+    func autoUploadSettingsRoundTrip() {
+        let previousAuto = SnapshotLinkSettings.autoUploadEnabled
+        let previousFingerprint = SnapshotLinkSettings.lastUploadedFingerprint
+        defer {
+            SnapshotLinkSettings.autoUploadEnabled = previousAuto
+            SnapshotLinkSettings.lastUploadedFingerprint = previousFingerprint
+        }
+
+        SnapshotLinkSettings.autoUploadEnabled = true
+        SnapshotLinkSettings.lastUploadedFingerprint = "deadbeef"
+        #expect(SnapshotLinkSettings.autoUploadEnabled)
+        #expect(SnapshotLinkSettings.lastUploadedFingerprint == "deadbeef")
+    }
+
+    @Test
     func promptContainsURLAndVersionButNoToken() {
         let prompt = SnapshotLinkPrompt.makePrompt(
             snapshotURLString: "https://example.workers.dev/v1/snapshot"
