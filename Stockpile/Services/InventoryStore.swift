@@ -25,14 +25,14 @@ enum InventoryStore {
         return deduplicated(bags.filter { $0.family == nil })
     }
 
-    /// 期限に余裕がある（期限切れでも7日以内でもない）備蓄の割合。0〜100
+    /// 期限に余裕がある（期限切れでも30日以内でもない）備蓄の割合。0〜100
     static func readinessPercent(of items: [Item]) -> Int {
         guard !items.isEmpty else { return 100 }
         let readyCount = items.filter { !$0.expiryStatus.needsAttention }.count
         return Int((Double(readyCount) / Double(items.count) * 100).rounded())
     }
 
-    /// 期限切れ・7日以内を、期限の近い順に並べたもの
+    /// 期限切れ・30日以内を、期限の近い順に並べたもの
     static func attentionItems(in items: [Item]) -> [Item] {
         items
             .filter { $0.expiryStatus.needsAttention }
@@ -99,6 +99,6 @@ enum InventoryStore {
 extension ExpiryStatus {
     /// ホームの「いま対応が必要」に出す状態か
     var needsAttention: Bool {
-        self == .expired || self == .imminent
+        self == .expired || self == .imminent || self == .approaching
     }
 }

@@ -334,3 +334,8 @@
 "デザイン" = "Design";
 "新デザイン" = "Nouveau design";
 "旧デザイン" = "Design classique";
+
+"外観" = "Apparence";
+"システム" = "Système";
+"ライトモード" = "Mode clair";
+"ダークモード" = "Mode sombre";

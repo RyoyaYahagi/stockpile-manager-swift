@@ -334,3 +334,8 @@
 "デザイン" = "Design";
 "新デザイン" = "Neues Design";
 "旧デザイン" = "Klassisches Design";
+
+"外観" = "Erscheinungsbild";
+"システム" = "System";
+"ライトモード" = "Heller Modus";
+"ダークモード" = "Dunkler Modus";

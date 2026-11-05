@@ -28,10 +28,10 @@ enum ScreenshotFixtures {
 
         // ダッシュボードの一覧が下部の検索バーに掛からず収まる件数（6点）に抑える
         let items = [
-            Item(name: "飲料水", quantity: 12, expiryDate: date(daysFromNow: 45)),
+            Item(name: "飲料水", quantity: 12, expiryDate: date(daysFromNow: 30)),
             Item(name: "レトルトカレー", quantity: 6, expiryDate: date(daysFromNow: 5)),
             Item(name: "アルファ米", quantity: 4, expiryDate: date(daysFromNow: 2)),
-            Item(name: "カセットボンベ", quantity: 3, expiryDate: date(daysFromNow: 90)),
+            Item(name: "カセットボンベ", quantity: 3, expiryDate: date(daysFromNow: 31)),
             Item(name: "簡易トイレ", quantity: 10, expiryDate: nil),
             Item(name: "救急セット", quantity: 1, expiryDate: date(daysFromNow: -3))
         ]

@@ -7,7 +7,7 @@ final class InventoryStoreTests: XCTestCase {
         return Item(name: name, quantity: 2, expiryDate: date)
     }
 
-    func testReadinessCountsItemsThatAreNotExpiredOrImminent() {
+    func testReadinessCountsItemsBeyondThirtyDaysOrWithoutExpiry() {
         let items = [
             item("期限切れ", daysFromNow: -3),
             item("7日以内", daysFromNow: 2),
@@ -16,21 +16,24 @@ final class InventoryStoreTests: XCTestCase {
             item("期限なし", daysFromNow: nil)
         ]
 
-        XCTAssertEqual(InventoryStore.readinessPercent(of: items), 60)
+        XCTAssertEqual(InventoryStore.readinessPercent(of: items), 40)
     }
 
     func testReadinessIsFullWhenThereAreNoItems() {
         XCTAssertEqual(InventoryStore.readinessPercent(of: []), 100)
     }
 
-    func testAttentionItemsAreExpiredOrImminentInExpiryOrder() {
+    func testAttentionItemsIncludeThirtyDaysAndExcludeLaterDatesInExpiryOrder() {
         let soon = item("7日以内", daysFromNow: 5)
         let expired = item("期限切れ", daysFromNow: -1)
-        let safe = item("余裕あり", daysFromNow: 60)
+        let today = item("本日期限", daysFromNow: 0)
+        let month = item("30日以内", daysFromNow: 30)
+        let safe = item("31日以降", daysFromNow: 31)
+        let noExpiry = item("期限なし", daysFromNow: nil)
 
-        let result = InventoryStore.attentionItems(in: [soon, safe, expired])
+        let result = InventoryStore.attentionItems(in: [month, soon, safe, noExpiry, today, expired])
 
-        XCTAssertEqual(result.map(\.name), ["期限切れ", "7日以内"])
+        XCTAssertEqual(result.map(\.name), ["期限切れ", "本日期限", "7日以内", "30日以内"])
     }
 
     func testRenewUpdatesExpiryAndResetsNotificationFlags() {
@@ -62,6 +65,7 @@ final class InventoryStoreTests: XCTestCase {
     func testRedesignKeysExistForSupportedInAppLanguages() throws {
         let keys = [
             "ホーム", "在庫", "いま対応が必要", "わが家の備え", "安心度",
+            "外観", "システム", "ライトモード", "ダークモード",
             "1つ使った", "入れ替えた", "要対応", "1か月以内", "余裕あり",
             "どうやって追加しますか？", "バーコードを読み取る", "賞味期限を撮影する", "手で入力する",
             "%@品目のうち %@品目", "期限が近い%@品を入れ替えると、安心度が上がります。"
@@ -107,5 +111,14 @@ final class InventoryStoreTests: XCTestCase {
             NotificationLedger.key(itemId: id, rule: rule, thresholdDate: base),
             NotificationLedger.key(itemId: id, rule: rule, thresholdDate: next)
         )
+    }
+}
+
+final class ModernAppearanceTests: XCTestCase {
+    func testAppearanceSupportsSystemLightAndDark() {
+        XCTAssertEqual(AppAppearance.allCases.map(\.rawValue), ["system", "light", "dark"])
+        XCTAssertNil(AppAppearance.system.colorScheme)
+        XCTAssertEqual(AppAppearance.light.colorScheme, .light)
+        XCTAssertEqual(AppAppearance.dark.colorScheme, .dark)
     }
 }

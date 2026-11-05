@@ -173,7 +173,7 @@ private struct CoachStep {
             ),
             CoachStep(
                 title: "期限が近いものはホームで分かります",
-                message: "「いま対応が必要」に、期限切れと7日以内の備蓄が並びます。使ったら「1つ使った」、買い替えたら「入れ替えた」を押します。",
+                message: "「いま対応が必要」に、期限切れと30日以内の備蓄が並びます。使ったら「1つ使った」、買い替えたら「入れ替えた」を押します。",
                 primaryTitle: "次へ進む",
                 hint: Hint(text: "入れ替えたらここを押す", symbol: "arrow.triangle.2.circlepath"),
                 tab: .home,

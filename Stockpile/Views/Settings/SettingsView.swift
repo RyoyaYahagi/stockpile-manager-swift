@@ -7,6 +7,8 @@ struct SettingsView: View {
     @Environment(LocalizationController.self) private var localizationController
     @Environment(PremiumAccessManager.self) private var premiumAccessManager
 
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
+
     @Query private var bags: [Bag]
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     @AppStorage("app.tutorial.replayRequestToken")
@@ -88,6 +90,31 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 AppDesignPicker()
                     .padding(16)
+
+                SettingsDivider()
+
+                Menu {
+                    ForEach(AppAppearance.allCases) { option in
+                        Button {
+                            appearance = option
+                        } label: {
+                            if appearance == option {
+                                Label(option.displayName, systemImage: "checkmark")
+                            } else {
+                                Text(option.displayName)
+                            }
+                        }
+                    }
+                } label: {
+                    SettingsRowLabel(
+                        symbol: "circle.lefthalf.filled",
+                        tint: AppTheme.accent,
+                        title: "外観",
+                        detail: appearance.displayName
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("settings.appearance")
 
                 SettingsDivider()
 
