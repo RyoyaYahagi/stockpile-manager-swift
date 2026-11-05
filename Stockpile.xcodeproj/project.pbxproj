@@ -32,6 +32,8 @@
 		025 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 125 /* NotificationSettingsView.swift */; };
 		026 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126 /* BarcodeScannerView.swift */; };
 		027 /* ProductSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 127 /* ProductSearchService.swift */; };
+		F01 /* SnapshotLinkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11 /* SnapshotLinkService.swift */; };
+		F02 /* AILinkSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12 /* AILinkSettingsView.swift */; };
 		028 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128 /* APIConfig.swift */; };
 		031 /* FamilySharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131 /* FamilySharingService.swift */; };
 		032 /* FamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132 /* FamilySettingsView.swift */; };
@@ -67,6 +69,7 @@
 		A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */; };
 		A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000004 /* PremiumAccessManagerTests.swift */; };
 		A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000005 /* AppLocalizationTests.swift */; };
+		A4B100000000000000000105 /* SnapshotLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000006 /* SnapshotLinkTests.swift */; };
 		A659FF64C07B539D8D70E351 /* LegacyBagListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFB79FE50E938C11551F618C /* LegacyBagListView.swift */; };
 		B281281E57B9DD9075C40E56 /* CoachMarkOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A5A570208BBAEBF6310C00 /* CoachMarkOverlay.swift */; };
 		C15EEADB9F78E894C8C536A6 /* LegacyNotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 270A077E38BC490E48A37C64 /* LegacyNotificationSettingsView.swift */; };
@@ -116,6 +119,8 @@
 		1258E2F415494C32B165F443 /* NotificationReminderCard.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationReminderCard.swift; sourceTree = "<group>"; };
 		126 /* BarcodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
 		127 /* ProductSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchService.swift; sourceTree = "<group>"; };
+		F11 /* SnapshotLinkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotLinkService.swift; sourceTree = "<group>"; };
+		F12 /* AILinkSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AILinkSettingsView.swift; sourceTree = "<group>"; };
 		128 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 		131 /* FamilySharingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySharingService.swift; sourceTree = "<group>"; };
 		132 /* FamilySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySettingsView.swift; sourceTree = "<group>"; };
@@ -154,6 +159,7 @@
 		A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitFamilySharingServiceTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000004 /* PremiumAccessManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumAccessManagerTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000005 /* AppLocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalizationTests.swift; sourceTree = "<group>"; };
+		A4B100000000000000000006 /* SnapshotLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotLinkTests.swift; sourceTree = "<group>"; };
 		AF14E1C1F18CC52D575E8FE7 /* RenewExpirySheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RenewExpirySheet.swift; sourceTree = "<group>"; };
 		AF966BDA61B4847C53006459 /* ScannerFrame.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScannerFrame.swift; sourceTree = "<group>"; };
 		C176BB208A4D750919424EB0 /* LegacyItemFormSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemFormSheet.swift; sourceTree = "<group>"; };
@@ -332,6 +338,7 @@
 				136 /* LanguageSettingsView.swift */,
 				132 /* FamilySettingsView.swift */,
 				118 /* ImportJSONView.swift */,
+				F12 /* AILinkSettingsView.swift */,
 				125 /* NotificationSettingsView.swift */,
 				148 /* PremiumPlanView.swift */,
 				1258E2F415494C32B165F443 /* NotificationReminderCard.swift */,
@@ -367,6 +374,7 @@
 			children = (
 				124 /* NotificationManager.swift */,
 				127 /* ProductSearchService.swift */,
+				F11 /* SnapshotLinkService.swift */,
 				131 /* FamilySharingService.swift */,
 				147 /* PremiumAccessManager.swift */,
 				D1E49F77D9DD9670638E3672 /* InventoryStore.swift */,
@@ -425,6 +433,7 @@
 			isa = PBXGroup;
 			children = (
 				A4B100000000000000000005 /* AppLocalizationTests.swift */,
+				A4B100000000000000000006 /* SnapshotLinkTests.swift */,
 				A4B100000000000000000004 /* PremiumAccessManagerTests.swift */,
 				A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */,
 				A4B100000000000000000002 /* ProductSearchServiceTests.swift */,
@@ -539,6 +548,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F01 /* SnapshotLinkService.swift in Sources */,
+				F02 /* AILinkSettingsView.swift in Sources */,
 				A659FF64C07B539D8D70E351 /* LegacyBagListView.swift in Sources */,
 				2F1CF689B3FC96E0216335AD /* LegacyDashboardView.swift in Sources */,
 				6C0081EE497E11DB8EC51EFE /* LegacyFamilySettingsView.swift in Sources */,
@@ -606,6 +617,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A4B100000000000000000105 /* SnapshotLinkTests.swift in Sources */,
 				A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */,
 				A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */,
 				A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */,

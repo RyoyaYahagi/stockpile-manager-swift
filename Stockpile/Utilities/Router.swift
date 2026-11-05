@@ -89,6 +89,7 @@ final class Router {
         case inviteCode(String)
         case importJSON
         case exportJSON
+        case aiLink
         case qrScanner
 
         var id: String {
@@ -103,6 +104,7 @@ final class Router {
             case .inviteCode: return "inviteCode"
             case .importJSON: return "importJSON"
             case .exportJSON: return "exportJSON"
+            case .aiLink: return "aiLink"
             case .qrScanner: return "qrScanner"
             }
         }

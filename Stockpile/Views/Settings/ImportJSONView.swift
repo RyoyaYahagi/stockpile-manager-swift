@@ -745,7 +745,7 @@ struct ImportJSONView: View {
 
 // MARK: - バックアップ画面の共通部品
 
-private struct BackupHeaderCard: View {
+struct BackupHeaderCard: View {
     let icon: String
     let title: LocalizedStringKey
     let subtitle: LocalizedStringKey
@@ -777,7 +777,7 @@ private struct BackupHeaderCard: View {
     }
 }
 
-private struct BackupResultBanner: View {
+struct BackupResultBanner: View {
     let isSuccess: Bool
     let message: String
 
@@ -827,7 +827,7 @@ private struct BackupSampleCard: View {
     }
 }
 
-private struct BackupWarningCard: View {
+struct BackupWarningCard: View {
     let title: String
     let message: String
 
