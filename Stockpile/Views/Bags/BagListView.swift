@@ -44,9 +44,11 @@ struct BagListView: View {
                     systemImage: "bag",
                     description: Text("右上の+ボタンで収納場所を追加しましょう")
                 )
+                .listRowBackground(Color.clear)
             } else {
                 ForEach(sortedBags) { bag in
                     BagRow(bag: bag)
+                        .listRowBackground(AppTheme.card)
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
                                 deleteBag(bag)
@@ -57,6 +59,8 @@ struct BagListView: View {
                 }
             }
         }
+        .appScreenBackground()
+        .tint(AppTheme.accent)
         .navigationTitle("収納場所")
         .localizedRefresh()
         .toolbar {
@@ -197,20 +201,27 @@ struct BagRow: View {
     let bag: Bag
     
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Image(systemName: "bag")
-                .foregroundStyle(.blue)
-                .frame(width: 32)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.accentInk)
+                .frame(width: 36, height: 36)
+                .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(bag.name)
                     .font(.body)
+                    .foregroundStyle(AppTheme.ink)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
                 
                 Text(L10n.format("%@個のアイテム", String(bag.resolvedItems.count)))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.inkSecondary)
             }
+            Spacer(minLength: 0)
         }
+        .frame(minHeight: 44)
         .padding(.vertical, 4)
     }
 }
@@ -250,12 +261,17 @@ struct BagFormSheet: View {
             Form {
                 Section {
                     TextField("収納場所名", text: $name)
+                        .foregroundStyle(AppTheme.ink)
+                        .frame(minHeight: 44)
+                        .listRowBackground(AppTheme.card)
                 } header: {
                     Text("収納場所名")
                 } footer: {
                     Text("例: 玄関用、車載用、寝室")
                 }
             }
+            .appScreenBackground()
+            .tint(AppTheme.accent)
             .navigationTitle("収納場所を追加")
             .navigationBarTitleDisplayMode(.inline)
             .localizedRefresh()
@@ -348,27 +364,30 @@ struct BagUndoSnackbar: View {
         HStack(spacing: 12) {
             Text(message)
                 .font(.subheadline)
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.ink)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
             
-            Spacer()
+            Spacer(minLength: 8)
             
             Button("元に戻す") {
                 onUndo()
             }
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.yellow)
+            .foregroundStyle(AppTheme.accentInk)
             
             Button {
                 onDismiss()
             } label: {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(AppTheme.inkSecondary)
+                    .frame(minWidth: 44, minHeight: 44)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
+        .glassSurface(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 

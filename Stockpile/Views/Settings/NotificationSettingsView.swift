@@ -35,6 +35,7 @@ struct NotificationSettingsView: View {
                 // 通知権限セクション（スクリーンショット撮影時は未許可状態の警告表示を避けるため非表示）
                 if !ScreenshotMode.isActive {
                     Section {
+                      Group {
                         authorizationStatusRow
                         soundStatusRow
 
@@ -50,6 +51,8 @@ struct NotificationSettingsView: View {
                                 openSettings()
                             }
                         }
+                      }
+                      .listRowBackground(AppTheme.card)
                     } header: {
                         Text("通知権限")
                     } footer: {
@@ -68,13 +71,16 @@ struct NotificationSettingsView: View {
                             persistSettingsAndReschedule(settings)
                         }
                     ))
+                    .tint(AppTheme.accent)
+                    .listRowBackground(AppTheme.card)
                 }
                 
                 // 通知タイミング
                 Section {
+                  Group {
                     if settings.notificationTimingRules.isEmpty {
                         Text("通知タイミングは未設定です")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.inkSecondary)
                     } else {
                         ForEach(Array(settings.notificationTimingRules.enumerated()), id: \.offset) { index, _ in
                             let currentRule = currentTimingRule(at: index, settings: settings)
@@ -113,6 +119,8 @@ struct NotificationSettingsView: View {
                         addNotificationTimingRule(for: settings)
                     }
                     .disabled(!settings.isEnabled || reachedNotificationTimingMaximum(for: settings))
+                  }
+                  .listRowBackground(AppTheme.card)
                 } header: {
                     Text(notificationTimingSectionTitle(for: settings))
                 } footer: {
@@ -132,6 +140,7 @@ struct NotificationSettingsView: View {
                         displayedComponents: .hourAndMinute
                     )
                     .disabled(!settings.isEnabled)
+                    .listRowBackground(AppTheme.card)
                 } header: {
                     Text("通知時刻")
                 } footer: {
@@ -145,9 +154,12 @@ struct NotificationSettingsView: View {
                         ProgressView("設定を読み込み中...")
                         Spacer()
                     }
+                    .listRowBackground(AppTheme.card)
                 }
             }
         }
+        .appScreenBackground()
+        .tint(AppTheme.accent)
         .navigationTitle("通知設定")
         .localizedRefresh()
         .task {
@@ -215,10 +227,10 @@ struct NotificationSettingsView: View {
     
     private var statusColor: Color {
         switch notificationManager.authorizationStatus {
-        case .authorized, .provisional, .ephemeral: return .green
-        case .denied: return .red
-        case .notDetermined: return .orange
-        @unknown default: return .secondary
+        case .authorized, .provisional, .ephemeral: return AppTheme.color(for: .safe)
+        case .denied: return AppTheme.color(for: .expired)
+        case .notDetermined: return AppTheme.color(for: .imminent)
+        @unknown default: return AppTheme.inkSecondary
         }
     }
 
@@ -237,16 +249,16 @@ struct NotificationSettingsView: View {
     }
 
     private var soundStatusColor: Color {
-        guard let currentSystemSettings else { return .secondary }
+        guard let currentSystemSettings else { return AppTheme.inkSecondary }
         switch currentSystemSettings.soundSetting {
         case .enabled:
-            return .green
+            return AppTheme.color(for: .safe)
         case .disabled:
-            return .red
+            return AppTheme.color(for: .expired)
         case .notSupported:
-            return .orange
+            return AppTheme.color(for: .imminent)
         @unknown default:
-            return .secondary
+            return AppTheme.inkSecondary
         }
     }
     

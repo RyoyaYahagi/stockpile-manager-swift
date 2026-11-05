@@ -6,6 +6,49 @@ import SwiftData
 private struct NotificationItem {
     let item: Item
     let rule: NotificationTimingRule
+    let ledgerKey: String
+}
+
+/// 予定した通知の発火日時を端末に記録し、届け済みの通知を出し直さないようにする
+struct NotificationLedger {
+    private static let storageKey = "notificationLedger.fireDates"
+    private var fireDates: [String: Date]
+
+    init(fireDates: [String: Date] = [:]) {
+        self.fireDates = fireDates
+    }
+
+    static func load(from defaults: UserDefaults = .standard) -> NotificationLedger {
+        let raw = defaults.dictionary(forKey: storageKey) as? [String: Date] ?? [:]
+        return NotificationLedger(fireDates: raw)
+    }
+
+    func save(to defaults: UserDefaults = .standard) {
+        defaults.set(fireDates, forKey: Self.storageKey)
+    }
+
+    /// 期限日が変われば別の通知として扱うよう、品目・タイミング・通知の基準日で区別する
+    static func key(itemId: UUID, rule: NotificationTimingRule, thresholdDate: Date) -> String {
+        let day = Int(thresholdDate.timeIntervalSince1970 / 86_400)
+        return "\(itemId.uuidString)|\(rule.normalizedRule.serializedValue)|\(day)"
+    }
+
+    func hasDelivered(_ key: String, now: Date) -> Bool {
+        guard let fireDate = fireDates[key] else { return false }
+        return fireDate <= now
+    }
+
+    mutating func record(_ key: String, fireDate: Date) {
+        fireDates[key] = fireDate
+    }
+
+    mutating func forgetPending(after date: Date) {
+        fireDates = fireDates.filter { $0.value <= date }
+    }
+
+    mutating func prune(before date: Date) {
+        fireDates = fireDates.filter { $0.value >= date }
+    }
 }
 
 /// 通知管理サービス
@@ -88,8 +131,14 @@ final class NotificationManager: ObservableObject {
     func rescheduleAllNotifications(items: [Item], settings: NotificationSettings) async {
         cancelPendingReschedule()
         cancelAllNotifications()
-        
-        guard settings.isEnabled else { return }
+
+        guard settings.isEnabled else {
+            // 取り消した予定は届いていないので、記録からも外す
+            var ledger = NotificationLedger.load()
+            ledger.forgetPending(after: Date())
+            ledger.save()
+            return
+        }
         guard await ensureAuthorizationForScheduling() else { return }
         let timingRules = settings.notificationTimingRules
         guard !timingRules.isEmpty else { return }
@@ -100,7 +149,9 @@ final class NotificationManager: ObservableObject {
         // 今日の日付成分のみを取得（時刻を無視）
         let todayComponents = calendar.dateComponents([.year, .month, .day], from: Date())
         guard let today = calendar.date(from: todayComponents) else { return }
-        
+        let now = Date()
+        var ledger = NotificationLedger.load()
+
         // 通知日ごとにアイテムをグループ化（日付のみでグループ化）
         var groupedNotifications: [Date: [NotificationItem]] = [:]
         
@@ -142,21 +193,36 @@ final class NotificationManager: ObservableObject {
                     continue
                 }
 
+                let ledgerKey = NotificationLedger.key(
+                    itemId: item.id,
+                    rule: scheduledRule.rule,
+                    thresholdDate: scheduledRule.thresholdDate
+                )
+                // 一度届けた通知は、アプリを開き直したり再スケジュールしたりしても出し直さない
+                if ledger.hasDelivered(ledgerKey, now: now) {
+                    continue
+                }
+
                 groupedNotifications[notifyDate, default: []].append(
-                    NotificationItem(item: item, rule: scheduledRule.rule)
+                    NotificationItem(item: item, rule: scheduledRule.rule, ledgerKey: ledgerKey)
                 )
             }
         }
         
         // グループ化された通知をスケジュール
         for (notifyDate, notificationItems) in groupedNotifications {
-            await scheduleGroupedNotification(
+            guard let fireDate = await scheduleGroupedNotification(
                 notificationItems: notificationItems,
                 at: notifyDate,
                 settings: settings
-            )
+            ) else { continue }
+            for notificationItem in notificationItems {
+                ledger.record(notificationItem.ledgerKey, fireDate: fireDate)
+            }
         }
-        
+        ledger.prune(before: calendar.date(byAdding: .year, value: -1, to: today) ?? today)
+        ledger.save()
+
         #if DEBUG
         debugLog("📋 Scheduled \(groupedNotifications.count) grouped notifications")
         #endif
@@ -190,12 +256,12 @@ final class NotificationManager: ObservableObject {
         await rescheduleAllNotifications(items: allItems, settings: settings)
     }
     
-    /// グループ化された通知をスケジュール
+    /// グループ化された通知をスケジュールし、発火日時を返す（予定できなかったときは nil）
     private func scheduleGroupedNotification(
         notificationItems: [NotificationItem],
         at date: Date,
         settings: NotificationSettings
-    ) async {
+    ) async -> Date? {
         let content = UNMutableNotificationContent()
         content.sound = .default
         if #available(iOS 15.0, *) {
@@ -226,7 +292,7 @@ final class NotificationManager: ObservableObject {
         // 実際の通知発火日時を計算
         guard let scheduledDate = calendar.date(from: dateComponents) else {
             debugLog("⚠️ Failed to create scheduled date")
-            return
+            return nil
         }
         
         let now = Date()
@@ -248,7 +314,7 @@ final class NotificationManager: ObservableObject {
             effectiveScheduledDate = now.addingTimeInterval(immediateFallbackInterval)
         } else {
             debugLog("⚠️ Skipped grouped notification - \(formatDate(scheduledDate)) is in the past")
-            return
+            return nil
         }
         
         // 日付でユニークなidentifierを生成
@@ -265,8 +331,10 @@ final class NotificationManager: ObservableObject {
         do {
             try await UNUserNotificationCenter.current().add(request)
             debugLog("✅ Scheduled grouped: \(notificationItems.count)件 at \(formatDate(effectiveScheduledDate))")
+            return effectiveScheduledDate
         } catch {
             debugLog("❌ Failed to schedule grouped notification: \(error)")
+            return nil
         }
     }
     

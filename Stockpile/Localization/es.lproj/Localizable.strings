@@ -131,8 +131,8 @@
 "備蓄品の期限通知（%@件）" = "Recordatorio de caducidad de reservas (%@)";
 "備蓄品を追加" = "Añadir artículo";
 "備蓄品を編集" = "Editar artículo";
-"備蓄品管理" = "Stockpile";
-"備蓄管理アプリ「らくストック」に参加しよう！\n招待コード: %@\nまたはこちらのリンクから: stockpile://join?code=%@" = "¡Únete a la app de gestión de artículos almacenados Stockpile!\nCódigo de invitación: %@\nO abre este enlace: stockpile://join?code=%@";
+"備蓄品管理" = "RakuStock";
+"備蓄管理アプリ「らくストック」に参加しよう！\n招待コード: %@\nまたはこちらのリンクから: stockpile://join?code=%@" = "¡Únete a la app de gestión de artículos almacenados RakuStock!\nCódigo de invitación: %@\nO abre este enlace: stockpile://join?code=%@";
 "復元に失敗しました: %@" = "No se pudo restaurar: %@";
 "当日" = "El mismo día";
 "当日に通知" = "Notificar el mismo día";
@@ -143,14 +143,14 @@
 "無効" = "Desactivado";
 "現在の備蓄品データをバックアップファイルとして書き出します" = "Exporta los datos actuales de reservas como archivo de respaldo.";
 "管理" = "Administración";
-"「%@」の Stockpile 家族共有リンクです。" = "Este es el enlace de uso compartido familiar de Stockpile de %@.";
+"「%@」の Stockpile 家族共有リンクです。" = "Este es el enlace de uso compartido familiar de RakuStock de %@.";
 "「%@」の期限が近づいています（%@のお知らせ）" = "%@ se acerca a su fecha de caducidad (%@).";
 "「%@」の期限は本日です" = "%@ vence hoy.";
 "「%@」を削除しました" = "Se eliminó %@.";
 "CloudKit上のレコードが見つかりません。" = "No se encontró el registro de CloudKit.";
 "CloudKit共有メタデータの読み取りに失敗しました。" = "No se pudieron leer los metadatos de uso compartido de CloudKit.";
 "CloudKit共有レコードの作成に失敗しました。" = "No se pudo crear el registro compartido de CloudKit.";
-"Stockpile の家族共有リンクです。" = "Este es un enlace de uso compartido familiar de Stockpile.";
+"Stockpile の家族共有リンクです。" = "Este es un enlace de uso compartido familiar de RakuStock.";
 "Yahoo" = "Yahoo";
 "APIキーが設定されていません" = "La clave API no está configurada.";
 "APIリクエストに失敗しました" = "La solicitud de API falló.";
@@ -172,7 +172,6 @@
 "まずは右下の + を押します" = "Primero, toca el botón + de la parte inferior derecha.";
 "右下の + を押すと、登録画面が開きます。" = "Toca el botón + de la parte inferior derecha para abrir la pantalla de registro.";
 "+ボタンを開く" = "Abrir la pantalla de registro";
-"今は説明だけ見る" = "Solo ver la explicación por ahora";
 "登録できました" = "Elemento añadido";
 "名前だけでも保存できます" = "Puedes guardarlo solo con el nombre.";
 "一覧に1件増えていれば、最初の登録は完了です。" = "Si ves un elemento más en la lista, tu primer registro está completo.";
@@ -183,7 +182,6 @@
 "通知は必要になってから設定できます" = "Puedes configurar los recordatorios más adelante cuando los necesites.";
 "通知を開くと、いつお知らせするかを決められます。" = "Abre las notificaciones para decidir cuándo quieres recibir el aviso.";
 "通知を開く" = "Abrir notificaciones";
-"今は設定しない" = "Ahora no";
 "家族共有の準備もできます" = "También puedes preparar el uso compartido familiar.";
 "家族と使うときは共有を設定できます" = "Puedes configurar el uso compartido cuando la uses con tu familia.";
 "家族設定から、家族に共有リンクを送れる状態です。" = "Desde los ajustes de familia ya puedes enviar un enlace de uso compartido a tu familia.";
@@ -275,7 +273,7 @@
 "収納場所がありません" = "No hay ubicaciones de almacenamiento";
 "例: 玄関用、車載用、寝室" = "Ejemplo: entrada, coche, dormitorio";
 "収納場所を追加" = "Añadir ubicación de almacenamiento";
-"Stockpile 家族共有" = "Uso compartido familiar de Stockpile";
+"Stockpile 家族共有" = "Uso compartido familiar de RakuStock";
 "HTTPレスポンスを取得できませんでした" = "No se pudo obtener la respuesta HTTP";
 "JSONを解析できませんでした" = "No se pudo analizar la respuesta JSON";
 "status が含まれていません" = "La respuesta no incluye status";
@@ -290,7 +288,7 @@
 "Yahoo検索APIのJSONを解析できませんでした" = "No se pudo analizar el JSON de la API de búsqueda de Yahoo";
 "Yahoo検索APIの name を取得できませんでした" = "No se pudo obtener name de la API de búsqueda de Yahoo";
 "編集" = "Editar";
-"Stockpileへようこそ" = "Bienvenido a Stockpile";
+"Stockpileへようこそ" = "Bienvenido a RakuStock";
 "最初に表示する言語" = "Idioma inicial";
 "システムの言語のままでも進められます" = "También puedes continuar con el idioma del sistema.";
 "ここを押す" = "Toca aquí";
@@ -332,3 +330,12 @@
 "購入の確認に失敗しました。" = "No se pudo verificar la compra.";
 "購入処理は保留中です。承認後に自動で反映されます。" = "La compra está pendiente. Se aplicará automáticamente tras la aprobación.";
 "購入に失敗しました: %@" = "La compra falló: %@";
+
+"デザイン" = "Diseño";
+"新デザイン" = "Diseño nuevo";
+"旧デザイン" = "Diseño clásico";
+
+"外観" = "Apariencia";
+"システム" = "Sistema";
+"ライトモード" = "Modo claro";
+"ダークモード" = "Modo oscuro";

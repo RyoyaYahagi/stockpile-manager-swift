@@ -94,8 +94,35 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
     }
 }
 
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    static let storageKey = "settings.appAppearance"
+    var id: String { rawValue }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .system: return L10n.string("システム")
+        case .light: return L10n.string("ライトモード")
+        case .dark: return L10n.string("ダークモード")
+        }
+    }
+}
+
 @main
 struct StockpileApp: App {
+    @AppStorage(AppAppearance.storageKey) private var appearance: AppAppearance = .system
+    @AppStorage(AppDesign.storageKey) private var design: AppDesign = .modern
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var localizationController = LocalizationController()
     @State private var premiumAccessManager = PremiumAccessManager.shared
@@ -109,6 +136,7 @@ struct StockpileApp: App {
                     .environment(premiumAccessManager)
                     .environment(\.locale, localizationController.locale)
                     .modelContainer(container)
+                    .preferredColorScheme(design == .modern ? appearance.colorScheme : nil)
                     .task {
                         CloudKitSyncRuntime.shared.configure(container: container)
                     }

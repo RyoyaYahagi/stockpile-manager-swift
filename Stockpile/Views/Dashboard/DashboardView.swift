@@ -95,11 +95,12 @@ struct DashboardView: View {
     @Query private var bags: [Bag]
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     
-    @State private var selectedBagId: UUID?
+    @State private var collapsedGroupIds: Set<String> = []
+    @State private var showBagReorder = false
+    @AppStorage(BagOrderStore.revisionKey) private var bagOrderRevision = 0
     @State private var selectedItems: Set<UUID> = []
     @State private var isSelectionMode = false
     @State private var searchText = ""
-    @State private var showStorageLocationPicker = false
     @State private var showDeleteConfirmation = false
     @State private var showMoveSheet = false
     @State private var showCopySheet = false
@@ -109,94 +110,75 @@ struct DashboardView: View {
     @State private var selectedExpiryFilter: ExpiryFilter = .all
     @State private var autoSyncedFamilyID: UUID?
     
-    enum ExpiryFilter {
+    enum ExpiryFilter: CaseIterable {
         case all
-        case expired
-        case imminent
+        case attention
+        case approaching
+        case safe
+
+        var title: LocalizedStringKey {
+            switch self {
+            case .all: return "すべて"
+            case .attention: return "要対応"
+            case .approaching: return "1か月以内"
+            case .safe: return "余裕あり"
+            }
+        }
+
+        func matches(_ status: ExpiryStatus) -> Bool {
+            switch self {
+            case .all: return true
+            case .attention: return status.needsAttention
+            case .approaching: return status == .approaching
+            case .safe: return status == .safe || status == .noExpiry
+            }
+        }
     }
-    
-    private struct DashboardData {
-        let filteredItems: [Item]
-        let expiredCount: Int
-        let imminentCount: Int
+
+    /// 収納場所ごとのまとまり
+    private struct ItemGroup: Identifiable {
+        let id: String
+        let bagId: UUID?
+        let name: String
+        let items: [Item]
+
+        var attentionCount: Int {
+            items.filter { $0.expiryStatus.needsAttention }.count
+        }
     }
+
+    private static let unassignedGroupId = "unassigned"
 
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
     }
 
     private var scopedItems: [Item] {
-        guard let family = currentFamily else {
-            return deduplicatedItems(items.filter { $0.family == nil })
-        }
-        let familyItems = deduplicatedItems(items.filter { $0.family?.id == family.id })
-        if !familyItems.isEmpty || family.prefersStrictCloudKitScoping {
-            return familyItems
-        }
-        return deduplicatedItems(items.filter { $0.family == nil })
+        InventoryStore.scopedItems(items, family: currentFamily)
     }
 
     private var scopedBags: [Bag] {
-        guard let family = currentFamily else {
-            return deduplicatedBags(bags.filter { $0.family == nil })
-        }
-        let familyBags = deduplicatedBags(bags.filter { $0.family?.id == family.id })
-        if !familyBags.isEmpty || family.prefersStrictCloudKitScoping {
-            return familyBags
-        }
-        return deduplicatedBags(bags.filter { $0.family == nil })
+        InventoryStore.scopedBags(bags, family: currentFamily)
     }
 
-    private func deduplicatedItems(_ source: [Item]) -> [Item] {
-        var seen = Set<UUID>()
-        return source.filter { seen.insert($0.id).inserted }
+    private var isNarrowing: Bool {
+        selectedExpiryFilter != .all
+            || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func deduplicatedBags(_ source: [Bag]) -> [Bag] {
-        var seen = Set<UUID>()
-        return source.filter { seen.insert($0.id).inserted }
-    }
-    
-    private var dashboardData: DashboardData {
+    private var filteredItems: [Item] {
         let normalizedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let queryForms = SearchNormalizer.normalizedForms(for: normalizedSearchText)
         let hasSearchText = !queryForms.isEmpty
-        
-        var filtered: [Item] = []
-        var expiredCount = 0
-        var imminentCount = 0
-        
-        for item in scopedItems {
-            let status = item.expiryStatus
-            
-            if status == .expired {
-                expiredCount += 1
-            }
-            if status == .imminent {
-                imminentCount += 1
-            }
-            
-            if let bagId = selectedBagId, item.bag?.id != bagId {
-                continue
-            }
-            
+
+        let filtered = scopedItems.filter { item in
             if hasSearchText, !SearchNormalizer.matches(item.name, queryForms: queryForms) {
-                continue
+                return false
             }
-            
-            switch selectedExpiryFilter {
-            case .expired:
-                guard status == .expired else { continue }
-            case .imminent:
-                guard status == .expired || status == .imminent else { continue }
-            case .all:
-                break
-            }
-            
-            filtered.append(item)
+            return selectedExpiryFilter.matches(item.expiryStatus)
         }
-        
-        filtered.sort { item1, item2 in
+
+        return filtered.sorted { item1, item2 in
             switch (item1.expiryDate, item2.expiryDate) {
             case (nil, nil): return false
             case (nil, _): return false
@@ -204,20 +186,47 @@ struct DashboardView: View {
             case let (date1?, date2?): return date1 < date2
             }
         }
-        
-        return DashboardData(
-            filteredItems: filtered,
-            expiredCount: expiredCount,
-            imminentCount: imminentCount
-        )
     }
-    
-    private var selectedBagName: String {
-        guard let bagId = selectedBagId,
-              let bag = scopedBags.first(where: { $0.id == bagId }) else {
-            return L10n.string("すべて")
+
+    private func groups(for filtered: [Item]) -> [ItemGroup] {
+        _ = bagOrderRevision
+        var result = BagOrderStore.sorted(scopedBags, family: currentFamily)
+            .map { bag in
+                ItemGroup(
+                    id: bag.id.uuidString,
+                    bagId: bag.id,
+                    name: bag.name,
+                    items: filtered.filter { $0.bag?.id == bag.id }
+                )
+            }
+        let knownBagIds = Set(scopedBags.map(\.id))
+        let unassigned = filtered.filter { item in
+            guard let bagId = item.bag?.id else { return true }
+            return !knownBagIds.contains(bagId)
         }
-        return bag.name
+        result.append(
+            ItemGroup(
+                id: Self.unassignedGroupId,
+                bagId: nil,
+                name: L10n.string("未分類"),
+                items: unassigned
+            )
+        )
+        return result.filter { !$0.items.isEmpty }
+    }
+
+    private func isExpanded(_ group: ItemGroup) -> Bool {
+        isNarrowing || !collapsedGroupIds.contains(group.id)
+    }
+
+    private func toggle(_ group: ItemGroup) {
+        withAnimation(AppTheme.accordionAnimation) {
+            if collapsedGroupIds.contains(group.id) {
+                collapsedGroupIds.remove(group.id)
+            } else {
+                collapsedGroupIds.insert(group.id)
+            }
+        }
     }
 
     private var deletedItemsMessage: String {
@@ -236,192 +245,94 @@ struct DashboardView: View {
     }
     
     var body: some View {
-        let data = dashboardData
-        
-        List(selection: isSelectionMode ? $selectedItems : nil) {
-            // サマリーセクション
-            if !scopedItems.isEmpty {
-                Section {
-                    HStack(spacing: 16) {
-                        Button {
-                            withAnimation {
-                                selectedExpiryFilter = selectedExpiryFilter == .expired ? .all : .expired
-                            }
-                        } label: {
-                            SummaryCard(
-                                title: "期限切れ",
-                                count: data.expiredCount,
-                                color: .red,
-                                isSelected: selectedExpiryFilter == .expired
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        
-                        Button {
-                            withAnimation {
-                                selectedExpiryFilter = selectedExpiryFilter == .imminent ? .all : .imminent
-                            }
-                        } label: {
-                            SummaryCard(
-                                title: "期限間近",
-                                count: data.imminentCount,
-                                color: .orange,
-                                isSelected: selectedExpiryFilter == .imminent
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        
-                        Button {
-                            withAnimation {
-                                selectedExpiryFilter = .all
-                            }
-                        } label: {
-                            SummaryCard(
-                                title: "合計",
-                                count: scopedItems.count,
-                                color: .blue,
-                                isSelected: selectedExpiryFilter == .all
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                }
-            }
-            
-            // 収納場所フィルタ
-            if !scopedBags.isEmpty && !isSelectionMode {
-                Section {
-                    Button {
-                        showStorageLocationPicker = true
-                    } label: {
-                        HStack {
-                            Label("収納場所", systemImage: "folder")
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Text(selectedBagName)
-                                .foregroundStyle(.secondary)
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            
-            // アイテム一覧
-            Section {
-                if data.filteredItems.isEmpty {
-                    ContentUnavailableView(
-                        "備蓄品がありません",
-                        systemImage: "tray",
-                        description: Text("まずは右下の+から、1件登録してみましょう")
-                    )
-                } else {
-                    ForEach(data.filteredItems) { item in
-                        ItemRow(item: item)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if isSelectionMode {
-                                    // 選択モード時は選択/解除
-                                    if selectedItems.contains(item.id) {
-                                        selectedItems.remove(item.id)
-                                        // 全て解除されたら選択モードを終了
-                                        if selectedItems.isEmpty {
-                                            withAnimation {
-                                                isSelectionMode = false
-                                            }
-                                        }
-                                    } else {
-                                        selectedItems.insert(item.id)
-                                    }
-                                } else {
-                                    router.push(.itemDetail(item))
-                                }
-                            }
-                            .onLongPressGesture {
-                                // 長押しで選択モードに入る
-                                withAnimation {
-                                    isSelectionMode = true
-                                    selectedItems.insert(item.id)
-                                }
-                                // 触覚フィードバック
-                                let generator = UIImpactFeedbackGenerator(style: .medium)
-                                generator.impactOccurred()
-                            }
-                            .listRowBackground(
-                                isSelectionMode && selectedItems.contains(item.id)
-                                    ? Color.blue.opacity(0.15)
-                                    : nil
-                            )
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    deleteItem(item)
-                                } label: {
-                                    Label("削除", systemImage: "trash")
-                                }
-                            }
-                            .swipeActions(edge: .leading) {
-                                Button {
-                                    router.present(.editItem(item))
-                                } label: {
-                                    Label("編集", systemImage: "pencil")
-                                }
-                                .tint(.blue)
-                            }
-                    }
-                }
-            } header: {
-                if !data.filteredItems.isEmpty {
-                    Text(filteredItemsSectionTitle(count: data.filteredItems.count))
-                }
-            }
-        }
-        .listStyle(.insetGrouped)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            exitSelectionModeIfNeeded()
-        }
-        .navigationTitle("備蓄品管理")
-        .navigationBarTitleDisplayMode(.inline)
-        .localizedRefresh()
-        .searchable(text: $searchText, prompt: "品名で検索")
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                HStack(spacing: 8) {
-                    Image("AppIcon")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 28, height: 28)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                    Text("備蓄品管理")
-                        .font(.headline)
-                }
-            }
-            
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    router.push(.settings)
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-            }
-            
-            ToolbarItem(placement: .topBarTrailing) {
+        let filtered = filteredItems
+        let itemGroups = groups(for: filtered)
+
+        ScrollViewReader { proxy in
+            List(selection: isSelectionMode ? $selectedItems : nil) {
                 if !scopedItems.isEmpty {
-                    Button(isSelectionMode ? LocalizedStringKey("完了") : LocalizedStringKey("選択")) {
-                        withAnimation {
-                            isSelectionMode.toggle()
-                            if !isSelectionMode {
-                                selectedItems.removeAll()
+                    Section {
+                        ExpiryFilterControl(selection: $selectedExpiryFilter)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                            .listRowBackground(Color.clear)
+                    }
+                }
+
+                if itemGroups.isEmpty {
+                    Section {
+                        ContentUnavailableView(
+                            scopedItems.isEmpty ? "備蓄品がありません" : "該当する備蓄はありません",
+                            systemImage: "tray",
+                            description: Text(scopedItems.isEmpty ? "右下の＋から、1件登録してみましょう" : "")
+                        )
+                        .listRowBackground(Color.clear)
+                    }
+                } else {
+                    ForEach(itemGroups) { group in
+                        Section {
+                            groupHeader(group)
+                                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                                .listRowBackground(AppTheme.card)
+                                .id(group.id)
+
+                            if isExpanded(group) {
+                                ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
+                                    itemRow(item, index: index)
+                                }
                             }
                         }
                     }
                 }
             }
-            
+            .listStyle(.insetGrouped)
+            .listSectionSpacing(14)
+            .appScreenBackground()
+            .onAppear { scrollToFocusedBag(using: proxy) }
+            .onChange(of: router.stockFocusRequest?.token) { _, _ in scrollToFocusedBag(using: proxy) }
+        }
+        .navigationTitle("在庫")
+        .navigationBarTitleDisplayMode(.large)
+        .localizedRefresh()
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "品名で検索")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    if !scopedItems.isEmpty {
+                        Button {
+                            setSelectionMode(!isSelectionMode)
+                        } label: {
+                            Label(
+                                isSelectionMode ? LocalizedStringKey("選択を終了") : LocalizedStringKey("選択して移動・削除"),
+                                systemImage: "checkmark.circle"
+                            )
+                        }
+                    }
+                    if scopedBags.count > 1 {
+                        Button {
+                            showBagReorder = true
+                        } label: {
+                            Label("収納場所の並べ替え", systemImage: "arrow.up.arrow.down")
+                        }
+                    }
+                    Button {
+                        router.push(.bagList)
+                    } label: {
+                        Label("収納場所を編集", systemImage: "bag")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .accessibilityLabel(Text("その他"))
+                }
+            }
+
+            if isSelectionMode {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("完了") {
+                        setSelectionMode(false)
+                    }
+                }
+            }
+
             ToolbarItem(placement: .bottomBar) {
                 if isSelectionMode && !selectedItems.isEmpty {
                     HStack {
@@ -430,17 +341,17 @@ struct DashboardView: View {
                         } label: {
                             Label("移動", systemImage: "folder")
                         }
-                        
+
                         Spacer()
-                        
+
                         Button {
                             showCopySheet = true
                         } label: {
                             Label("コピー", systemImage: "doc.on.doc")
                         }
-                        
+
                         Spacer()
-                        
+
                         Button(role: .destructive) {
                             showDeleteConfirmation = true
                         } label: {
@@ -459,19 +370,13 @@ struct DashboardView: View {
             deletedItemInfoList = deletedItems
             showUndoSnackbarWithTimeout()
         }
-        .overlay(alignment: .bottomTrailing) {
-            if !isSelectionMode {
-                Button {
-                    router.present(.addItem(bagId: selectedBagId))
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 56, height: 56)
-                        .background(.blue, in: Circle())
-                        .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
-                }
-                .padding()
+        .onChange(of: isSelectionMode) { _, newValue in
+            // 選択中は下のツールバーと重ならないよう、タブバーを隠す
+            router.isTabBarHidden = newValue
+        }
+        .onDisappear {
+            if isSelectionMode {
+                setSelectionMode(false)
             }
         }
         .overlay(alignment: .bottom) {
@@ -486,15 +391,12 @@ struct DashboardView: View {
                     }
                 )
                 .padding(.horizontal)
-                .padding(.bottom, isSelectionMode ? 60 : 80)
+                .padding(.bottom, isSelectionMode ? 60 : 100)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .sheet(isPresented: $showStorageLocationPicker) {
-            StorageLocationPicker(
-                bags: scopedBags,
-                selectedBagId: $selectedBagId
-            )
+        .sheet(isPresented: $showBagReorder) {
+            BagReorderSheet(bags: scopedBags, family: currentFamily)
         }
         .sheet(isPresented: $showMoveSheet) {
             BulkMoveSheet(
@@ -527,6 +429,119 @@ struct DashboardView: View {
         }
     }
     
+    // MARK: - Rows
+
+    private func groupHeader(_ group: ItemGroup) -> some View {
+        let expanded = isExpanded(group)
+        return Button {
+            toggle(group)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: group.bagId == nil ? "tray" : "bag")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppTheme.ink)
+                    .frame(width: 40, height: 40)
+                    .background(AppTheme.softFill, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(group.name)
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(AppTheme.ink)
+                        .lineLimit(1)
+                    Text(groupSummary(group))
+                        .font(.caption)
+                        .foregroundStyle(group.attentionCount > 0 ? AppTheme.color(for: .imminent) : AppTheme.inkSecondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.inkSecondary)
+                    .rotationEffect(.degrees(expanded ? 180 : 0))
+            }
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isNarrowing)
+        .accessibilityValue(Text(expanded ? "開いています" : "閉じています"))
+    }
+
+    private func groupSummary(_ group: ItemGroup) -> String {
+        let count = L10n.format("%@品目", String(group.items.count))
+        if group.attentionCount > 0 {
+            return "\(count) ・ " + L10n.format("要対応 %@件", String(group.attentionCount))
+        }
+        return "\(count) ・ " + L10n.string("すべて期限内")
+    }
+
+    private func itemRow(_ item: Item, index: Int) -> some View {
+        ItemRow(item: item, isSelected: isSelectionMode ? selectedItems.contains(item.id) : nil)
+            .riseIn(index: index, delayStep: 0.05)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if isSelectionMode {
+                    if selectedItems.contains(item.id) {
+                        selectedItems.remove(item.id)
+                        if selectedItems.isEmpty {
+                            setSelectionMode(false)
+                        }
+                    } else {
+                        selectedItems.insert(item.id)
+                    }
+                } else {
+                    router.push(.itemDetail(item))
+                }
+            }
+            .onLongPressGesture {
+                withAnimation {
+                    isSelectionMode = true
+                    selectedItems.insert(item.id)
+                }
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
+            .listRowBackground(AppTheme.card)
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                Button(role: .destructive) {
+                    deleteItem(item)
+                } label: {
+                    Label("削除", systemImage: "trash")
+                }
+            }
+            .swipeActions(edge: .leading) {
+                Button {
+                    router.present(.editItem(item))
+                } label: {
+                    Label("編集", systemImage: "pencil")
+                }
+                .tint(AppTheme.accent)
+            }
+    }
+
+    private func setSelectionMode(_ enabled: Bool) {
+        withAnimation {
+            isSelectionMode = enabled
+            if !enabled {
+                selectedItems.removeAll()
+            }
+        }
+    }
+
+    /// ホームの収納場所カードから来たとき、その場所を開いて表示する
+    private func scrollToFocusedBag(using proxy: ScrollViewProxy) {
+        guard let request = router.stockFocusRequest else { return }
+        router.stockFocusRequest = nil
+        let groupId = request.bagId?.uuidString ?? Self.unassignedGroupId
+        selectedExpiryFilter = .all
+        searchText = ""
+        let allGroupIds = Set(groups(for: filteredItems).map(\.id))
+        collapsedGroupIds = allGroupIds.subtracting([groupId])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(AppTheme.accordionAnimation) {
+                proxy.scrollTo(groupId, anchor: .top)
+            }
+        }
+    }
+
     private func deleteItem(_ item: Item) {
         deletedItemInfoList = [snapshotForUndo(from: item)]
 
@@ -699,6 +714,7 @@ struct DashboardView: View {
     }
 
     private func autoSyncFromCloudKitIfNeeded() async {
+        guard !ScreenshotMode.isActive else { return }
         guard let family = currentFamily else { return }
         guard autoSyncedFamilyID != family.id else { return }
         autoSyncedFamilyID = family.id
@@ -725,6 +741,46 @@ struct DashboardView: View {
 }
 
 // MARK: - Supporting Views
+
+/// 期限での絞り込み（ガラスの切り替え。選択中の玉がスライドする）
+private struct ExpiryFilterControl: View {
+    @Binding var selection: DashboardView.ExpiryFilter
+    @Namespace private var namespace
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(DashboardView.ExpiryFilter.allCases, id: \.self) { filter in
+                let isSelected = selection == filter
+                Button {
+                    withAnimation(AppTheme.indicatorAnimation) {
+                        selection = filter
+                    }
+                } label: {
+                    Text(filter.title)
+                        .font(.footnote.weight(isSelected ? .bold : .medium))
+                        .foregroundStyle(isSelected ? AppTheme.ink : AppTheme.inkSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .padding(.horizontal, 6)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(AppTheme.card)
+                                    .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 2)
+                                    .matchedGeometryEffect(id: "filter", in: namespace)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .glassSurface(in: Capsule())
+    }
+}
 
 struct SummaryCard: View {
     let title: LocalizedStringKey
@@ -790,8 +846,9 @@ struct BulkMoveSheet: View {
                         onMove(nil)
                         dismiss()
                     } label: {
-                        Label("未分類に移動", systemImage: "tray")
+                        BulkDestinationLabel(title: "未分類に移動", systemImage: "tray")
                     }
+                    .listRowBackground(AppTheme.card)
                 }
                 
                 Section("収納場所を選択") {
@@ -800,11 +857,14 @@ struct BulkMoveSheet: View {
                             onMove(bag.id)
                             dismiss()
                         } label: {
-                            Label(bag.name, systemImage: "folder")
+                            BulkDestinationLabel(title: bag.name, systemImage: "bag", verbatim: true)
                         }
+                        .listRowBackground(AppTheme.card)
                     }
                 }
             }
+            .appScreenBackground()
+            .tint(AppTheme.accent)
             .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
             .localizedRefresh()
@@ -839,8 +899,9 @@ struct BulkCopySheet: View {
                         onCopy(nil)
                         dismiss()
                     } label: {
-                        Label("未分類にコピー", systemImage: "tray")
+                        BulkDestinationLabel(title: "未分類にコピー", systemImage: "tray")
                     }
+                    .listRowBackground(AppTheme.card)
                 }
                 
                 Section("収納場所を選択") {
@@ -849,11 +910,14 @@ struct BulkCopySheet: View {
                             onCopy(bag.id)
                             dismiss()
                         } label: {
-                            Label(bag.name, systemImage: "folder")
+                            BulkDestinationLabel(title: bag.name, systemImage: "bag", verbatim: true)
                         }
+                        .listRowBackground(AppTheme.card)
                     }
                 }
             }
+            .appScreenBackground()
+            .tint(AppTheme.accent)
             .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
             .localizedRefresh()
@@ -866,6 +930,38 @@ struct BulkCopySheet: View {
             }
         }
         .presentationDetents([.medium])
+    }
+}
+
+/// 一括移動・コピー先の行（アイコン付き）
+private struct BulkDestinationLabel: View {
+    let title: String
+    let systemImage: String
+    var verbatim = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.accentInk)
+                .frame(width: 32, height: 32)
+                .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Group {
+                if verbatim {
+                    Text(verbatim: title)
+                } else {
+                    Text(LocalizedStringKey(title))
+                }
+            }
+            .font(.body)
+            .foregroundStyle(AppTheme.ink)
+            .lineLimit(2)
+            .minimumScaleFactor(0.85)
+            .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }
 
@@ -890,27 +986,30 @@ struct UndoSnackbar: View {
         HStack(spacing: 12) {
             Text(message)
                 .font(.subheadline)
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.ink)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
             
-            Spacer()
+            Spacer(minLength: 8)
             
             Button("元に戻す") {
                 onUndo()
             }
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.yellow)
+            .foregroundStyle(AppTheme.accentInk)
             
             Button {
                 onDismiss()
             } label: {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(AppTheme.inkSecondary)
+                    .frame(minWidth: 32, minHeight: 32)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
+        .glassSurface(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 

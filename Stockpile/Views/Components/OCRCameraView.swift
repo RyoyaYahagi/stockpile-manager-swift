@@ -38,17 +38,31 @@ struct OCRCameraView: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(.systemBackground))
+                    .background(Color(red: 0.1, green: 0.09, blue: 0.08))
                 }
                 
                 if isCameraAvailable {
+                    // 撮影の目安になる枠（タップは下のカメラに通す）
+                    VStack(spacing: 18) {
+                        ScannerFrame(width: 300, height: 150, isScanning: viewModel.isProcessing)
+                        Text("「賞味期限」の数字が枠に収まるように写してください")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .glassSurface(in: Capsule())
+                            .padding(.horizontal, 24)
+                    }
+                    .allowsHitTesting(false)
+
                     VStack {
                         if let quotaText = ocrQuotaText {
                             Text(quotaText)
                                 .font(.caption)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
-                                .background(.regularMaterial, in: Capsule())
+                                .glassSurface(in: Capsule())
                                 .padding(.top, 16)
                         }
 
@@ -58,8 +72,8 @@ struct OCRCameraView: View {
                         VStack(spacing: 12) {
                             if viewModel.isProcessing {
                                 ProgressView("読み取り中...")
-                                    .padding()
-                                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                    .padding(20)
+                                    .glassSurface(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                             } else if let date = viewModel.detectedDate {
                                 VStack(spacing: 8) {
                                     Text("検出された日付")
@@ -68,8 +82,9 @@ struct OCRCameraView: View {
                                     Text(date, style: .date)
                                         .font(.title2.bold())
                                 }
-                                .padding()
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                .padding(.horizontal, 28)
+                                .padding(.vertical, 18)
+                                .glassSurface(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                                 
                                 Button {
                                     onDateDetected(date)
@@ -77,12 +92,10 @@ struct OCRCameraView: View {
                                 } label: {
                                     Text("この日付を使用")
                                         .font(.headline)
-                                        .frame(maxWidth: .infinity)
-                                        .padding()
-                                        .background(.blue, in: RoundedRectangle(cornerRadius: 12))
-                                        .foregroundStyle(.white)
+                                        .frame(maxWidth: .infinity, minHeight: 34)
                                 }
-                                .padding(.horizontal)
+                                .buttonStyle(PrimaryActionButtonStyle())
+                                .padding(.horizontal, 20)
                             } else if !viewModel.detectedText.isEmpty {
                                 VStack(spacing: 8) {
                                     Text("日付が検出できませんでした")
@@ -92,14 +105,15 @@ struct OCRCameraView: View {
                                         .font(.caption)
                                         .foregroundStyle(.tertiary)
                                 }
-                                .padding()
-                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                .padding(20)
+                                .glassSurface(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                             }
                         }
                         .padding(.bottom, 20)
                     }
                 }
             }
+            .environment(\.colorScheme, .dark)
             .navigationTitle("賞味期限を読み取り")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

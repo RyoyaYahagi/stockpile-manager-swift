@@ -999,10 +999,11 @@ final class CloudKitFamilySharingService {
     }
 
     /// Returns the owner and accepted participants for member lists and counts.
-    /// Pending invitations are intentionally excluded.
+    /// Pending invitations are excluded unless `includingPending` is true.
     func fetchShareParticipants(
         for family: Family,
-        forceRefresh: Bool = false
+        forceRefresh: Bool = false,
+        includingPending: Bool = false
     ) async throws -> [ShareParticipantDisplay] {
         guard family.shareState != .localOnly else { return [] }
         try await ensureCloudKitAccountAvailable()
@@ -1013,13 +1014,13 @@ final class CloudKitFamilySharingService {
             for: cacheKey,
             maxAge: Constants.shareParticipantsCacheTTL
            ) {
-            return cachedParticipants.filter { $0.status != .pending }
+            return cachedParticipants.filter { includingPending || $0.status != .pending }
         }
 
         guard let share = try await fetchZoneWideShare(for: family) else { return [] }
         let participants = shareParticipantDisplays(from: share)
         await Self.shareParticipantsCache.store(participants, for: cacheKey)
-        return participants.filter { $0.status != .pending }
+        return participants.filter { includingPending || $0.status != .pending }
     }
 
     func clearShareMetadata(for family: Family) {
@@ -1435,6 +1436,17 @@ final class CloudKitFamilySharingService {
         if let contact = participant.userIdentity.contactIdentifiers.first,
            !contact.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return contact
+        }
+
+        // 名前は相手が iCloud で「見つけられる」設定にしていないと返らないため、
+        // 招待に使ったメールアドレスや電話番号が分かればそれを出す
+        if let lookupInfo = participant.userIdentity.lookupInfo {
+            if let email = lookupInfo.emailAddress?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty {
+                return email
+            }
+            if let phone = lookupInfo.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines), !phone.isEmpty {
+                return phone
+            }
         }
 
         return fallback

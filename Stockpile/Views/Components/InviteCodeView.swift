@@ -21,53 +21,62 @@ struct InviteCodeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
-                    if let qrImage = qrCodeImage {
-                        Image(uiImage: qrImage)
-                            .interpolation(.none)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 200, height: 200)
-                            .padding()
-                            .background(Color.white)
-                            .cornerRadius(16)
-                            .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+                VStack(spacing: 16) {
+                    VStack(spacing: 20) {
+                        if let qrImage = qrCodeImage {
+                            Image(uiImage: qrImage)
+                                .interpolation(.none)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 200, height: 200)
+                                .padding(16)
+                                .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
+                        }
+
+                        VStack(spacing: 8) {
+                            Text("招待コード")
+                                .font(.headline)
+                                .foregroundStyle(AppTheme.inkSecondary)
+
+                            Text(code)
+                                .font(.system(size: 36, weight: .bold, design: .monospaced))
+                                .tracking(6)
+                                .foregroundStyle(AppTheme.ink)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.6)
+                        }
+
+                        Text("QRコードをスキャンするか、\n6桁のコードを入力して参加できます")
+                            .font(.subheadline)
+                            .foregroundStyle(AppTheme.inkSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-
-                    VStack(spacing: 8) {
-                        Text("招待コード")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-
-                        Text(code)
-                            .font(.system(size: 36, weight: .bold, design: .monospaced))
-                            .tracking(6)
-                    }
-
-                    Text("QRコードをスキャンするか、\n6桁のコードを入力して参加できます")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(20)
+                    .cardSurface()
 
                     ShareLink(item: shareMessage) {
                         Label("招待を共有", systemImage: "square.and.arrow.up")
                             .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(.blue, in: RoundedRectangle(cornerRadius: 12))
-                            .foregroundStyle(.white)
+                            .padding(.vertical, 6)
                     }
-                    .padding(.horizontal, 32)
+                    .buttonStyle(PrimaryActionButtonStyle())
 
                     Button {
                         UIPasteboard.general.string = code
                     } label: {
                         Label("コードをコピー", systemImage: "doc.on.doc")
                     }
+                    .buttonStyle(SecondaryActionButtonStyle())
                 }
-                .padding(.top, 32)
-                .padding(.bottom, 20)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 32)
             }
+            .appScreenBackground()
+            .tint(AppTheme.accent)
             .navigationTitle("招待コード")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

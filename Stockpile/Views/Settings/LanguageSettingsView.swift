@@ -16,11 +16,11 @@ struct LanguageSettingsView: View {
                     } label: {
                         HStack {
                             Text(language.displayName)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(AppTheme.ink)
                             Spacer()
                             if selectedLanguage == language {
                                 Image(systemName: "checkmark")
-                                    .foregroundStyle(.blue)
+                                    .foregroundStyle(AppTheme.accent)
                                     .fontWeight(.semibold)
                             }
                         }
@@ -28,6 +28,7 @@ struct LanguageSettingsView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .listRowBackground(AppTheme.card)
                 }
             } header: {
                 Text("言語")
@@ -35,6 +36,8 @@ struct LanguageSettingsView: View {
                 Text("変更はすぐに反映されます。日付や数値の表示も選択した言語に合わせます。")
             }
         }
+        .appScreenBackground()
+        .tint(AppTheme.accent)
         .navigationTitle("言語")
         .navigationBarTitleDisplayMode(.inline)
         .localizedRefresh()

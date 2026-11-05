@@ -23,7 +23,7 @@ SCREENS=(
   "02_add-item:add-item"
   "03_bags:bags"
   "04_family:family"
-  "05_notifications:notifications"
+  "05_notifications:settings"
 )
 
 resolve_device_id() {
@@ -114,7 +114,7 @@ for entry in "${SCREENS[@]}"; do
     -AppleLanguages "(${LANGUAGE})" \
     -AppleLocale "$LOCALE" \
     >/dev/null
-  sleep 3
+  sleep 6
   xcrun simctl io "$DEVICE_ID" screenshot "${OUTPUT_DIR}/${filename}.png"
   echo "  -> ${OUTPUT_DIR}/${filename}.png"
 done

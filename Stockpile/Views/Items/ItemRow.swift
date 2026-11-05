@@ -3,67 +3,58 @@ import SwiftUI
 /// アイテム一覧の行表示
 struct ItemRow: View {
     let item: Item
-    
+    var showsBag = false
+    /// 選択モード中は選択状態、それ以外は nil
+    var isSelected: Bool? = nil
+
     var body: some View {
         let expiryStatus = item.expiryStatus
-        
+
         HStack(spacing: 12) {
-            // 期限状態インジケーター
-            ExpiryBadge(status: expiryStatus)
-            
-            VStack(alignment: .leading, spacing: 4) {
+            if let isSelected {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22))
+                    .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.inkSecondary.opacity(0.6))
+                    .contentTransition(.symbolEffect(.replace))
+                    .accessibilityLabel(Text(isSelected ? "選択中" : "未選択"))
+            }
+
+            Circle()
+                .fill(AppTheme.color(for: expiryStatus))
+                .frame(width: 10, height: 10)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     Text(item.name)
-                        .font(.body)
-                        .fontWeight(.medium)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(AppTheme.ink)
                         .lineLimit(1)
-                    
+
                     Text(L10n.format("×%@", String(item.quantity)))
                         .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.inkSecondary)
                 }
-                
-                HStack(spacing: 4) {
-                    Image(systemName: "folder")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if let bag = item.bag {
-                        Text(bag.name)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("未分類")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+
+                HStack(spacing: 6) {
+                    if let expiryDate = item.expiryDate {
+                        Text(expiryDate, format: .dateTime.year().month().day())
+                    }
+                    if showsBag {
+                        Text(item.bag?.name ?? L10n.string("未分類"))
                     }
                 }
+                .font(.caption)
+                .foregroundStyle(AppTheme.inkSecondary)
+                .lineLimit(1)
             }
-            
-            Spacer()
-            
-            // 期限表示
-            VStack(alignment: .trailing, spacing: 2) {
-                if let expiryDate = item.expiryDate {
-                    Text(expiryDate, style: .date)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Text(item.expiryDisplayText)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(expiryColor(for: expiryStatus))
-            }
+
+            Spacer(minLength: 8)
+
+            StatusPill(text: item.expiryDisplayText, status: expiryStatus)
         }
-        .padding(.vertical, 4)
-    }
-    
-    private func expiryColor(for status: ExpiryStatus) -> Color {
-        switch status {
-        case .expired: return .red
-        case .imminent: return .orange
-        case .approaching: return .yellow
-        case .safe: return .green
-        case .noExpiry: return .secondary
-        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -71,6 +62,6 @@ struct ItemRow: View {
     List {
         ItemRow(item: Item(name: "缶詰", quantity: 3, expiryDate: Date().addingTimeInterval(-86400)))
         ItemRow(item: Item(name: "水", quantity: 6, expiryDate: Date().addingTimeInterval(86400 * 5)))
-        ItemRow(item: Item(name: "乾パン", quantity: 2, expiryDate: Date().addingTimeInterval(86400 * 60)))
+        ItemRow(item: Item(name: "乾パン", quantity: 2, expiryDate: Date().addingTimeInterval(86400 * 60)), showsBag: true)
     }
 }

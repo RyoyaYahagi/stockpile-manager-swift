@@ -46,31 +46,41 @@ struct QRScannerView: View {
                 } else {
                     VStack(spacing: 20) {
                         Image(systemName: "camera.fill")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 36))
+                            .foregroundStyle(AppTheme.accentInk)
+                            .frame(width: 80, height: 80)
+                            .background(AppTheme.accentSoft, in: Circle())
 
                         Text("カメラへのアクセスが必要です")
                             .font(.headline)
+                            .foregroundStyle(AppTheme.ink)
 
                         Text("QRコードをスキャンするには\nカメラへのアクセスを許可してください")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.inkSecondary)
                             .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         Button("設定を開く") {
                             if let url = URL(string: UIApplication.openSettingsURLString) {
                                 UIApplication.shared.open(url)
                             }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PrimaryActionButtonStyle())
 
                         Button("手動で入力") {
                             showManualEntry = true
                         }
+                        .buttonStyle(SecondaryActionButtonStyle())
                     }
-                    .padding()
+                    .padding(20)
+                    .frame(maxWidth: .infinity)
+                    .cardSurface()
+                    .padding(.horizontal, 20)
                 }
             }
+            .background { if !hasPermission { AppBackground() } }
+            .tint(AppTheme.accent)
             .navigationTitle("QRスキャン")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -256,6 +266,9 @@ struct ManualCodeEntryView: View {
                 Section {
                     TextField("招待コード（6桁）", text: $code)
                         .textInputAutocapitalization(.characters)
+                        .foregroundStyle(AppTheme.ink)
+                        .frame(minHeight: 44)
+                        .listRowBackground(AppTheme.card)
                         .onChange(of: code) { _, newValue in
                             code = String(newValue.prefix(6)).uppercased()
                         }
@@ -276,8 +289,11 @@ struct ManualCodeEntryView: View {
                         }
                     }
                     .disabled(code.count != 6)
+                    .listRowBackground(AppTheme.card)
                 }
             }
+            .appScreenBackground()
+            .tint(AppTheme.accent)
             .navigationTitle("招待コード入力")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

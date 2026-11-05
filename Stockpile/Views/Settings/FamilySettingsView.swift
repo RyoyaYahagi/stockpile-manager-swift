@@ -27,7 +27,10 @@ struct FamilySettingsView: View {
     @State private var sharePayload: ShareActivityPayload?
     @State private var participantDisplays: [CloudKitFamilySharingService.ShareParticipantDisplay] = []
     @State private var isLoadingParticipants = false
+    @State private var participantLoadError: String?
     @State private var isOpeningShareManagement = false
+    @State private var showInvitePanel = false
+    @State private var showRenameSheet = false
 
     private var isParticipantFamily: Bool {
         family.cloudKitDatabaseScope == .sharedDatabase
@@ -60,16 +63,14 @@ struct FamilySettingsView: View {
             : L10n.string("共有リンクを再送できます。以前にこの共有から離脱した人を再招待する場合は、「共有設定を管理」から招待してください。")
     }
 
-    private var memberSectionTitle: String {
-        L10n.format("メンバー（%@人）", String(displayedMemberCount))
-    }
-
     private var displayedLocalMembers: [User] {
         family.shouldShowMemberList ? family.uniqueMembers : []
     }
 
     private var displayedMemberCount: Int {
-        usesCloudKitParticipantList ? participantDisplays.count : displayedLocalMembers.count
+        usesCloudKitParticipantList
+            ? participantDisplays.filter { $0.status != .pending }.count
+            : displayedLocalMembers.count
     }
 
     private var scopedItemsCount: Int {
@@ -93,207 +94,79 @@ struct FamilySettingsView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                if isEditing {
-                    TextField("家族名", text: $editedName)
-                        .onSubmit {
-                            saveChanges()
-                        }
-                } else {
-                    Button {
-                        editedName = family.name
-                        isEditing = true
-                    } label: {
-                        HStack {
-                            Label("家族名", systemImage: "person.3")
-                            Spacer()
-                            Text(family.displayNameForCurrentState)
-                                .foregroundStyle(.secondary)
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("家族")
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .foregroundStyle(AppTheme.ink)
+                    .accessibilityAddTraits(.isHeader)
+
+                familyCard
+                    .tutorialTarget(.familyAction)
+                    .padding(.top, 20)
+                    .riseIn()
+
+                if showInvitePanel && !isParticipantFamily {
+                    invitePanel
+                        .padding(.top, 12)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-            } header: {
-                Text("家族情報")
-            }
 
-            if !isParticipantFamily {
-                Section {
-                    Button {
-                        handleShareButtonTap()
-                    } label: {
-                        HStack {
-                            Label(shareButtonTitle, systemImage: "link")
-                            Spacer()
-                            if isStartingShare {
-                                ProgressView()
-                                    .progressViewStyle(.circular)
-                            }
-                        }
-                    }
-                    .disabled(isStartingShare || isOpeningShareManagement)
+                SectionHeading(title: "共有データ")
+                    .padding(.top, 28)
+                    .padding(.bottom, 12)
+                dataCard
+                    .riseIn(index: 3)
 
-                    if canManageShare {
-                        Button {
-                            openShareManagement()
-                        } label: {
-                            HStack {
-                                Label("共有設定を管理", systemImage: "person.crop.circle.badge.checkmark")
-                                Spacer()
-                                if isOpeningShareManagement {
-                                    ProgressView()
-                                        .progressViewStyle(.circular)
-                                }
-                            }
-                        }
-                        .disabled(isStartingShare || isOpeningShareManagement)
-                    }
-                } header: {
-                    Text("招待")
-                } footer: {
-                    Text(invitationSectionFooter)
+                if isParticipantFamily {
+                    leaveCard
+                        .padding(.top, 28)
+                        .riseIn(index: 4)
                 }
             }
-
-            Section {
-                HStack {
-                    Label("共有方法", systemImage: "icloud")
-                    Spacer()
-                    Text(family.shareState.label)
-                        .foregroundStyle(.secondary)
-                }
-
-                Button {
-                    saveFamilyDataToCloudKitNow()
-                } label: {
-                    HStack {
-                        Label("iCloudに保存", systemImage: "arrow.up.circle")
-                        Spacer()
-                        if isSavingFamilyDataToCloud {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                        }
-                    }
-                }
-                .disabled(isAnyCloudSyncInFlight || family.shareState == .localOnly)
-
-                Button {
-                    syncFamilyDataNow()
-                } label: {
-                    HStack {
-                        Label("iCloudから最新化", systemImage: "arrow.clockwise.icloud")
-                        Spacer()
-                        if isRefreshingFamilyData {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                        }
-                    }
-                }
-                .disabled(isAnyCloudSyncInFlight || family.shareState == .localOnly)
-            } header: {
-                Text("iCloud同期")
-            } footer: {
-                if family.shareState == .preparing {
-                    Text("共有受理後の同期を再試行できます。CloudKit の共有データを同期中です。")
-                }
-            }
-
-            Section {
-                if usesCloudKitParticipantList {
-                    ForEach(participantDisplays) { participant in
-                        HStack {
-                            Image(systemName: participant.isOwner ? "person.crop.circle.badge.checkmark" : "person.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(participant.isOwner ? .orange : .blue)
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(participant.displayName)
-                                    .font(.body)
-                                Text(participant.statusLabel)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                } else {
-                    ForEach(displayedLocalMembers) { member in
-                        HStack {
-                            Image(systemName: "person.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.blue)
-
-                            VStack(alignment: .leading) {
-                                Text(member.displayName)
-                                    .font(.body)
-                                if let email = member.email {
-                                    Text(email)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if displayedMemberCount == 0 {
-                    HStack {
-                        Image(systemName: "person.badge.plus")
-                            .foregroundStyle(.secondary)
-                        Text(memberSectionFooter)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            } header: {
-                Text(memberSectionTitle)
-            } footer: {
-                Text(memberSectionFooter)
-            }
-
-            Section {
-                HStack {
-                    Label("収納場所", systemImage: "bag")
-                    Spacer()
-                    Text(L10n.format("%@件", String(scopedBagsCount)))
-                        .foregroundStyle(.secondary)
-                }
-
-                HStack {
-                    Label("アイテム", systemImage: "archivebox")
-                    Spacer()
-                    Text(L10n.format("%@件", String(scopedItemsCount)))
-                        .foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("共有データ")
-            }
-
-            if isParticipantFamily {
-                Section {
-                    Button(role: .destructive) {
-                        showLeaveConfirmation = true
-                    } label: {
-                        Label("共有家族から離脱", systemImage: "person.badge.minus")
-                    }
-                } footer: {
-                    Text("離脱すると、この家族の共有データにアクセスできなくなります")
-                }
-            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
         }
-        .navigationTitle("家族設定")
+        .refreshable {
+            // 下に引っ張ると、家族の備蓄と参加者を iCloud から読み直す
+            let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            try? await sharingService.syncFamilyStateFromCloudKit(for: family)
+            await refreshParticipantDisplays(forceRefresh: true)
+        }
+        .appScreenBackground()
+        .tint(AppTheme.accent)
+        .toolbar(.hidden, for: .navigationBar)
         .localizedRefresh()
-        .toolbar {
-            if isEditing {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("完了") {
-                        saveChanges()
+        .sheet(isPresented: $showRenameSheet) {
+            NavigationStack {
+                Form {
+                    Section {
+                        TextField("家族名", text: $editedName)
+                            .submitLabel(.done)
+                            .listRowBackground(AppTheme.card)
+                    }
+                }
+                .appScreenBackground()
+                .tint(AppTheme.accent)
+                .navigationTitle("家族名を変更")
+                .navigationBarTitleDisplayMode(.inline)
+                .localizedRefresh()
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("キャンセル") { showRenameSheet = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("保存") {
+                            saveChanges()
+                            showRenameSheet = false
+                        }
+                        .fontWeight(.bold)
+                        .disabled(editedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
             }
+            .presentationDetents([.height(220)])
         }
         .confirmationDialog(
             "家族共有から離脱しますか？",
@@ -317,12 +190,15 @@ struct FamilySettingsView: View {
                 Form {
                     Section {
                         TextField("家族名", text: $editedName)
+                            .listRowBackground(AppTheme.card)
                     } header: {
                         Text("家族名")
                     } footer: {
                         Text("最初に家族名を登録すると、その名前で共有リンクを送信できます。")
                     }
                 }
+                .appScreenBackground()
+                .tint(AppTheme.accent)
                 .navigationTitle("家族名を設定")
                 .navigationBarTitleDisplayMode(.inline)
                 .localizedRefresh()
@@ -376,6 +252,268 @@ struct FamilySettingsView: View {
             await refreshParticipantDisplays()
             await autoSyncFamilyStateIfPossible()
         }
+    }
+
+    // MARK: - Family card
+
+    private var syncPillTitle: String {
+        if isAnyCloudSyncInFlight { return L10n.string("同期中") }
+        return family.shareState == .shared ? L10n.string("同期済み") : family.shareState.label
+    }
+
+    private var syncPillIcon: String {
+        switch family.shareState {
+        case .shared: return isAnyCloudSyncInFlight ? "arrow.triangle.2.circlepath.icloud" : "checkmark.icloud"
+        case .preparing: return "arrow.triangle.2.circlepath.icloud"
+        case .localOnly: return "icloud.slash"
+        }
+    }
+
+    private var familyCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(family.displayNameForCurrentState)
+                        .font(.system(.title3, design: .rounded, weight: .bold))
+                        .foregroundStyle(AppTheme.ink)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                    Text(displayedMemberCount > 0
+                         ? L10n.format("%@人で備蓄を共有中", String(displayedMemberCount))
+                         : memberSectionFooter)
+                        .font(.subheadline)
+                        .foregroundStyle(AppTheme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        editedName = family.name
+                        showRenameSheet = true
+                    } label: {
+                        Label("名前を変更", systemImage: "pencil")
+                            .font(.footnote.weight(.bold))
+                            .foregroundStyle(AppTheme.accentInk)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 32)
+                            .background(AppTheme.accentSoft, in: Capsule())
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(PressableButtonStyle())
+                    .padding(.top, 6)
+                    .frame(minHeight: 44)
+                }
+                Spacer(minLength: 8)
+                HStack(spacing: 5) {
+                    Image(systemName: syncPillIcon)
+                        .font(.caption.weight(.bold))
+                    Text(syncPillTitle)
+                        .font(.caption.weight(.bold))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(AppTheme.accentInk)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(AppTheme.accentSoft, in: Capsule())
+            }
+
+            Divider()
+
+            VStack(spacing: 14) {
+                if usesCloudKitParticipantList {
+                    ForEach(Array(participantDisplays.enumerated()), id: \.element.id) { index, participant in
+                        memberRow(
+                            name: participant.displayName,
+                            role: participant.statusLabel,
+                            index: index
+                        )
+                    }
+                    if let participantLoadError {
+                        participantNotice(participantLoadError, symbol: "exclamationmark.icloud")
+                    } else if !isLoadingParticipants,
+                              !isParticipantFamily,
+                              !participantDisplays.isEmpty,
+                              participantDisplays.allSatisfy({ $0.isOwner }) {
+                        participantNotice(
+                            L10n.string("まだ参加している家族はいません。招待を受けた人が共有リンクを開いて参加すると、ここに表示されます。"),
+                            symbol: "person.badge.clock"
+                        )
+                    }
+                } else {
+                    ForEach(Array(displayedLocalMembers.enumerated()), id: \.element.id) { index, member in
+                        memberRow(
+                            name: member.displayName,
+                            role: member.email ?? L10n.string("メンバー"),
+                            index: index
+                        )
+                    }
+                }
+            }
+
+            if !isParticipantFamily {
+                Button {
+                    toggleInvitePanel()
+                } label: {
+                    Label("家族を招待する", systemImage: showInvitePanel ? "xmark" : "plus")
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                }
+                .buttonStyle(PrimaryActionButtonStyle())
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface()
+    }
+
+    private static let avatarColors: [Color] = [
+        Color(light: 0xCBE5D5, dark: 0x2B5A44),
+        Color(light: 0xF7D9BC, dark: 0x6A4526),
+        Color(light: 0xD6DFF3, dark: 0x30406E),
+        Color(light: 0xEBD3EA, dark: 0x5A3A58)
+    ]
+
+    private func memberRow(name: String, role: String, index: Int) -> some View {
+        HStack(spacing: 12) {
+            Text(String(name.trimmingCharacters(in: .whitespaces).prefix(1)))
+                .font(.system(.headline, design: .rounded, weight: .bold))
+                .foregroundStyle(AppTheme.ink)
+                .frame(width: 44, height: 44)
+                .background(Self.avatarColors[index % Self.avatarColors.count], in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(AppTheme.ink)
+                    .lineLimit(1)
+                Text(role)
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.inkSecondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func participantNotice(_ message: String, symbol: String) -> some View {
+        Label {
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(AppTheme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: symbol)
+                .foregroundStyle(AppTheme.inkSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func toggleInvitePanel() {
+        withAnimation(AppTheme.accordionAnimation) {
+            showInvitePanel.toggle()
+        }
+    }
+
+    // MARK: - Invite panel
+
+    private var invitePanel: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button {
+                handleShareButtonTap()
+            } label: {
+                HStack(spacing: 8) {
+                    Label(shareButtonTitle, systemImage: "link")
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                    if isStartingShare {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white)
+                    }
+                }
+            }
+            .buttonStyle(PrimaryActionButtonStyle())
+            .disabled(isStartingShare || isOpeningShareManagement)
+
+            if canManageShare {
+                Button {
+                    openShareManagement()
+                } label: {
+                    HStack(spacing: 8) {
+                        Label("共有設定を管理", systemImage: "person.crop.circle.badge.checkmark")
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.85)
+                        if isOpeningShareManagement {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                        }
+                    }
+                }
+                .buttonStyle(SecondaryActionButtonStyle())
+                .disabled(isStartingShare || isOpeningShareManagement)
+            }
+
+            Text(invitationSectionFooter)
+                .font(.footnote)
+                .foregroundStyle(AppTheme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface()
+    }
+
+    // MARK: - Setting cards
+
+    private var dataCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Label("収納場所", systemImage: "bag")
+                    .foregroundStyle(AppTheme.ink)
+                Spacer(minLength: 8)
+                Text(L10n.format("%@件", String(scopedBagsCount)))
+                    .foregroundStyle(AppTheme.inkSecondary)
+            }
+            .frame(minHeight: 44)
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Label("アイテム", systemImage: "archivebox")
+                    .foregroundStyle(AppTheme.ink)
+                Spacer(minLength: 8)
+                Text(L10n.format("%@件", String(scopedItemsCount)))
+                    .foregroundStyle(AppTheme.inkSecondary)
+            }
+            .frame(minHeight: 44)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface()
+    }
+
+    private var leaveCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                showLeaveConfirmation = true
+            } label: {
+                Label("共有家族から離脱", systemImage: "person.badge.minus")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(AppTheme.color(for: .expired))
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Text("離脱すると、この家族の共有データにアクセスできなくなります")
+                .font(.footnote)
+                .foregroundStyle(AppTheme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface()
     }
 
     private func saveChanges() {
@@ -582,6 +720,7 @@ struct FamilySettingsView: View {
     private func refreshParticipantDisplays(forceRefresh: Bool = false) async {
         guard usesCloudKitParticipantList else {
             participantDisplays = []
+            participantLoadError = nil
             isLoadingParticipants = false
             return
         }
@@ -591,12 +730,16 @@ struct FamilySettingsView: View {
 
         do {
             let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+            // 招待したのにまだ参加していない人も「招待中」として見せる
             participantDisplays = try await sharingService.fetchShareParticipants(
                 for: family,
-                forceRefresh: forceRefresh
+                forceRefresh: forceRefresh,
+                includingPending: !isParticipantFamily
             )
+            participantLoadError = nil
         } catch {
             participantDisplays = []
+            participantLoadError = L10n.format("家族の一覧を読み込めませんでした（%@）", error.localizedDescription)
         }
     }
 
