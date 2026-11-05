@@ -1,0 +1,15 @@
+# Stockpile snapshot worker (one deployment per user)
+name = "stockpile-snapshot"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# Create the KV namespace first:
+#   npx wrangler kv namespace create SNAPSHOTS
+# then paste the printed id below.
+[[kv_namespaces]]
+binding = "SNAPSHOTS"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# Secrets (never commit real values; set them with wrangler):
+#   npx wrangler secret put WRITE_TOKEN
+#   npx wrangler secret put READ_TOKEN
