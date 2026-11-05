@@ -171,6 +171,19 @@ struct SettingsView: View {
                     )
                 }
                 .buttonStyle(.plain)
+
+                SettingsDivider()
+
+                Button {
+                    router.present(.aiLink)
+                } label: {
+                    SettingsRowLabel(
+                        symbol: "sparkles",
+                        tint: AppTheme.accent,
+                        title: "AI連携"
+                    )
+                }
+                .buttonStyle(.plain)
             }
         }
     }

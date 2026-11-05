@@ -297,6 +297,8 @@ struct ContentView: View {
             ImportJSONView()
         case .exportJSON:
             ExportJSONView()
+        case .aiLink:
+            AILinkSettingsView()
         case .qrScanner:
             QRScannerView { _ in }
         }
