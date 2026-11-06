@@ -1,7 +1,7 @@
 import SwiftData
 import SwiftUI
 
-/// AI連携（読み取り専用）の設定ビュー
+/// Muse連携（読み取り専用）の設定ビュー
 /// 利用者が自分の送信先（Cloudflare Worker 等）を設定し、備蓄スナップショットを送る。
 /// 連携は無料・デフォルトOFF。書き込みトークンは Keychain にだけ保存する。
 struct AILinkSettingsView: View {
@@ -57,8 +57,8 @@ struct AILinkSettingsView: View {
         VStack(spacing: 16) {
           BackupHeaderCard(
             icon: "sparkles",
-            title: "AI連携",
-            subtitle: "備蓄データを自分のAIアシスタントに読み取り専用で渡します（上級者向け）"
+            title: "Muse連携",
+            subtitle: "備蓄データをMuseに読み取り専用で渡します（上級者向け）"
           )
           .riseIn(index: 0)
 
@@ -97,7 +97,7 @@ struct AILinkSettingsView: View {
       }
       .appScreenBackground()
       .tint(AppTheme.accent)
-      .navigationTitle(L10n.string("AI連携"))
+      .navigationTitle(L10n.string("Muse連携"))
       .navigationBarTitleDisplayMode(.inline)
       .localizedRefresh()
       .toolbar {
@@ -131,7 +131,7 @@ struct AILinkSettingsView: View {
   private var settingsCard: some View {
     VStack(alignment: .leading, spacing: 12) {
       Toggle(isOn: $isEnabled) {
-        Text(L10n.string("AI連携を使う"))
+        Text(L10n.string("Muse連携を使う"))
           .font(.headline)
       }
 
@@ -155,7 +155,7 @@ struct AILinkSettingsView: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .font(.footnote.monospaced())
-          Text(L10n.string("トークンはこの端末のKeychainにだけ保存されます。読み取りトークンはAI側に別途渡してください。"))
+          Text(L10n.string("トークンはこの端末のKeychainにだけ保存されます。読み取りトークンはMuse側に別途渡してください。"))
             .font(.caption)
             .foregroundStyle(AppTheme.inkSecondary)
         }
@@ -209,7 +209,7 @@ struct AILinkSettingsView: View {
     VStack(alignment: .leading, spacing: 10) {
       Text(L10n.string("Museへのセットアップ依頼"))
         .font(.headline)
-      Text(L10n.string("下の文をコピーして、あなたのAIアシスタント（Muse）に貼ると連携設定が始まります。トークンはこの文に含まれていません。"))
+      Text(L10n.string("下の文をコピーして、あなたのMuseに貼ると連携設定が始まります。トークンはこの文に含まれていません。"))
         .font(.caption)
         .foregroundStyle(AppTheme.inkSecondary)
 
