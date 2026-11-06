@@ -84,6 +84,7 @@ struct ContentView: View {
     @State private var cloudKitShareSuccessMessage: String?
     @State private var cloudKitShareSuccessToken = UUID()
     @State private var pendingSharedFamilyRefreshTask: Task<Void, Never>?
+    @State private var snapshotAutoUploadTrigger = 0
     @State private var showScreenshotAddItemFullScreen = false
     
     private var currentFamily: Family? {
@@ -112,7 +113,17 @@ struct ContentView: View {
 
         return "\(settingsSignature)#\(itemSignature)"
     }
-    
+
+    /// AI連携の自動送信（S-05）用タスクID。
+    /// 内容のフィンガープリントが変わるたびにタスクが再起動され、
+    /// デバウンスとして働く。起動・復帰時はトリガーを進めて再評価する。
+    private var snapshotAutoUploadTaskID: String {
+        let scoped = SnapshotLinkScope.resolved(items: items, families: families)
+        let fingerprint = SnapshotFingerprint.compute(
+            items: scoped.items, familyName: scoped.family?.name)
+        return "\(fingerprint)#\(snapshotAutoUploadTrigger)"
+    }
+
     var body: some View {
         let refreshToken = localizationController.uiRefreshToken
 
@@ -175,8 +186,19 @@ struct ContentView: View {
             guard !ScreenshotMode.isActive else { return }
             requestRescheduleForCurrentData()
         }
+        .task(id: snapshotAutoUploadTaskID) {
+            guard !ScreenshotMode.isActive else { return }
+            // デバウンス: 連続変更ではこのタスクが再起動され続けるため、
+            // 変更が落ち着いてから1回だけ送信される
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            let scoped = SnapshotLinkScope.resolved(items: items, families: families)
+            _ = await SnapshotAutoUploader.uploadIfNeeded(
+                items: scoped.items, familyName: scoped.family?.name)
+        }
         .onChange(of: scenePhase) { _, newValue in
             guard newValue == .active, !ScreenshotMode.isActive else { return }
+            snapshotAutoUploadTrigger += 1
             LocalDataRepairService(modelContext: modelContext).repairInvalidAndDuplicateRecordsIfNeeded()
             premiumAccessManager.refreshUsageState()
             requestRescheduleForCurrentData()
