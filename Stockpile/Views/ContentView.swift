@@ -114,7 +114,7 @@ struct ContentView: View {
         return "\(settingsSignature)#\(itemSignature)"
     }
 
-    /// AI連携の自動送信（S-05）用タスクID。
+    /// Muse連携の自動送信（S-05）用タスクID。
     /// 内容のフィンガープリントが変わるたびにタスクが再起動され、
     /// デバウンスとして働く。起動・復帰時はトリガーを進めて再評価する。
     private var snapshotAutoUploadTaskID: String {

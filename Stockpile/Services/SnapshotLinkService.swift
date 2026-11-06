@@ -4,7 +4,7 @@ import SwiftData
 
 // MARK: - スナップショット（スキーマ v1）
 
-/// AI連携用スナップショット。形式の正は docs/snapshot-schema-v1.md。
+/// Muse連携用スナップショット。形式の正は docs/snapshot-schema-v1.md。
 /// バックアップ書き出しとは別形式で、id と生成日時を持つ。
 struct StockpileSnapshot: Codable {
   var schemaVersion: Int

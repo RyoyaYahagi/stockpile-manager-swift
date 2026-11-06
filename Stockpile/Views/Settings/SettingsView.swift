@@ -180,7 +180,7 @@ struct SettingsView: View {
                     SettingsRowLabel(
                         symbol: "sparkles",
                         tint: AppTheme.accent,
-                        title: "AI連携"
+                        title: "Muse連携"
                     )
                 }
                 .buttonStyle(.plain)
