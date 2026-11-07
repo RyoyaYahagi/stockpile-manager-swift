@@ -93,10 +93,8 @@ struct AILinkSettingsView: View {
           sendCard
             .riseIn(index: 5)
 
-          if destination == .customURL {
-            promptCard
-              .riseIn(index: 6)
-          }
+          promptCard
+            .riseIn(index: 6)
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
@@ -130,6 +128,7 @@ struct AILinkSettingsView: View {
       }
       .onChange(of: destination) { _, newValue in
         SnapshotLinkSettings.destination = newValue
+        promptCopied = false
       }
       .onChange(of: autoUploadEnabled) { _, newValue in
         SnapshotLinkSettings.autoUploadEnabled = newValue
@@ -307,15 +306,28 @@ struct AILinkSettingsView: View {
     }
   }
 
+  /// 送信先に応じたセットアップ依頼文（カスタムURLは v1、Google Driveは v2）
+  private var setupPromptText: String {
+    destination == .googleDrive
+      ? SnapshotLinkPrompt.makeDrivePrompt()
+      : SnapshotLinkPrompt.makePrompt(snapshotURLString: endpointString)
+  }
+
+  private var promptDescription: String {
+    destination == .googleDrive
+      ? L10n.string("下の文をコピーして、あなたのClaudeに貼ると連携設定が始まります。トークンやURLは不要です。")
+      : L10n.string("下の文をコピーして、あなたのClaudeに貼ると連携設定が始まります。トークンはこの文に含まれていません。")
+  }
+
   private var promptCard: some View {
     VStack(alignment: .leading, spacing: 10) {
       Text(L10n.string("Museへのセットアップ依頼"))
         .font(.headline)
-      Text(L10n.string("下の文をコピーして、あなたのMuseに貼ると連携設定が始まります。トークンはこの文に含まれていません。"))
+      Text(promptDescription)
         .font(.caption)
         .foregroundStyle(AppTheme.inkSecondary)
 
-      Text(SnapshotLinkPrompt.makePrompt(snapshotURLString: endpointString))
+      Text(setupPromptText)
         .font(.caption.monospaced())
         .textSelection(.enabled)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -323,8 +335,7 @@ struct AILinkSettingsView: View {
         .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
       Button {
-        UIPasteboard.general.string = SnapshotLinkPrompt.makePrompt(
-          snapshotURLString: endpointString)
+        UIPasteboard.general.string = setupPromptText
         promptCopied = true
       } label: {
         Label(

@@ -324,10 +324,12 @@ enum SnapshotUploader {
 // MARK: - セットアッププロンプト（アプリ内に表示する連携依頼文）
 
 /// 利用者が自分の AI アシスタント（Muse）に貼るためのセットアップ依頼文。
-/// 文面の正はプロジェクト側の setup-prompt 文案（stockpile-link-prompt v1）。
-/// トークンはこの文に含めない。URL だけを差し込む。
+/// 文面の正はプロジェクト側の setup-prompt 文案。
+/// カスタムURL向けが v1（トークンは含めず、URL だけを差し込む）、
+/// Google Drive向けが v2（差し込む情報はなく、トークンも URL も不要）。
 enum SnapshotLinkPrompt {
   static let promptVersion = "stockpile-link-prompt v1"
+  static let drivePromptVersion = "stockpile-link-prompt v2"
 
   static func makePrompt(snapshotURLString: String) -> String {
     let url = snapshotURLString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -368,6 +370,55 @@ enum SnapshotLinkPrompt {
       - この連携は読み取り専用です。アプリのデータを変更しようとしないでください。
 
       まず、トークンの安全な受け渡し手順から始めてください。
+      """
+  }
+
+  /// Google Drive 送信先向けの依頼文（v2）。
+  /// スナップショットは利用者本人の Drive（アプリが作ったフォルダ）にあるため、
+  /// URL もトークンも差し込まない。前提は「Muse 側の Drive 連携が、
+  /// アプリでサインインしたのと同じ Google アカウントに接続されていること」。
+  static func makeDrivePrompt() -> String {
+    return """
+      私の防災備蓄アプリ「らくストック」との読み取り専用連携を設定してください。
+      （\(drivePromptVersion) / スナップショットスキーマ v1）
+
+
+      - 私の備蓄スナップショット（JSON）は、私の Google Drive の
+      「らくストック」フォルダ（英語環境では「RakuStock」フォルダ）の中の
+      snapshot.json です。アプリが作ったフォルダで、私の Drive にだけあります。
+      - あなたの Google Drive 連携が、アプリでサインインしたのと同じ
+      Google アカウントに接続されている必要があります。フォルダが
+      見当たらない場合は、アカウントが一致していない可能性を先に確認してください。
+      - この方式にトークンや URL は要りません。
+      - 形式はスキーマ v1 です: 先頭に schemaVersion / generatedAt を持ち、items に
+      name / janCode / quantity / expiryDate(yyyy-MM-dd) / bagName / locationNote /
+      id / updatedAt が入っています。
+
+
+      1. 読み取り専用のカスタムコネクタ（custom.stockpile）と CLI を作ってください:
+      - status: 生成日時・件数・情報の鮮さ
+      - items: 在庫一覧（保管場所で絞り込み可）
+      - expiring: 期限が近い順の一覧
+      - get: 1件の詳細
+      取得はあなたの Drive 連携経由で行い、書き込み系の機能は作らないでください。
+      2. 世帯設定のヒアリングと保存:
+      - 世帯人数と、備蓄の目標日数を私に聞いて、あなた側の設定に保存してください
+      （アプリ側にはこの設定はありません）。
+      - 充足の目安は、前提を明示した上で使ってください（例: 飲料水 3L/人/日）。
+      内容量が分からない品目は概算であることを分けて書いてください。
+      3. 月1回の定期チェック:
+      - 期限切れ・7日以内の期限・30日以上スナップショットが更新されていない時だけ
+      知らせてください。条件に当たらない月は何も送らないでください。
+
+
+      - 在庫について答える時は、必ず generatedAt（いつの情報か）を添えてください。
+      - 期限の区分はアプリに合わせて「7日以内」「30日以内」でお願いします。
+      - 補充の提案はリスト作成と価格比較までで、注文や購入は行わないでください。
+      - この連携は読み取り専用です。スナップショットやアプリのデータを変更しようと
+      しないでください。
+
+      まず、私の Drive にフォルダと snapshot.json が見えるか確認するところから
+      始めてください。
       """
   }
 }
