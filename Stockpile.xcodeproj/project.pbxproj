@@ -38,6 +38,7 @@
 		F02 /* AILinkSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12 /* AILinkSettingsView.swift */; };
 		F03 /* SnapshotAutoUpload.swift in Sources */ = {isa = PBXBuildFile; fileRef = F13 /* SnapshotAutoUpload.swift */; };
 		F04 /* GoogleDriveLinkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F14 /* GoogleDriveLinkManager.swift */; };
+		F05 /* GoogleDriveSnapshotWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15 /* GoogleDriveSnapshotWriter.swift */; };
 		028 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128 /* APIConfig.swift */; };
 		031 /* FamilySharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131 /* FamilySharingService.swift */; };
 		032 /* FamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132 /* FamilySettingsView.swift */; };
@@ -127,6 +128,7 @@
 		F12 /* AILinkSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AILinkSettingsView.swift; sourceTree = "<group>"; };
 		F13 /* SnapshotAutoUpload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotAutoUpload.swift; sourceTree = "<group>"; };
 		F14 /* GoogleDriveLinkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveLinkManager.swift; sourceTree = "<group>"; };
+		F15 /* GoogleDriveSnapshotWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveSnapshotWriter.swift; sourceTree = "<group>"; };
 		128 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 		131 /* FamilySharingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySharingService.swift; sourceTree = "<group>"; };
 		132 /* FamilySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySettingsView.swift; sourceTree = "<group>"; };
@@ -385,6 +387,7 @@
 				F11 /* SnapshotLinkService.swift */,
 				F13 /* SnapshotAutoUpload.swift */,
 				F14 /* GoogleDriveLinkManager.swift */,
+				F15 /* GoogleDriveSnapshotWriter.swift */,
 				131 /* FamilySharingService.swift */,
 				147 /* PremiumAccessManager.swift */,
 				D1E49F77D9DD9670638E3672 /* InventoryStore.swift */,
@@ -569,6 +572,7 @@
 				F02 /* AILinkSettingsView.swift in Sources */,
 				F03 /* SnapshotAutoUpload.swift in Sources */,
 				F04 /* GoogleDriveLinkManager.swift in Sources */,
+				F05 /* GoogleDriveSnapshotWriter.swift in Sources */,
 				A659FF64C07B539D8D70E351 /* LegacyBagListView.swift in Sources */,
 				2F1CF689B3FC96E0216335AD /* LegacyDashboardView.swift in Sources */,
 				6C0081EE497E11DB8EC51EFE /* LegacyFamilySettingsView.swift in Sources */,
