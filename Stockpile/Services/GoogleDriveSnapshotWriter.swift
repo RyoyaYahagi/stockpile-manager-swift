@@ -35,6 +35,9 @@ enum GoogleDriveUploadError: Error, LocalizedError {
 /// 配置先は「Stockpile」フォルダ直下の `snapshot.json` 固定（Gシリーズの決定事項）。
 /// スコープは drive.file のため、ここから見えるのはこのアプリが作ったファイルだけ。
 /// 送信タイミングの制御（手動・自動の振り分け）は G-04 が担い、ここは書き込みだけを行う。
+/// GIDGoogleUser は Sendable ではないため、型全体を MainActor に寄せて
+/// ユーザーオブジェクトを隔離境界の外へ送らないようにしている。
+@MainActor
 enum GoogleDriveSnapshotWriter {
   static let folderName = "Stockpile"
   static let fileName = "snapshot.json"

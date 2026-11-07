@@ -57,9 +57,19 @@ enum SnapshotAutoUploader {
     case failed
   }
 
+  /// 選択中の送信先に応じて振り分ける（G-04）
   static func uploadIfNeeded(items: [Item], familyName: String?) async -> Result {
-    // 送信先が Google Drive の間は URL 送信を行わない（Drive 送信は G-04 で統合する）
-    guard SnapshotLinkSettings.destination == .customURL else { return .skipped }
+    switch SnapshotLinkSettings.destination {
+    case .customURL:
+      return await uploadToCustomURLIfNeeded(items: items, familyName: familyName)
+    case .googleDrive:
+      return await uploadToDriveIfNeeded(items: items, familyName: familyName)
+    }
+  }
+
+  private static func uploadToCustomURLIfNeeded(items: [Item], familyName: String?) async
+    -> Result
+  {
     let fingerprint = SnapshotFingerprint.compute(items: items, familyName: familyName)
     let endpoint = SnapshotLinkSettings.validatedEndpoint(
       SnapshotLinkSettings.endpointURLString)
@@ -72,7 +82,7 @@ enum SnapshotAutoUploader {
         endpoint: endpoint,
         hasWriteToken: token != nil,
         fingerprint: fingerprint,
-        lastUploadedFingerprint: SnapshotLinkSettings.lastUploadedFingerprint
+        lastUploadedFingerprint: SnapshotLinkSettings.lastUploadedFingerprint(for: .customURL)
       ), let endpoint, let token
     else {
       return .skipped
@@ -81,8 +91,34 @@ enum SnapshotAutoUploader {
     do {
       let data = try SnapshotBuilder.makeJSONData(items: items, familyName: familyName)
       _ = try await SnapshotUploader.upload(data: data, endpoint: endpoint, writeToken: token)
-      SnapshotLinkSettings.lastUploadedFingerprint = fingerprint
-      SnapshotLinkSettings.lastSentAt = Date()
+      SnapshotLinkSettings.setLastUploadedFingerprint(fingerprint, for: .customURL)
+      SnapshotLinkSettings.setLastSentAt(Date(), for: .customURL)
+      return .uploaded(itemCount: items.count)
+    } catch {
+      return .failed
+    }
+  }
+
+  private static func uploadToDriveIfNeeded(items: [Item], familyName: String?) async
+    -> Result
+  {
+    guard SnapshotLinkSettings.isEnabled, SnapshotLinkSettings.autoUploadEnabled else {
+      return .skipped
+    }
+    let fingerprint = SnapshotFingerprint.compute(items: items, familyName: familyName)
+    guard !fingerprint.isEmpty,
+      fingerprint != SnapshotLinkSettings.lastUploadedFingerprint(for: .googleDrive),
+      GoogleDriveLinkManager.shared.currentUser != nil
+    else {
+      return .skipped
+    }
+
+    do {
+      let data = try SnapshotBuilder.makeJSONData(items: items, familyName: familyName)
+      // GIDGoogleUser は Sendable ではないため、値を持ち回らずマネージャ経由で送信する
+      try await GoogleDriveLinkManager.shared.uploadSnapshot(data: data)
+      SnapshotLinkSettings.setLastUploadedFingerprint(fingerprint, for: .googleDrive)
+      SnapshotLinkSettings.setLastSentAt(Date(), for: .googleDrive)
       return .uploaded(itemCount: items.count)
     } catch {
       return .failed

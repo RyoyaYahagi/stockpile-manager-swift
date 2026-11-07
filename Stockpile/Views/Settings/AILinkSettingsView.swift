@@ -41,7 +41,7 @@ struct AILinkSettingsView: View {
   /// 前回の送信成功時点から内容が変わっているか
   private var hasUnsentChanges: Bool {
     SnapshotFingerprint.compute(items: scopedItems, familyName: currentFamily?.name)
-      != SnapshotLinkSettings.lastUploadedFingerprint
+      != SnapshotLinkSettings.lastUploadedFingerprint(for: destination)
   }
 
   private var isSharedFamily: Bool {
@@ -49,7 +49,7 @@ struct AILinkSettingsView: View {
   }
 
   private var lastSentText: String? {
-    guard let date = SnapshotLinkSettings.lastSentAt else { return nil }
+    guard let date = SnapshotLinkSettings.lastSentAt(for: destination) else { return nil }
     let formatter = DateFormatter()
     formatter.dateStyle = .medium
     formatter.timeStyle = .short
@@ -118,7 +118,12 @@ struct AILinkSettingsView: View {
           Task { await performSend() }
         }
       } message: {
-        Text(L10n.format("送信先: %@\n対象: %@件のアイテム", endpointString, String(scopedItems.count)))
+        Text(
+          L10n.format(
+            "送信先: %@\n対象: %@件のアイテム",
+            destination == .googleDrive
+              ? "Google Drive（Stockpile/snapshot.json）" : endpointString,
+            String(scopedItems.count)))
       }
       .onChange(of: isEnabled) { _, newValue in
         SnapshotLinkSettings.isEnabled = newValue
@@ -286,13 +291,7 @@ struct AILinkSettingsView: View {
         .padding(.vertical, 6)
       }
       .buttonStyle(PrimaryActionButtonStyle())
-      .disabled(!isEnabled || isSending || destination == .googleDrive)
-
-      if isEnabled && destination == .googleDrive {
-        Text(L10n.string("Google Driveへの送信は次のアップデートで有効になります。先に連携だけ済ませておけます。"))
-          .font(.caption)
-          .foregroundStyle(AppTheme.inkSecondary)
-      }
+      .disabled(!isEnabled || isSending)
 
       if let lastSentText {
         Text(L10n.format("最終送信: %@", lastSentText))
@@ -352,7 +351,17 @@ struct AILinkSettingsView: View {
     }
   }
 
+  /// 選択中の送信先に応じて送信する（G-04）
   private func performSend() async {
+    switch destination {
+    case .customURL:
+      await performSendToCustomURL()
+    case .googleDrive:
+      await performSendToDrive()
+    }
+  }
+
+  private func performSendToCustomURL() async {
     guard let endpoint = SnapshotLinkSettings.validatedEndpoint(endpointString) else {
       sendResult = .error(SnapshotUploadError.invalidEndpoint.errorDescription ?? "")
       return
@@ -373,12 +382,36 @@ struct AILinkSettingsView: View {
       )
       let response = try await SnapshotUploader.upload(
         data: data, endpoint: endpoint, writeToken: token)
-      SnapshotLinkSettings.lastSentAt = Date()
-      SnapshotLinkSettings.lastUploadedFingerprint = SnapshotFingerprint.compute(
-        items: scopedItems, familyName: currentFamily?.name)
+      SnapshotLinkSettings.setLastSentAt(Date(), for: .customURL)
+      SnapshotLinkSettings.setLastUploadedFingerprint(
+        SnapshotFingerprint.compute(items: scopedItems, familyName: currentFamily?.name),
+        for: .customURL)
       let count = (response["itemCount"] as? Int) ?? scopedItems.count
       sendResult = .success(L10n.format("%@件のアイテムを送信しました", String(count)))
     } catch let error as SnapshotUploadError {
+      sendResult = .error(error.errorDescription ?? error.localizedDescription)
+    } catch {
+      sendResult = .error(error.localizedDescription)
+    }
+  }
+
+  private func performSendToDrive() async {
+    isSending = true
+    defer { isSending = false }
+
+    do {
+      let data = try SnapshotBuilder.makeJSONData(
+        items: scopedItems,
+        familyName: currentFamily?.name
+      )
+      try await googleLink.uploadSnapshot(data: data)
+      SnapshotLinkSettings.setLastSentAt(Date(), for: .googleDrive)
+      SnapshotLinkSettings.setLastUploadedFingerprint(
+        SnapshotFingerprint.compute(items: scopedItems, familyName: currentFamily?.name),
+        for: .googleDrive)
+      sendResult = .success(
+        L10n.format("%@件のアイテムを送信しました", String(scopedItems.count)))
+    } catch let error as GoogleDriveUploadError {
       sendResult = .error(error.errorDescription ?? error.localizedDescription)
     } catch {
       sendResult = .error(error.localizedDescription)
