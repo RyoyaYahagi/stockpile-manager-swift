@@ -8,11 +8,9 @@ struct HomeView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @Query(sort: \Item.expiryDate) private var items: [Item]
-    @Query private var bags: [Bag]
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
 
     @State private var displayedPercent = 0
-    @AppStorage(BagOrderStore.revisionKey) private var bagOrderRevision = 0
     @State private var toastMessage: String?
     @State private var toastToken = UUID()
 
@@ -22,11 +20,6 @@ struct HomeView: View {
 
     private var scopedItems: [Item] {
         InventoryStore.scopedItems(items, family: currentFamily)
-    }
-
-    private var scopedBags: [Bag] {
-        _ = bagOrderRevision
-        return BagOrderStore.sorted(InventoryStore.scopedBags(bags, family: currentFamily), family: currentFamily)
     }
 
     var body: some View {
@@ -72,11 +65,11 @@ struct HomeView: View {
                     }
                 }
 
-                if !scopedBags.isEmpty || !items.isEmpty {
-                    SectionHeading(title: "収納場所")
+                if !items.isEmpty {
+                    SectionHeading(title: "ジャンル")
                         .padding(.top, 28)
                         .padding(.bottom, 12)
-                    bagGrid(items: items)
+                    categoryGrid(items: items)
                 }
             }
             .padding(.horizontal, 20)
@@ -200,22 +193,21 @@ struct HomeView: View {
         .cardSurface()
     }
 
-    private func bagGrid(items: [Item]) -> some View {
+    /// ジャンルのタイル。「その他」以外は 0 品目でも出し、足りないジャンルに気づけるようにする
+    private func categoryGrid(items: [Item]) -> some View {
         let columns = [GridItem(.adaptive(minimum: 100), spacing: 10)]
-        var entries: [(id: UUID?, name: String, items: [Item])] = scopedBags.map { bag in
-            (bag.id, bag.name, items.filter { $0.bag?.id == bag.id })
-        }
-        let unassigned = items.filter { $0.bag == nil }
-        if !unassigned.isEmpty {
-            entries.append((nil, L10n.string("未分類"), unassigned))
+        let entries: [(category: ItemCategory, items: [Item])] = ItemCategory.allCases.compactMap { category in
+            let categoryItems = items.filter { $0.resolvedCategory == category }
+            if category == .other && categoryItems.isEmpty { return nil }
+            return (category, categoryItems)
         }
 
         return LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
+            ForEach(Array(entries.enumerated()), id: \.element.category) { index, entry in
                 Button {
-                    router.showStock(focusing: entry.id)
+                    router.showStock(focusing: entry.category)
                 } label: {
-                    BagTile(name: entry.name, items: entry.items, isUnassigned: entry.id == nil)
+                    CategoryTile(category: entry.category, items: entry.items)
                 }
                 .buttonStyle(PressableButtonStyle())
                 .riseIn(index: index + 2)
@@ -355,22 +347,21 @@ private struct AttentionCard: View {
     }
 }
 
-/// 収納場所のタイル
-private struct BagTile: View {
-    let name: String
+/// ジャンルのタイル
+private struct CategoryTile: View {
+    let category: ItemCategory
     let items: [Item]
-    let isUnassigned: Bool
 
     var body: some View {
         let worst = items.map(\.expiryStatus).min()
         VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: isUnassigned ? "tray" : "bag")
+            Image(systemName: category.systemImage)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(AppTheme.ink)
+                .foregroundStyle(items.isEmpty ? AppTheme.inkSecondary : AppTheme.ink)
                 .frame(width: 34, height: 34)
                 .background(AppTheme.softFill, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             Spacer(minLength: 0)
-            Text(name)
+            Text(category.displayName)
                 .font(.footnote.weight(.bold))
                 .foregroundStyle(AppTheme.ink)
                 .lineLimit(2)

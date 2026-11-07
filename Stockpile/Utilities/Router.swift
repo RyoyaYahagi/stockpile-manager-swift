@@ -47,7 +47,7 @@ final class Router {
     var familyPath = NavigationPath()
     var settingsPath = NavigationPath()
     var presentedSheet: Sheet?
-    /// 在庫タブで開いて表示する収納場所（ホームの収納場所カードから指定する。nil の bagId は未分類）
+    /// 在庫タブで開いて表示するまとまり（ホームのジャンルカードなどから指定する）
     var stockFocusRequest: StockFocusRequest?
     /// 在庫の複数選択中など、下部のツールバーを使う画面でタブバーを隠す
     var isTabBarHidden = false
@@ -57,12 +57,26 @@ final class Router {
     }
 
     struct StockFocusRequest {
-        let bagId: UUID?
+        enum Target {
+            /// 収納場所。nil は未分類
+            case bag(UUID?)
+            case category(ItemCategory)
+        }
+
+        let target: Target
         let token = UUID()
     }
 
     func showStock(focusing bagId: UUID?) {
-        stockFocusRequest = StockFocusRequest(bagId: bagId)
+        showStock(target: .bag(bagId))
+    }
+
+    func showStock(focusing category: ItemCategory) {
+        showStock(target: .category(category))
+    }
+
+    private func showStock(target: StockFocusRequest.Target) {
+        stockFocusRequest = StockFocusRequest(target: target)
         select(.stock, resetPath: true)
     }
 
