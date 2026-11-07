@@ -78,6 +78,15 @@ final class GoogleDriveLinkManager {
     }
   }
 
+  /// 現在のユーザーで Drive へスナップショットを送信する（G-04 の送信統合用）。
+  /// GIDGoogleUser は Sendable ではないため、呼び出し側に渡さずこの中で書き込みまで行う。
+  func uploadSnapshot(data: Data) async throws {
+    guard let currentUser else {
+      throw GoogleDriveUploadError.notSignedIn
+    }
+    try await GoogleDriveSnapshotWriter.upload(data: data, user: currentUser)
+  }
+
   /// 連携解除（アプリ側のサインアウトのみ）
   func signOut() {
     GIDSignIn.sharedInstance.signOut()

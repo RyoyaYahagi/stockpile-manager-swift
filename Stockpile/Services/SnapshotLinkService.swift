@@ -135,6 +135,53 @@ enum SnapshotLinkSettings {
     set { UserDefaults.standard.set(newValue, forKey: lastSentAtKey) }
   }
 
+  // MARK: 送信先ごとの送信記録（G-04）
+
+  private static let driveLastSentAtKey = "snapshotLink.drive.lastSentAt"
+  private static let driveLastUploadedFingerprintKey =
+    "snapshotLink.drive.lastUploadedFingerprint"
+
+  /// 送信先ごとの最終送信日時。カスタムURLは従来キー、Drive は専用キーで分けて保持する
+  /// （送信先を切り替えた時に、もう一方の記録で「送信済み」と誤判定しないため）。
+  static func lastSentAt(for destination: SnapshotDestination) -> Date? {
+    switch destination {
+    case .customURL:
+      return lastSentAt
+    case .googleDrive:
+      return UserDefaults.standard.object(forKey: driveLastSentAtKey) as? Date
+    }
+  }
+
+  static func setLastSentAt(_ date: Date?, for destination: SnapshotDestination) {
+    switch destination {
+    case .customURL:
+      lastSentAt = date
+    case .googleDrive:
+      UserDefaults.standard.set(date, forKey: driveLastSentAtKey)
+    }
+  }
+
+  /// 送信先ごとの最終フィンガープリント（変更検知用）
+  static func lastUploadedFingerprint(for destination: SnapshotDestination) -> String? {
+    switch destination {
+    case .customURL:
+      return lastUploadedFingerprint
+    case .googleDrive:
+      return UserDefaults.standard.string(forKey: driveLastUploadedFingerprintKey)
+    }
+  }
+
+  static func setLastUploadedFingerprint(
+    _ value: String?, for destination: SnapshotDestination
+  ) {
+    switch destination {
+    case .customURL:
+      lastUploadedFingerprint = value
+    case .googleDrive:
+      UserDefaults.standard.set(value, forKey: driveLastUploadedFingerprintKey)
+    }
+  }
+
   /// 送信先として妥当な HTTPS URL かどうか
   static func validatedEndpoint(_ string: String) -> URL? {
     let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
