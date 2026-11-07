@@ -105,6 +105,9 @@ enum InventoryGrouping: String, CaseIterable, Identifiable {
 }
 
 struct DashboardView: View {
+    /// このタブが表示されているか。非表示の間は重い派生データを作り直さない
+    let isActive: Bool
+
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
     
@@ -129,6 +132,7 @@ struct DashboardView: View {
     @State private var undoWorkItem: DispatchWorkItem?
     @State private var selectedExpiryFilter: ExpiryFilter = .all
     @State private var autoSyncedFamilyID: UUID?
+    @State private var derivedCache = DashboardDerivedCache()
     
     enum ExpiryFilter: CaseIterable {
         case all
@@ -174,6 +178,78 @@ struct DashboardView: View {
                 count + (item.expiryStatus.needsAttention ? 1 : 0)
             }
         }
+    }
+
+    /// 表示に使う派生データ。検索・絞り込み・並びが変わったときだけ作り直す
+    private struct Derived {
+        var filteredItems: [Item] = []
+        var groups: [ItemGroup] = []
+    }
+
+    /// 派生データを作り直す条件
+    private struct DerivedKey: Equatable {
+        let itemsSignature: Int
+        let bagsSignature: Int
+        let searchText: String
+        let expiryFilter: ExpiryFilter
+        let grouping: InventoryGrouping
+        let categoryFilterBagId: UUID?
+        let bagOrderRevision: Int
+        let familyId: UUID?
+    }
+
+    private func derivedKey(items: [Item], bags: [Bag]) -> DerivedKey {
+        DerivedKey(
+            itemsSignature: Self.itemSignature(items),
+            bagsSignature: Self.bagSignature(bags),
+            searchText: searchText,
+            expiryFilter: selectedExpiryFilter,
+            grouping: grouping,
+            categoryFilterBagId: categoryFilterBagId,
+            bagOrderRevision: bagOrderRevision,
+            familyId: currentFamily?.id
+        )
+    }
+
+    /// 派生データのキャッシュ。非表示のタブでは作り直さず、表示に戻ったときに更新する
+    private final class DashboardDerivedCache {
+        private var key: DerivedKey?
+        private var value = Derived()
+
+        func derived(key: DerivedKey, isActive: Bool, make: () -> Derived) -> Derived {
+            if isActive, self.key != key {
+                self.key = key
+                value = make()
+            }
+            return value
+        }
+    }
+
+    /// 品目の内容が変わったかを見るための軽い署名
+    private static func itemSignature(_ items: [Item]) -> Int {
+        var hasher = Hasher()
+        // 日付が変わると期限状態が変わるため、その日も署名に含める
+        hasher.combine(Calendar.current.startOfDay(for: Date()))
+        for item in items {
+            hasher.combine(item.id)
+            hasher.combine(item.updatedAt)
+            hasher.combine(item.quantity)
+            hasher.combine(item.expiryDate)
+            hasher.combine(item.category)
+            hasher.combine(item.name)
+            hasher.combine(item.bag?.id)
+        }
+        return hasher.finalize()
+    }
+
+    /// 収納場所の名前や並びが変わったかを見るための軽い署名
+    private static func bagSignature(_ bags: [Bag]) -> Int {
+        var hasher = Hasher()
+        for bag in bags {
+            hasher.combine(bag.id)
+            hasher.combine(bag.name)
+        }
+        return hasher.finalize()
     }
 
     private static let unassignedGroupId = "unassigned"
@@ -272,9 +348,9 @@ struct DashboardView: View {
     }
 
     private func categoryGroups(for filtered: [Item]) -> [ItemGroup] {
-        let grouped = InventoryStore.groupedByCategory(filtered)
-        return ItemCategory.allCases.compactMap { category in
-            guard let categoryItems = grouped[category], !categoryItems.isEmpty else { return nil }
+        ItemCategory.allCases.compactMap { category in
+            let categoryItems = filtered.filter { $0.resolvedCategory == category }
+            guard !categoryItems.isEmpty else { return nil }
             return ItemGroup(
                 id: Self.categoryGroupPrefix + category.rawValue,
                 bagId: nil,
@@ -315,8 +391,16 @@ struct DashboardView: View {
     }
     
     var body: some View {
-        let filtered = filteredItems
-        let itemGroups = groups(for: filtered)
+        let scopedItems = self.scopedItems
+        let scopedBags = self.scopedBags
+        let derived = derivedCache.derived(
+            key: derivedKey(items: scopedItems, bags: scopedBags),
+            isActive: isActive
+        ) {
+            let filtered = filteredItems
+            return Derived(filteredItems: filtered, groups: groups(for: filtered))
+        }
+        let itemGroups = derived.groups
 
         ScrollViewReader { proxy in
             List(selection: isSelectionMode ? $selectedItems : nil) {
@@ -1176,7 +1260,7 @@ struct UndoSnackbar: View {
 
 #Preview {
     NavigationStack {
-        DashboardView()
+        DashboardView(isActive: true)
     }
     .environment(Router())
     .modelContainer(for: [Family.self, User.self, Bag.self, Item.self], inMemory: true)

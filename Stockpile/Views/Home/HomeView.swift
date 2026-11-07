@@ -3,6 +3,9 @@ import SwiftData
 
 /// ホーム: 備えの安心度と、いま対応が必要な備蓄
 struct HomeView: View {
+    /// このタブが表示されているか。非表示の間は重い派生データを作り直さない
+    let isActive: Bool
+
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -13,6 +16,7 @@ struct HomeView: View {
     @State private var displayedPercent = 0
     @State private var toastMessage: String?
     @State private var toastToken = UUID()
+    @State private var derivedCache = HomeDerivedCache()
 
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
@@ -23,11 +27,10 @@ struct HomeView: View {
     }
 
     var body: some View {
-        let items = scopedItems
-        let attention = InventoryStore.attentionItems(in: items)
-        let readiness = InventoryStore.readiness(of: items)
-        let readinessPercent = readiness.percent
-        let entries = categoryEntries(for: items)
+        let derived = derivedCache.derived(for: scopedItems, isActive: isActive)
+        let items = derived.items
+        let attention = derived.attention
+        let readinessPercent = derived.readiness.percent
 
         TutorialScrollReader {
         ScrollView {
@@ -38,7 +41,7 @@ struct HomeView: View {
                     emptyState
                         .padding(.top, 20)
                 } else {
-                    readinessCard(readiness: readiness, attentionCount: attention.count)
+                    readinessCard(readiness: derived.readiness, attentionCount: attention.count)
                         .tutorialTarget(.homeReadiness)
                         .padding(.top, 20)
                         .riseIn()
@@ -71,7 +74,7 @@ struct HomeView: View {
                     SectionHeading(title: "ジャンル")
                         .padding(.top, 28)
                         .padding(.bottom, 12)
-                    categoryGrid(entries: entries)
+                    categoryGrid(entries: derived.categoryEntries)
                 }
             }
             .padding(.horizontal, 20)
@@ -222,16 +225,7 @@ struct HomeView: View {
         .cardSurface()
     }
 
-    /// ジャンルごとの品目。「その他」以外は 0 品目でも出し、足りないジャンルに気づけるようにする
-    private func categoryEntries(for items: [Item]) -> [(category: ItemCategory, items: [Item])] {
-        let grouped = InventoryStore.groupedByCategory(items)
-        return ItemCategory.allCases.compactMap { category in
-            let categoryItems = grouped[category] ?? []
-            if category == .other && categoryItems.isEmpty { return nil }
-            return (category, categoryItems)
-        }
-    }
-
+    /// ジャンルのタイル。「その他」以外は 0 品目でも出し、足りないジャンルに気づけるようにする
     private func categoryGrid(entries: [(category: ItemCategory, items: [Item])]) -> some View {
         let columns = [GridItem(.adaptive(minimum: 100), spacing: 10)]
 
@@ -412,5 +406,70 @@ private struct CategoryTile: View {
         .padding(14)
         .cardSurface(radius: 20)
         .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - 派生データ
+
+/// ホームの表示に使う派生データ。品目が変わったときだけ作り直す
+private struct HomeDerived {
+    var items: [Item] = []
+    var attention: [Item] = []
+    var readiness = InventoryStore.Readiness(
+        readyCount: 0,
+        itemCount: 0,
+        coveredCategories: [],
+        missingCategories: InventoryStore.essentialCategories
+    )
+    var categoryEntries: [(category: ItemCategory, items: [Item])] = []
+
+    static func make(items: [Item]) -> HomeDerived {
+        let grouped = InventoryStore.groupedByCategory(items)
+        let entries: [(category: ItemCategory, items: [Item])] = ItemCategory.allCases.compactMap { category in
+            let categoryItems = grouped[category] ?? []
+            if category == .other && categoryItems.isEmpty { return nil }
+            return (category, categoryItems)
+        }
+        return HomeDerived(
+            items: items,
+            attention: InventoryStore.attentionItems(in: items),
+            readiness: InventoryStore.readiness(of: items),
+            categoryEntries: entries
+        )
+    }
+}
+
+/// 派生データのキャッシュ。非表示のタブでは作り直さず、表示に戻ったときに更新する
+@MainActor
+private final class HomeDerivedCache {
+    private var signature: Int?
+    private var value = HomeDerived()
+
+    func derived(for items: [Item], isActive: Bool) -> HomeDerived {
+        let current = HomeView.itemSignature(items)
+        if isActive, signature != current {
+            signature = current
+            value = HomeDerived.make(items: items)
+        }
+        return value
+    }
+}
+
+private extension HomeView {
+    /// 品目の内容が変わったかを見るための軽い署名
+    static func itemSignature(_ items: [Item]) -> Int {
+        var hasher = Hasher()
+        // 日付が変わると期限状態が変わるため、その日も署名に含める
+        hasher.combine(Calendar.current.startOfDay(for: Date()))
+        for item in items {
+            hasher.combine(item.id)
+            hasher.combine(item.updatedAt)
+            hasher.combine(item.quantity)
+            hasher.combine(item.expiryDate)
+            hasher.combine(item.category)
+            hasher.combine(item.name)
+            hasher.combine(item.bag?.id)
+        }
+        return hasher.finalize()
     }
 }

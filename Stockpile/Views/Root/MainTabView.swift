@@ -17,20 +17,20 @@ struct MainTabView: View {
         ZStack {
             AppBackground()
 
-            tabStack(.home, path: $router.homePath) {
-                HomeView()
+            tabStack(.home, path: $router.homePath) { isActive in
+                HomeView(isActive: isActive)
             }
-            tabStack(.stock, path: $router.stockPath) {
-                DashboardView()
+            tabStack(.stock, path: $router.stockPath) { isActive in
+                DashboardView(isActive: isActive)
             }
-            tabStack(.family, path: $router.familyPath) {
+            tabStack(.family, path: $router.familyPath) { _ in
                 if let family = currentFamily {
                     FamilySettingsView(family: family)
                 } else {
                     FamilySetupView()
                 }
             }
-            tabStack(.settings, path: $router.settingsPath) {
+            tabStack(.settings, path: $router.settingsPath) { _ in
                 SettingsView()
             }
         }
@@ -62,11 +62,11 @@ struct MainTabView: View {
     private func tabStack<Content: View>(
         _ tab: AppTab,
         path: Binding<NavigationPath>,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: (Bool) -> Content
     ) -> some View {
         let isSelected = router.selectedTab == tab
         return NavigationStack(path: path) {
-            content()
+            content(isSelected)
                 .navigationDestination(for: Destination.self) { destination in
                     destinationView(destination)
                 }
