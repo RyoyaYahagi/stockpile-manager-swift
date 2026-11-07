@@ -10,6 +10,7 @@ struct ItemRow: View {
 
     var body: some View {
         let expiryStatus = item.expiryStatus
+        let category = showsCategoryIcon ? item.resolvedCategory : nil
 
         HStack(spacing: 12) {
             if let isSelected {
@@ -41,9 +42,9 @@ struct ItemRow: View {
                     if let expiryDate = item.expiryDate {
                         Text(expiryDate, format: .dateTime.year().month().day())
                     }
-                    if showsCategoryIcon {
-                        Image(systemName: item.resolvedCategory.systemImage)
-                            .accessibilityLabel(Text(item.resolvedCategory.displayName))
+                    if let category {
+                        Image(systemName: category.systemImage)
+                            .accessibilityLabel(Text(category.displayName))
                     }
                     if showsBag {
                         Text(item.bag?.name ?? L10n.string("未分類"))

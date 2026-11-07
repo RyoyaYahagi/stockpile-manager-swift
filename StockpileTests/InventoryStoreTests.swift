@@ -150,6 +150,22 @@ final class InventoryStoreTests: XCTestCase {
             NotificationLedger.key(itemId: id, rule: rule, thresholdDate: next)
         )
     }
+
+    func testGroupedByCategoryMatchesFilteringPerCategory() {
+        let names = ["水", "米", "缶詰", "薬", "マスク", "乾電池", "チョコ", "謎の品"]
+        let items = names.map { Item(name: $0) }
+
+        let grouped = InventoryStore.groupedByCategory(items)
+
+        for category in ItemCategory.allCases {
+            XCTAssertEqual(
+                grouped[category]?.map(\.id) ?? [],
+                items.filter { $0.resolvedCategory == category }.map(\.id),
+                "\(category.rawValue) の振り分けが一致しません"
+            )
+        }
+        XCTAssertEqual(grouped.values.flatMap { $0 }.count, items.count)
+    }
 }
 
 final class ModernAppearanceTests: XCTestCase {
@@ -229,6 +245,13 @@ final class ItemCategoryInferenceTests: XCTestCase {
                 XCTAssertNotNil(entries[key], "\(language) に「\(key)」がありません")
             }
         }
+    }
+
+    func testInferenceIsStableAcrossRepeatedAndWidthInsensitiveLookups() {
+        XCTAssertEqual(ItemCategoryInference.category(forName: "ＣＡＮＤＹ"), .snackSupplement)
+        XCTAssertEqual(ItemCategoryInference.category(forName: "candy"), .snackSupplement)
+        XCTAssertNil(ItemCategoryInference.category(forName: "謎の品"))
+        XCTAssertNil(ItemCategoryInference.category(forName: "謎の品"))
     }
 }
 

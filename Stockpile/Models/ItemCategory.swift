@@ -140,6 +140,28 @@ enum ItemCategoryInference {
         category(in: productCategory)
     }
 
+    /// ルールごとの正規表現。キーワードをまとめた 1 本を起動時に 1 回だけ組み立てる。
+    /// 日本語は部分一致、英語は単語境界で照合する（candy に can が当たる等を避ける）。
+    private static let compiledRules: [(category: ItemCategory, pattern: NSRegularExpression)] = rules.map { rule in
+        let alternatives = rule.keywords.map { keyword -> String in
+            let escaped = NSRegularExpression.escapedPattern(for: keyword)
+            if keyword.unicodeScalars.allSatisfy(\.isASCII) {
+                return "\\b\(escaped)\\b"
+            }
+            return escaped
+        }
+        // エスケープ済みのリテラルだけを連結するため、パターンは必ず妥当
+        let pattern = try! NSRegularExpression(
+            pattern: alternatives.joined(separator: "|"),
+            options: [.caseInsensitive]
+        )
+        return (rule.category, pattern)
+    }
+
+    /// 正規化した品名ごとの推定結果。
+    /// 画面の再描画やジャンルごとの振り分けで、同じ品名を何度も推定しない。
+    private static let cache = InferenceCache()
+
     private static func category(in text: String) -> ItemCategory? {
         let normalized = text
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -149,22 +171,51 @@ enum ItemCategoryInference {
             )
         guard !normalized.isEmpty else { return nil }
 
-        for rule in rules {
-            if rule.keywords.contains(where: { contains($0, in: normalized) }) {
+        if let cached = cache.result(for: normalized) {
+            return cached.category
+        }
+
+        let category = infer(in: normalized)
+        cache.store(InferenceResult(category: category), for: normalized)
+        return category
+    }
+
+    private static func infer(in normalized: String) -> ItemCategory? {
+        let range = NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)
+        for rule in compiledRules {
+            if rule.pattern.firstMatch(in: normalized, options: [], range: range) != nil {
                 return rule.category
             }
         }
         return nil
     }
 
-    /// 日本語は部分一致、英語は単語境界で照合する。
-    /// 英単語の部分一致（candy に can が当たる等）を避けるため。
-    private static func contains(_ keyword: String, in text: String) -> Bool {
-        if keyword.unicodeScalars.allSatisfy(\.isASCII) {
-            let pattern = "\\b" + NSRegularExpression.escapedPattern(for: keyword) + "\\b"
-            return text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    private struct InferenceResult {
+        let category: ItemCategory?
+    }
+
+    /// 推定結果のキャッシュ。画面更新とバックグラウンドの同期から同時に呼ばれるため、
+    /// ロックで保護する。
+    private final class InferenceCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var entries: [String: InferenceResult] = [:]
+        /// 際限なく増やさないための上限。超えたらまとめて捨てる
+        private let limit = 4096
+
+        func result(for key: String) -> InferenceResult? {
+            lock.lock()
+            defer { lock.unlock() }
+            return entries[key]
         }
-        return text.contains(keyword)
+
+        func store(_ result: InferenceResult, for key: String) {
+            lock.lock()
+            defer { lock.unlock() }
+            if entries.count >= limit {
+                entries.removeAll(keepingCapacity: true)
+            }
+            entries[key] = result
+        }
     }
 }
 

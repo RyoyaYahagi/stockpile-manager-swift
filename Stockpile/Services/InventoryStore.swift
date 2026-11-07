@@ -50,19 +50,35 @@ enum InventoryStore {
     ]
 
     static func readiness(of items: [Item]) -> Readiness {
-        let readyCount = items.filter { $0.quantity > 0 && !$0.expiryStatus.needsAttention }.count
-        // 期限切れでなく数量が1以上なら、そのジャンルは「ある」とみなす
-        let usableCategories = Set(
-            items
-                .filter { $0.quantity > 0 && $0.expiryStatus != .expired }
-                .map(\.resolvedCategory)
-        )
+        var readyCount = 0
+        var usableCategories: Set<ItemCategory> = []
+        for item in items {
+            let status = item.expiryStatus
+            if item.quantity > 0 && !status.needsAttention {
+                readyCount += 1
+            }
+            // 期限切れでなく数量が1以上なら、そのジャンルは「ある」とみなす
+            if item.quantity > 0 && status != .expired {
+                usableCategories.insert(item.resolvedCategory)
+            }
+        }
         return Readiness(
             readyCount: readyCount,
             itemCount: items.count,
             coveredCategories: essentialCategories.filter { usableCategories.contains($0) },
             missingCategories: essentialCategories.filter { !usableCategories.contains($0) }
         )
+    }
+
+    /// 品目ごとにジャンルを 1 回だけ解決し、1 回の走査でまとめる。
+    /// ジャンルごとに全品目を filter すると、その回数だけ推定が走ってしまう。
+    static func groupedByCategory(_ items: [Item]) -> [ItemCategory: [Item]] {
+        var grouped: [ItemCategory: [Item]] = [:]
+        grouped.reserveCapacity(ItemCategory.allCases.count)
+        for item in items {
+            grouped[item.resolvedCategory, default: []].append(item)
+        }
+        return grouped
     }
 
     static func readinessPercent(of items: [Item]) -> Int {
