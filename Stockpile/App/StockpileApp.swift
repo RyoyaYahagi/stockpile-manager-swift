@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import UIKit
 import UserNotifications
+import GoogleSignIn
 
 @MainActor
 @Observable
@@ -146,6 +147,9 @@ struct StockpileApp: App {
                     retry: modelStartup.retry
                 )
             }
+        }
+        .onOpenURL { url in
+            _ = GIDSignIn.sharedInstance.handle(url)
         }
     }
 

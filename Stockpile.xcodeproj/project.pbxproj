@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D60100000000000000000A04 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = D60100000000000000000A02 /* GoogleSignIn */; };
+		D60100000000000000000A05 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = D60100000000000000000A03 /* GoogleSignInSwift */; };
 		001 /* StockpileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101 /* StockpileApp.swift */; };
 		002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102 /* ContentView.swift */; };
 		003 /* Family.swift in Sources */ = {isa = PBXBuildFile; fileRef = 103 /* Family.swift */; };
@@ -183,6 +185,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D60100000000000000000A04 /* GoogleSignIn in Frameworks */,
+				D60100000000000000000A05 /* GoogleSignInSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -460,6 +464,10 @@
 			);
 			dependencies = (
 			);
+			packageProductDependencies = (
+				D60100000000000000000A02 /* GoogleSignIn */,
+				D60100000000000000000A03 /* GoogleSignInSwift */,
+			);
 			name = Stockpile;
 			productName = Stockpile;
 			productReference = 100 /* Stockpile.app */;
@@ -518,6 +526,9 @@
 			productRefGroup = 302 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
+			packageReferences = (
+				D60100000000000000000A01 /* GoogleSignIn-iOS */,
+			);
 			targets = (
 				400 /* Stockpile */,
 				A4B100000000000000000401 /* StockpileTests */,
@@ -950,6 +961,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+/* Begin XCRemoteSwiftPackageReference section */
+		D60100000000000000000A01 /* GoogleSignIn-iOS */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D60100000000000000000A02 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D60100000000000000000A01 /* GoogleSignIn-iOS */;
+			productName = GoogleSignIn;
+		};
+		D60100000000000000000A03 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D60100000000000000000A01 /* GoogleSignIn-iOS */;
+			productName = GoogleSignInSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
+
 	};
 	rootObject = 600 /* Project object */;
 }

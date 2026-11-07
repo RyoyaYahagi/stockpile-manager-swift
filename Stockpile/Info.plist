@@ -18,5 +18,18 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>GIDClientID</key>
+	<string>348641334136-0pvig6qeta0s9atne9h63sosrgd40ls4.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.0pvig6qeta0s9atne9h63sosrgd40ls4-348641334136</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
