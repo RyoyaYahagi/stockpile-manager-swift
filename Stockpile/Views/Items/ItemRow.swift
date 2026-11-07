@@ -4,6 +4,7 @@ import SwiftUI
 struct ItemRow: View {
     let item: Item
     var showsBag = false
+    var showsCategoryIcon = false
     /// 選択モード中は選択状態、それ以外は nil
     var isSelected: Bool? = nil
 
@@ -39,6 +40,10 @@ struct ItemRow: View {
                 HStack(spacing: 6) {
                     if let expiryDate = item.expiryDate {
                         Text(expiryDate, format: .dateTime.year().month().day())
+                    }
+                    if showsCategoryIcon {
+                        Image(systemName: item.resolvedCategory.systemImage)
+                            .accessibilityLabel(Text(item.resolvedCategory.displayName))
                     }
                     if showsBag {
                         Text(item.bag?.name ?? L10n.string("未分類"))

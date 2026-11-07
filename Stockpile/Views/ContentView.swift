@@ -284,6 +284,7 @@ struct ContentView: View {
                     prefill: .init(
                         name: product.name,
                         janCode: product.janCode,
+                        productCategory: product.category,
                         message: L10n.string("バーコードから品名を入れました")
                     )
                 ))

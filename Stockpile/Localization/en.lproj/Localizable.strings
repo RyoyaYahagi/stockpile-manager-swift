@@ -438,3 +438,14 @@
 "システム" = "System";
 "ライトモード" = "Light mode";
 "ダークモード" = "Dark mode";
+
+"ジャンル" = "Category";
+"水・飲料" = "Water & Drinks";
+"主食" = "Staple Foods";
+"おかず・缶詰" = "Side Dishes & Canned Food";
+"お菓子・栄養補助" = "Snacks & Supplements";
+"衛生用品" = "Hygiene Supplies";
+"医薬品" = "Medicines";
+"電池・電源・照明" = "Batteries, Power & Light";
+"その他のジャンル" = "Other";
+"収納場所: %@" = "Storage: %@";

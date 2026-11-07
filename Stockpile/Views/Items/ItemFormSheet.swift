@@ -32,6 +32,9 @@ struct ItemFormSheet: View {
     @State private var janCode: String?
     @State private var selectedBagId: UUID?
     @State private var locationNote: String = ""
+    @State private var selectedCategory: ItemCategory?
+    @State private var productCategoryHint: String?
+    @State private var hasManuallySelectedCategory = false
     @State private var showOCRCamera = false
     @State private var showBarcodeScanner = false
     @State private var showAddBag = false
@@ -57,12 +60,21 @@ struct ItemFormSheet: View {
             _janCode = State(initialValue: item.janCode)
             _selectedBagId = State(initialValue: item.bag?.id)
             _locationNote = State(initialValue: item.locationNote ?? "")
+            _selectedCategory = State(initialValue: ItemCategory(rawValue: item.category ?? ""))
+            _hasManuallySelectedCategory = State(initialValue: true)
         } else {
             // 追加モードの場合、プリセット収納場所と読み取り結果を設定
             _selectedBagId = State(initialValue: preselectedBagId)
             if let prefill {
                 _name = State(initialValue: prefill.name ?? "")
                 _janCode = State(initialValue: prefill.janCode)
+                _productCategoryHint = State(initialValue: prefill.productCategory)
+                _selectedCategory = State(
+                    initialValue: ItemCategoryInference.category(
+                        forName: prefill.name,
+                        productCategory: prefill.productCategory
+                    )
+                )
                 if let date = prefill.expiryDate {
                     _expiryDate = State(initialValue: date)
                     _hasExpiry = State(initialValue: true)
@@ -106,6 +118,7 @@ struct ItemFormSheet: View {
                     }
 
                     nameField
+                    categoryField
                     quantityAndExpiry
                     locationField
                 }
@@ -157,9 +170,16 @@ struct ItemFormSheet: View {
             }
             .sheet(isPresented: $showBarcodeScanner) {
                 BarcodeScannerView { product in
-                    // スキャン結果を品名に反映
+                    // スキャン結果を品名とジャンルに反映
                     name = product.name
                     janCode = product.janCode
+                    productCategoryHint = product.category
+                    if !hasManuallySelectedCategory {
+                        selectedCategory = ItemCategoryInference.category(
+                            forName: product.name,
+                            productCategory: product.category
+                        )
+                    }
                     showAutofill(L10n.string("バーコードから品名を入れました"))
                 }
             }
@@ -183,6 +203,13 @@ struct ItemFormSheet: View {
                     .padding(.horizontal, 16)
                     .frame(minHeight: 52)
                     .background(inputBackground)
+                    .onChange(of: name) { _, newValue in
+                        guard isAddMode, !hasManuallySelectedCategory else { return }
+                        selectedCategory = ItemCategoryInference.category(
+                            forName: newValue,
+                            productCategory: productCategoryHint
+                        )
+                    }
 
                 if isAddMode {
                     Button {
@@ -203,6 +230,26 @@ struct ItemFormSheet: View {
                 Text(barcodeQuotaText)
                     .font(.caption)
                     .foregroundStyle(AppTheme.inkSecondary)
+            }
+        }
+    }
+
+    private var categoryField: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            fieldLabel("ジャンル")
+            FlowChips {
+                ForEach(ItemCategory.allCases) { category in
+                    ChoiceChip(
+                        verbatim: category.displayName,
+                        systemImage: category.systemImage,
+                        isSelected: selectedCategory == category
+                    ) {
+                        withAnimation(AppTheme.popAnimation) {
+                            selectedCategory = category
+                            hasManuallySelectedCategory = true
+                        }
+                    }
+                }
             }
         }
     }
@@ -359,12 +406,19 @@ struct ItemFormSheet: View {
 
         switch mode {
         case .add:
+            let category =
+                selectedCategory
+                ?? ItemCategoryInference.category(
+                    forName: trimmedName,
+                    productCategory: productCategoryHint
+                )
             let newItem = Item(
                 name: trimmedName,
                 janCode: normalizedJANCode,
                 quantity: quantity,
                 expiryDate: hasExpiry ? expiryDate : nil,
-                locationNote: trimmedNote.isEmpty ? nil : trimmedNote
+                locationNote: trimmedNote.isEmpty ? nil : trimmedNote,
+                category: category?.rawValue
             )
             newItem.bag = selectedBag
             newItem.family = family
@@ -376,6 +430,9 @@ struct ItemFormSheet: View {
             item.quantity = quantity
             item.expiryDate = hasExpiry ? expiryDate : nil
             item.locationNote = trimmedNote.isEmpty ? nil : trimmedNote
+            if let selectedCategory {
+                item.category = selectedCategory.rawValue
+            }
             item.bag = selectedBag
             if item.family == nil {
                 item.family = family
@@ -456,9 +513,9 @@ struct ChoiceChip: View {
         self.action = action
     }
 
-    init(verbatim: String, isSelected: Bool, action: @escaping () -> Void) {
+    init(verbatim: String, systemImage: String? = nil, isSelected: Bool, action: @escaping () -> Void) {
         self.title = Text(verbatim: verbatim)
-        self.systemImage = nil
+        self.systemImage = systemImage
         self.isSelected = isSelected
         self.isDashed = false
         self.action = action

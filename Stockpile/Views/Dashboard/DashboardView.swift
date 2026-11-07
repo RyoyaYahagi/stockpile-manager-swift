@@ -87,6 +87,23 @@ extension Notification.Name {
     static let didDeleteItems = Notification.Name("didDeleteItems")
 }
 
+/// 在庫タブのまとまり方。選んだ状態は端末に保存する。
+enum InventoryGrouping: String, CaseIterable, Identifiable {
+    case storage
+    case category
+
+    static let storageKey = "inventory.grouping"
+
+    var id: String { rawValue }
+
+    var title: LocalizedStringKey {
+        switch self {
+        case .storage: return "収納場所"
+        case .category: return "ジャンル"
+        }
+    }
+}
+
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(Router.self) private var router
@@ -98,12 +115,15 @@ struct DashboardView: View {
     @State private var collapsedGroupIds: Set<String> = []
     @State private var showBagReorder = false
     @AppStorage(BagOrderStore.revisionKey) private var bagOrderRevision = 0
+    @AppStorage(InventoryGrouping.storageKey) private var grouping: InventoryGrouping = .storage
     @State private var selectedItems: Set<UUID> = []
     @State private var isSelectionMode = false
     @State private var searchText = ""
     @State private var showDeleteConfirmation = false
     @State private var showMoveSheet = false
     @State private var showCopySheet = false
+    @State private var showCategoryBagPicker = false
+    @State private var categoryFilterBagId: UUID?
     @State private var deletedItemInfoList: [DeletedItemInfo] = []
     @State private var showUndoSnackbar = false
     @State private var undoWorkItem: DispatchWorkItem?
@@ -135,11 +155,12 @@ struct DashboardView: View {
         }
     }
 
-    /// 収納場所ごとのまとまり
+    /// 収納場所またはジャンルごとのまとまり
     private struct ItemGroup: Identifiable {
         let id: String
         let bagId: UUID?
         let name: String
+        let systemImage: String
         let items: [Item]
 
         var attentionCount: Int {
@@ -148,6 +169,7 @@ struct DashboardView: View {
     }
 
     private static let unassignedGroupId = "unassigned"
+    private static let categoryGroupPrefix = "category-"
 
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
@@ -166,12 +188,27 @@ struct DashboardView: View {
             || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// ジャンル表示のときだけ効く収納場所の絞り込み。
+    /// 選択した収納場所が削除済みなら「すべて」と同じ扱いにする。
+    private var categoryFilterBag: Bag? {
+        guard grouping == .category, let categoryFilterBagId else { return nil }
+        return scopedBags.first { $0.id == categoryFilterBagId }
+    }
+
+    private var categoryFilterTitle: String {
+        L10n.format("収納場所: %@", categoryFilterBag?.name ?? L10n.string("すべて"))
+    }
+
     private var filteredItems: [Item] {
         let normalizedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let queryForms = SearchNormalizer.normalizedForms(for: normalizedSearchText)
         let hasSearchText = !queryForms.isEmpty
+        let filterBag = categoryFilterBag
 
         let filtered = scopedItems.filter { item in
+            if let filterBag, item.bag?.id != filterBag.id {
+                return false
+            }
             if hasSearchText, !SearchNormalizer.matches(item.name, queryForms: queryForms) {
                 return false
             }
@@ -189,6 +226,15 @@ struct DashboardView: View {
     }
 
     private func groups(for filtered: [Item]) -> [ItemGroup] {
+        switch grouping {
+        case .storage:
+            return storageGroups(for: filtered)
+        case .category:
+            return categoryGroups(for: filtered)
+        }
+    }
+
+    private func storageGroups(for filtered: [Item]) -> [ItemGroup] {
         _ = bagOrderRevision
         var result = BagOrderStore.sorted(scopedBags, family: currentFamily)
             .map { bag in
@@ -196,6 +242,7 @@ struct DashboardView: View {
                     id: bag.id.uuidString,
                     bagId: bag.id,
                     name: bag.name,
+                    systemImage: "bag",
                     items: filtered.filter { $0.bag?.id == bag.id }
                 )
             }
@@ -209,10 +256,25 @@ struct DashboardView: View {
                 id: Self.unassignedGroupId,
                 bagId: nil,
                 name: L10n.string("未分類"),
+                systemImage: "tray",
                 items: unassigned
             )
         )
         return result.filter { !$0.items.isEmpty }
+    }
+
+    private func categoryGroups(for filtered: [Item]) -> [ItemGroup] {
+        ItemCategory.allCases.compactMap { category in
+            let categoryItems = filtered.filter { $0.resolvedCategory == category }
+            guard !categoryItems.isEmpty else { return nil }
+            return ItemGroup(
+                id: Self.categoryGroupPrefix + category.rawValue,
+                bagId: nil,
+                name: category.displayName,
+                systemImage: category.systemImage,
+                items: categoryItems
+            )
+        }
     }
 
     private func isExpanded(_ group: ItemGroup) -> Bool {
@@ -252,6 +314,36 @@ struct DashboardView: View {
             List(selection: isSelectionMode ? $selectedItems : nil) {
                 if !scopedItems.isEmpty {
                     Section {
+                        InventoryGroupingControl(selection: $grouping)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                            .listRowBackground(Color.clear)
+
+                        if grouping == .category {
+                            Button {
+                                showCategoryBagPicker = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "bag")
+                                        .font(.caption.weight(.bold))
+                                    Text(categoryFilterTitle)
+                                        .font(.footnote.weight(.bold))
+                                        .lineLimit(1)
+                                    Image(systemName: "chevron.down")
+                                        .font(.caption2.weight(.bold))
+                                    Spacer(minLength: 0)
+                                }
+                                .foregroundStyle(AppTheme.ink)
+                                .padding(.horizontal, 14)
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .glassSurface(in: Capsule())
+                            .accessibilityLabel(Text(categoryFilterTitle))
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
+                            .listRowBackground(Color.clear)
+                        }
+
                         ExpiryFilterControl(selection: $selectedExpiryFilter)
                             .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                             .listRowBackground(Color.clear)
@@ -307,7 +399,7 @@ struct DashboardView: View {
                             )
                         }
                     }
-                    if scopedBags.count > 1 {
+                    if grouping == .storage, scopedBags.count > 1 {
                         Button {
                             showBagReorder = true
                         } label: {
@@ -398,6 +490,9 @@ struct DashboardView: View {
         .sheet(isPresented: $showBagReorder) {
             BagReorderSheet(bags: scopedBags, family: currentFamily)
         }
+        .sheet(isPresented: $showCategoryBagPicker) {
+            StorageLocationPicker(bags: scopedBags, selectedBagId: $categoryFilterBagId)
+        }
         .sheet(isPresented: $showMoveSheet) {
             BulkMoveSheet(
                 bags: scopedBags,
@@ -437,7 +532,7 @@ struct DashboardView: View {
             toggle(group)
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: group.bagId == nil ? "tray" : "bag")
+                Image(systemName: group.systemImage)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppTheme.ink)
                     .frame(width: 40, height: 40)
@@ -475,7 +570,12 @@ struct DashboardView: View {
     }
 
     private func itemRow(_ item: Item, index: Int) -> some View {
-        ItemRow(item: item, isSelected: isSelectionMode ? selectedItems.contains(item.id) : nil)
+        ItemRow(
+            item: item,
+            showsBag: grouping == .category,
+            showsCategoryIcon: grouping == .storage,
+            isSelected: isSelectionMode ? selectedItems.contains(item.id) : nil
+        )
             .riseIn(index: index, delayStep: 0.05)
             .contentShape(Rectangle())
             .onTapGesture {
@@ -526,16 +626,17 @@ struct DashboardView: View {
         }
     }
 
-    /// ホームの収納場所カードから来たとき、その場所を開いて表示する
+    /// ホームの収納場所カードから来たとき、収納場所表示に切り替えてその場所を開く
     private func scrollToFocusedBag(using proxy: ScrollViewProxy) {
         guard let request = router.stockFocusRequest else { return }
         router.stockFocusRequest = nil
+        grouping = .storage
         let groupId = request.bagId?.uuidString ?? Self.unassignedGroupId
         selectedExpiryFilter = .all
         searchText = ""
-        let allGroupIds = Set(groups(for: filteredItems).map(\.id))
-        collapsedGroupIds = allGroupIds.subtracting([groupId])
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            let allGroupIds = Set(storageGroups(for: filteredItems).map(\.id))
+            collapsedGroupIds = allGroupIds.subtracting([groupId])
             withAnimation(AppTheme.accordionAnimation) {
                 proxy.scrollTo(groupId, anchor: .top)
             }
@@ -584,7 +685,8 @@ struct DashboardView: View {
                 janCode: info.janCode,
                 quantity: info.quantity,
                 expiryDate: info.expiryDate,
-                locationNote: info.locationNote
+                locationNote: info.locationNote,
+                category: info.category
             )
             newItem.id = info.id
             newItem.markUpdated(at: restoredAt)
@@ -675,7 +777,8 @@ struct DashboardView: View {
                 janCode: item.janCode,
                 quantity: item.quantity,
                 expiryDate: item.expiryDate,
-                locationNote: item.locationNote
+                locationNote: item.locationNote,
+                category: item.category
             )
             newItem.bag = targetBag
             newItem.family = currentFamily
@@ -735,12 +838,53 @@ struct DashboardView: View {
             quantity: item.quantity,
             expiryDate: item.expiryDate,
             locationNote: item.locationNote,
+            category: item.category,
             bagId: item.bag?.id
         )
     }
 }
 
 // MARK: - Supporting Views
+
+/// 収納場所 / ジャンルの切り替え（期限フィルターと同じガラス調）
+private struct InventoryGroupingControl: View {
+    @Binding var selection: InventoryGrouping
+    @Namespace private var namespace
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(InventoryGrouping.allCases) { grouping in
+                let isSelected = selection == grouping
+                Button {
+                    withAnimation(AppTheme.indicatorAnimation) {
+                        selection = grouping
+                    }
+                } label: {
+                    Text(grouping.title)
+                        .font(.footnote.weight(isSelected ? .bold : .medium))
+                        .foregroundStyle(isSelected ? AppTheme.ink : AppTheme.inkSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .padding(.horizontal, 6)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background {
+                            if isSelected {
+                                Capsule()
+                                    .fill(AppTheme.card)
+                                    .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 2)
+                                    .matchedGeometryEffect(id: "grouping", in: namespace)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .glassSurface(in: Capsule())
+    }
+}
 
 /// 期限での絞り込み（ガラスの切り替え。選択中の玉がスライドする）
 private struct ExpiryFilterControl: View {
@@ -974,6 +1118,7 @@ struct DeletedItemInfo {
     let quantity: Int
     let expiryDate: Date?
     let locationNote: String?
+    let category: String?
     let bagId: UUID?
 }
 

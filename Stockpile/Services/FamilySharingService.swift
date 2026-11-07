@@ -1167,6 +1167,7 @@ final class CloudKitFamilySharingService {
                 item.quantity = intValue(from: itemRecord["quantity"]) ?? item.quantity
                 item.expiryDate = itemRecord["expiryDate"] as? Date
                 item.locationNote = normalizedOptionalString(itemRecord["locationNote"] as? String)
+                item.category = normalizedOptionalString(itemRecord["category"] as? String)
                 item.notified30 = (itemRecord["notified30"] as? NSNumber)?.boolValue ?? item.notified30
                 item.notified7 = (itemRecord["notified7"] as? NSNumber)?.boolValue ?? item.notified7
                 item.notified1 = (itemRecord["notified1"] as? NSNumber)?.boolValue ?? item.notified1
@@ -1947,6 +1948,11 @@ final class CloudKitFamilySharingService {
             record["locationNote"] = locationNote as CKRecordValue
         } else {
             record["locationNote"] = nil
+        }
+        if let category = normalizedOptionalString(item.category) {
+            record["category"] = category as CKRecordValue
+        } else {
+            record["category"] = nil
         }
         record["notified30"] = item.notified30 as CKRecordValue
         record["notified7"] = item.notified7 as CKRecordValue
@@ -3609,6 +3615,7 @@ final class LocalDataRepairService {
         keeper.quantity = duplicates.map(\.quantity).max() ?? keeper.quantity
         keeper.expiryDate = duplicates.compactMap(\.expiryDate).min() ?? keeper.expiryDate
         keeper.locationNote = duplicates.compactMap(\.locationNote).compactMap(normalizedOptionalString).first ?? keeper.locationNote
+        keeper.category = duplicates.compactMap(\.category).compactMap(normalizedOptionalString).first ?? keeper.category
         keeper.notified30 = duplicates.contains { $0.notified30 }
         keeper.notified7 = duplicates.contains { $0.notified7 }
         keeper.notified1 = duplicates.contains { $0.notified1 }
@@ -3675,6 +3682,7 @@ final class LocalDataRepairService {
         if item.bag != nil { score += 2 }
         if item.expiryDate != nil { score += 1 }
         if normalizedOptionalString(item.locationNote) != nil { score += 1 }
+        if normalizedOptionalString(item.category) != nil { score += 1 }
         return score
     }
 
@@ -3701,7 +3709,8 @@ final class LocalDataRepairService {
             janCode: normalizedOptionalString(item.janCode),
             quantity: item.quantity,
             expiryDate: expiryDayKey(for: item.expiryDate),
-            locationNote: foldedLookupKey(for: item.locationNote)
+            locationNote: foldedLookupKey(for: item.locationNote),
+            category: normalizedOptionalString(item.category)
         )
     }
 
@@ -3727,7 +3736,8 @@ final class LocalDataRepairService {
             janCode: normalizedOptionalString(item.janCode),
             quantity: item.quantity,
             expiryDate: expiryDayKey(for: item.expiryDate),
-            locationNote: foldedLookupKey(for: item.locationNote)
+            locationNote: foldedLookupKey(for: item.locationNote),
+            category: normalizedOptionalString(item.category)
         )
     }
 
@@ -3863,6 +3873,7 @@ private struct ItemSemanticKey: Hashable {
     let quantity: Int
     let expiryDate: String?
     let locationNote: String?
+    let category: String?
 }
 
 private struct ItemContentKey: Hashable {
@@ -3871,4 +3882,5 @@ private struct ItemContentKey: Hashable {
     let quantity: Int
     let expiryDate: String?
     let locationNote: String?
+    let category: String?
 }
