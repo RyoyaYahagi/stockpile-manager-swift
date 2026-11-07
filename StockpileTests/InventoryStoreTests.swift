@@ -122,3 +122,135 @@ final class ModernAppearanceTests: XCTestCase {
         XCTAssertEqual(AppAppearance.dark.colorScheme, .dark)
     }
 }
+
+final class ItemCategoryInferenceTests: XCTestCase {
+    func testInfersWaterFromJapaneseName() {
+        XCTAssertEqual(
+            ItemCategoryInference.category(forName: "ミネラルウォーター 2L"),
+            .waterDrink
+        )
+    }
+
+    func testInfersSideDishFromCannedFoodName() {
+        XCTAssertEqual(ItemCategoryInference.category(forName: "ツナ缶"), .sideDish)
+    }
+
+    func testInfersPowerLightFromBatteryName() {
+        XCTAssertEqual(ItemCategoryInference.category(forName: "乾電池 単3"), .powerLight)
+    }
+
+    func testUsesProductCategoryWhenNameHasNoKeyword() {
+        XCTAssertEqual(
+            ItemCategoryInference.category(forName: "箱", productCategory: "医薬品、医療用品"),
+            .medicine
+        )
+    }
+
+    func testEnglishKeywordsMatchWholeWords() {
+        XCTAssertEqual(ItemCategoryInference.category(forName: "candy"), .snackSupplement)
+        XCTAssertNotEqual(ItemCategoryInference.category(forName: "steak"), .waterDrink)
+    }
+
+    func testUnknownNameReturnsNilAndResolvedFallsBackToOther() {
+        XCTAssertNil(ItemCategoryInference.category(forName: "謎の品"))
+        let item = Item(name: "謎の品")
+        XCTAssertEqual(item.resolvedCategory, .other)
+    }
+
+    func testStoredCategoryWinsOverInference() {
+        let item = Item(name: "水 2L", category: ItemCategory.snackSupplement.rawValue)
+        XCTAssertEqual(item.resolvedCategory, .snackSupplement)
+    }
+
+    func testCategoryKeysExistInAllEightLocalizations() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let languages = ["ja", "en", "de", "es", "fr", "ko", "zh-Hans", "zh-Hant"]
+        let keys = [
+            "ジャンル",
+            "水・飲料",
+            "主食",
+            "おかず・缶詰",
+            "お菓子・栄養補助",
+            "衛生用品",
+            "医薬品",
+            "電池・電源・照明",
+            "その他のジャンル",
+            "収納場所: %@"
+        ]
+
+        for language in languages {
+            let url = repositoryRoot
+                .appendingPathComponent("Stockpile/Localization/\(language).lproj/Localizable.strings")
+            let entries = try XCTUnwrap(
+                NSDictionary(contentsOf: url) as? [String: String],
+                "\(language) の Localizable.strings を読めません"
+            )
+            for key in keys {
+                XCTAssertNotNil(entries[key], "\(language) に「\(key)」がありません")
+            }
+        }
+    }
+}
+
+final class BackupJSONCategoryTests: XCTestCase {
+    func testCategoryRoundTripsThroughBackupJSON() throws {
+        let item = Item(
+            name: "ウェットティッシュ",
+            quantity: 3,
+            category: ItemCategory.hygiene.rawValue
+        )
+
+        let data = try BackupJSONCodec.makeExportData(from: [item])
+        let payloads = try BackupImportValidator.decodeAndValidate(data)
+
+        XCTAssertEqual(payloads.count, 1)
+        XCTAssertEqual(payloads.first?.category, ItemCategory.hygiene.rawValue)
+        XCTAssertEqual(payloads.first?.resolvedCategory, ItemCategory.hygiene.rawValue)
+    }
+
+    func testOldBackupWithoutCategoryDecodesAsNil() throws {
+        let data = Data("[{\"name\":\"Water\",\"quantity\":3}]".utf8)
+        let payloads = try BackupImportValidator.decodeAndValidate(data)
+        XCTAssertNil(payloads.first?.category)
+        XCTAssertNil(payloads.first?.resolvedCategory)
+    }
+
+    func testUnknownCategoryIsIgnored() throws {
+        let data = Data("[{\"name\":\"Water\",\"category\":\"unknown\"}]".utf8)
+        let payloads = try BackupImportValidator.decodeAndValidate(data)
+        XCTAssertEqual(payloads.first?.category, "unknown")
+        XCTAssertNil(payloads.first?.resolvedCategory)
+    }
+
+    func testSnapshotJSONRoundTripsCategory() throws {
+        let item = Item(
+            name: "ウェットティッシュ",
+            quantity: 3,
+            category: ItemCategory.hygiene.rawValue
+        )
+        let data = try SnapshotBuilder.makeJSONData(items: [item], familyName: nil)
+        let snapshot = try JSONDecoder().decode(StockpileSnapshot.self, from: data)
+        XCTAssertEqual(snapshot.items.first?.category, ItemCategory.hygiene.rawValue)
+    }
+
+    func testSnapshotWithoutCategoryStillDecodes() throws {
+        let json = """
+        {
+          "schemaVersion": 1,
+          "generatedAt": "2026-11-05T18:00:00+09:00",
+          "items": [
+            {
+              "id": "3F2504E0-4F89-41D3-9A0C-0305E82C3301",
+              "name": "水",
+              "quantity": 1,
+              "updatedAt": "2026-11-01T10:15:00+09:00"
+            }
+          ]
+        }
+        """
+        let snapshot = try JSONDecoder().decode(StockpileSnapshot.self, from: Data(json.utf8))
+        XCTAssertNil(snapshot.items.first?.category)
+    }
+}
