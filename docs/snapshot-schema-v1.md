@@ -28,6 +28,7 @@ AI 連携（読み取り専用）で Stockpile から外部へ渡すデータ形
       "expiryDate": "2027-03-31",
       "bagName": "非常袋",
       "locationNote": "玄関クローゼット",
+      "category": "waterDrink",
       "updatedAt": "2026-11-01T10:15:00+09:00"
     }
   ]
@@ -57,6 +58,7 @@ AI 連携（読み取り専用）で Stockpile から外部へ渡すデータ形
 | expiryDate | String (`yyyy-MM-dd`) / null | 任意 | 賞味・使用期限。期限なしは null |
 | bagName | String / null | 任意 | 保管場所（Bag）の名前 |
 | locationNote | String / null | 任意 | 位置メモ。最大2,000文字 |
+| category | String / null | 任意 | ジャンル。`waterDrink` / `stapleFood` / `sideDish` / `snackSupplement` / `hygiene` / `medicine` / `powerLight` / `other` のいずれか |
 | updatedAt | String (ISO 8601) | ○ | アイテムの最終更新（syncTimestamp: updatedAt、なければ createdAt） |
 
 含めないもの: 通知済みフラグ、Family の参加者情報、その他個人を特定する情報。
@@ -64,7 +66,7 @@ AI 連携（読み取り専用）で Stockpile から外部へ渡すデータ形
 ## 3. バックアップ形式との違い
 
 既存のバックアップ書き出し（移行用）は「JSON 配列」で、`name / janCode / quantity /
-expiryDate / bagName / locationNote` のみを持つ。本形式は連携用に次を追加したもの:
+expiryDate / bagName / locationNote / category` を持つ。本形式は連携用に次を追加したもの:
 
 - トップレベルの包み（schemaVersion / generatedAt / appVersion / familyName）
 - items への `id` と `updatedAt` の追加（差分検出と鮮度判定のため）

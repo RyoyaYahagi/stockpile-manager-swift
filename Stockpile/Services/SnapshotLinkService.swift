@@ -21,6 +21,7 @@ struct StockpileSnapshot: Codable {
     var expiryDate: String?
     var bagName: String?
     var locationNote: String?
+    var category: String?
     var updatedAt: String
   }
 }
@@ -64,6 +65,7 @@ enum SnapshotBuilder {
           expiryDate: item.expiryDate.map { day.string(from: $0) },
           bagName: item.bag?.name,
           locationNote: item.locationNote,
+          category: item.category,
           updatedAt: dateTime.string(from: item.syncTimestamp)
         )
       }
@@ -341,7 +343,7 @@ enum SnapshotLinkPrompt {
       \(urlText)
       - 形式はスキーマ v1 です: 先頭に schemaVersion / generatedAt を持ち、items に
       name / janCode / quantity / expiryDate(yyyy-MM-dd) / bagName / locationNote /
-      id / updatedAt が入っています。
+      category / id / updatedAt が入っています。
       - 読み取りトークンが必要です。トークンはこのチャットには貼りません。
       あなたの安全な入力方法（API アクセス設定）で別途渡すので、その手順を案内してください。
 

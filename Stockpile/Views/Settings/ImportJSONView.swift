@@ -9,6 +9,7 @@ struct BackupImportPayload: Decodable {
     let expiryDate: String?
     let bagName: String?
     let locationNote: String?
+    let category: String?
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -20,11 +21,19 @@ struct BackupImportPayload: Decodable {
         quantity = try container.decodeIfPresent(Int.self, forKey: .quantity)
         expiryDate = try container.decodeIfPresent(String.self, forKey: .expiryDate)
         locationNote = try container.decodeIfPresent(String.self, forKey: .locationNote)
+        category = try container.decodeIfPresent(String.self, forKey: .category)
         bagName =
             try container.decodeIfPresent(String.self, forKey: .bagName)
             ?? container.decodeIfPresent(String.self, forKey: .bagname)
             ?? container.decodeIfPresent(String.self, forKey: .bag_name)
             ?? container.decodeIfPresent(String.self, forKey: .storageName)
+    }
+
+    /// 既知のジャンルだけを保存値として採用する。未知の値は未設定として扱う。
+    var resolvedCategory: String? {
+        guard let category else { return nil }
+        let trimmed = category.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ItemCategory(rawValue: trimmed)?.rawValue
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -35,10 +44,43 @@ struct BackupImportPayload: Decodable {
         case quantity
         case expiryDate
         case locationNote
+        case category
         case bagName
         case bagname
         case bag_name
         case storageName
+    }
+}
+
+/// バックアップ書き出しの1件分。読み込み側の `BackupImportPayload` と対になる。
+struct BackupExportItem: Encodable {
+    let name: String
+    let janCode: String?
+    let quantity: Int
+    let expiryDate: String?
+    let bagName: String?
+    let locationNote: String?
+    let category: String?
+
+    init(item: Item, dateFormatter: DateFormatter) {
+        name = item.name
+        janCode = item.janCode
+        quantity = item.quantity
+        expiryDate = item.expiryDate.map { dateFormatter.string(from: $0) }
+        bagName = item.bag?.name
+        locationNote = item.locationNote
+        category = item.category
+    }
+}
+
+enum BackupJSONCodec {
+    static func makeExportData(from items: [Item]) throws -> Data {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let payload = items.map { BackupExportItem(item: $0, dateFormatter: formatter) }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        return try encoder.encode(payload)
     }
 }
 
@@ -218,7 +260,8 @@ struct ImportJSONView: View {
             "quantity": 3,
             "expiryDate": "2025-12-31",
             "bagName": "Emergency Bag",
-            "locationNote": "Top shelf"
+            "locationNote": "Top shelf",
+            "category": "waterDrink"
           }
         ]
         """
@@ -665,7 +708,8 @@ struct ImportJSONView: View {
                 janCode: normalized(importItem.janCode),
                 quantity: quantity,
                 expiryDate: expiryDate,
-                locationNote: importItem.locationNote
+                locationNote: importItem.locationNote,
+                category: importItem.resolvedCategory
             )
             item.family = targetFamily
             
@@ -1015,7 +1059,8 @@ struct ExportJSONView: View {
             "quantity": 3,
             "expiryDate": "2025-12-31",
             "bagName": "Emergency Bag",
-            "locationNote": "Top shelf"
+            "locationNote": "Top shelf",
+            "category": "waterDrink"
           }
         ]
         """
@@ -1063,32 +1108,7 @@ struct ExportJSONView: View {
     }
 
     private func makeExportData(from items: [Item]) throws -> Data {
-        struct ExportItem: Encodable {
-            let name: String
-            let janCode: String?
-            let quantity: Int
-            let expiryDate: String?
-            let bagName: String?
-            let locationNote: String?
-        }
-
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-
-        let payload = items.map { item in
-            ExportItem(
-                name: item.name,
-                janCode: item.janCode,
-                quantity: item.quantity,
-                expiryDate: item.expiryDate.map { formatter.string(from: $0) },
-                bagName: item.bag?.name,
-                locationNote: item.locationNote
-            )
-        }
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        return try encoder.encode(payload)
+        try BackupJSONCodec.makeExportData(from: items)
     }
 
     @ViewBuilder
