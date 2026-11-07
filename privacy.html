@@ -4,74 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>プライバシーポリシー｜らくストック</title>
-<style>
-  body { font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; margin: 0; color: #1c1c1e; background: #f7f7f5; line-height: 1.7; }
-  main { max-width: 720px; margin: 0 auto; padding: 48px 20px 64px; }
-  h1 { font-size: 24px; margin: 0 0 8px; }
-  h2 { font-size: 17px; margin: 28px 0 6px; }
-  p, li { font-size: 15px; }
-  ul { padding-left: 20px; }
-  .date { color: #888; font-size: 13px; }
-  a { color: #0a6cff; }
-  hr { border: none; border-top: 1px solid #ddd; margin: 40px 0; }
-  .en { color: #444; }
-</style>
+<meta http-equiv="refresh" content="0; url=https://stockpile-product-search-api.yhgry.workers.dev/privacy">
+<link rel="canonical" href="https://stockpile-product-search-api.yhgry.workers.dev/privacy">
 </head>
 <body>
-<main>
-  <h1>プライバシーポリシー</h1>
-  <p class="date">対象アプリ: らくストック（iOS）／ 最終更新日: 2026年11月7日</p>
-
-  <p>「らくストック」（以下、本アプリ）は、家庭の防災備蓄を管理するためのアプリです。本アプリの開発者は、利用者の個人情報を開発者のサーバーで収集することはありません。データの保存と送信は、以下の範囲でのみ行われます。</p>
-
-  <h2>1. アプリ内に保存される情報</h2>
-  <p>登録した備蓄品の情報（アイテム名、数量、賞味期限、保管場所のメモ、JANコードなど）は、利用者の端末内と、利用者自身の iCloud（CloudKit）に保存されます。家族共有を有効にした場合は、共有相手と iCloud 経由でデータが同期されます。これらのデータに開発者がアクセスすることはありません。</p>
-
-  <h2>2. バーコード検索</h2>
-  <p>バーコードを読み取ると、商品名などを取得するために、JANコードのみを商品検索用サーバー（Cloudflare Workers）を経由して Yahoo ショッピング API および Open Food Facts に送信します。JANコード以外の情報は送信しません。</p>
-
-  <h2>3. カメラ</h2>
-  <p>カメラはバーコードの読み取りと、賞味期限の文字認識（OCR）に使用します。画像の処理はすべて端末上で行い、画像を外部に送信することはありません。</p>
-
-  <h2>4. 通知</h2>
-  <p>賞味期限が近づいたことを知らせる通知は、端末のローカル通知として表示されます。</p>
-
-  <h2>5. AI連携（任意機能）</h2>
-  <p>本アプリには、備蓄データを外部の AI アシスタントから読み取れるようにする「Muse連携」があります。この機能はデフォルトでは無効で、有効にした場合のみ、備蓄スナップショット（JSON形式: アイテム名、JANコード、数量、賞味期限、収納場所のメモなど）が、利用者自身が設定した送信先にだけ送信されます。送信先は次のいずれかです。</p>
-  <ul>
-    <li>利用者自身が管理するサーバー（カスタムURL）</li>
-    <li>利用者自身の Google Drive</li>
-  </ul>
-  <p>開発者は送信された内容を受け取ることはありません。スナップショットは暗号化されていない JSON のため、送信先は利用者自身が管理する場所のみを設定してください。</p>
-
-  <h2>6. Google サインイン（AI連携で Google Drive を選んだ場合）</h2>
-  <ul>
-    <li>Google サインインは、AI連携の送信先として Google Drive を使う場合にのみ使用します。本アプリ自体のログインには使用しません。</li>
-    <li>メールアドレスは、連携中のアカウントを利用者本人が確認するための表示にのみ使用し、開発者のサーバーへ送信することはありません。</li>
-    <li>アクセス範囲は drive.file（本アプリが作成したファイルのみ）に限定されます。スナップショットは、利用者の Google Drive の「Stockpile」フォルダに <em>snapshot.json</em> として保存されます。</li>
-    <li>連携はアプリの設定画面からいつでも解除できます。</li>
-  </ul>
-
-  <h2>7. アプリ内課金</h2>
-  <p>有料機能の購入処理は Apple が行います。開発者が利用者の支払い情報を受け取ることはありません。</p>
-
-  <h2>8. アクセス解析・広告</h2>
-  <p>本アプリは、第三者のアクセス解析ツールや広告 SDK を使用していません。</p>
-
-  <h2>9. お問い合わせ</h2>
-  <p>本ポリシーに関するお問い合わせは、<a href="mailto:yappapp.support@gmail.com">yappapp.support@gmail.com</a> までご連絡ください。</p>
-
-  <h2>10. 改定</h2>
-  <p>本ポリシーを変更した場合は、このページで告知します。</p>
-
-  <hr>
-
-  <div class="en">
-    <h2>Summary (English)</h2>
-    <p>Rakustock (Stockpile) is a household emergency-stockpile manager for iOS. The developer does not collect personal data on developer servers. Inventory data stays on your device and your own iCloud. Optional features, when you explicitly enable them, send data only where you direct: barcode lookups send only the JAN code (via a Cloudflare Worker to Yahoo Shopping API / Open Food Facts), and the optional "Muse Link" export sends a JSON snapshot only to a destination you configure — your own server, or your own Google Drive. Google Sign-In is used solely for the Google Drive destination: your email address is shown in the app's settings for confirmation only and is never sent to the developer; access is limited to the drive.file scope (files created by this app). Purchases are processed by Apple. No third-party analytics or advertising SDKs are used. Contact: yappapp.support@gmail.com</p>
-  </div>
-
-  <p><a href="./index.html">トップページへ戻る</a></p>
-</main>
+<p>プライバシーポリシーは <a href="https://stockpile-product-search-api.yhgry.workers.dev/privacy">こちら</a> に移転しました。</p>
 </body>
 </html>
