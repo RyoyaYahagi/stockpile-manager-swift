@@ -16,11 +16,49 @@ final class InventoryStoreTests: XCTestCase {
             item("期限なし", daysFromNow: nil)
         ]
 
-        XCTAssertEqual(InventoryStore.readinessPercent(of: items), 40)
+        let readiness = InventoryStore.readiness(of: items)
+        XCTAssertEqual(readiness.readyCount, 2)
+        XCTAssertEqual(readiness.itemCount, 5)
+        // 期限 40% と、必須ジャンル 0/6 を半分ずつ
+        XCTAssertEqual(readiness.percent, 20)
     }
 
-    func testReadinessIsFullWhenThereAreNoItems() {
-        XCTAssertEqual(InventoryStore.readinessPercent(of: []), 100)
+    func testReadinessIsZeroWhenThereAreNoItems() {
+        let readiness = InventoryStore.readiness(of: [])
+        XCTAssertEqual(readiness.percent, 0)
+        XCTAssertEqual(readiness.missingCategories, InventoryStore.essentialCategories)
+    }
+
+    func testReadinessIsFullWhenAllEssentialCategoriesHaveTimeToSpare() {
+        let items = InventoryStore.essentialCategories.map { category -> Item in
+            let item = self.item("備蓄", daysFromNow: 90)
+            item.category = category.rawValue
+            return item
+        }
+
+        let readiness = InventoryStore.readiness(of: items)
+        XCTAssertEqual(readiness.missingCategories, [])
+        XCTAssertEqual(readiness.percent, 100)
+    }
+
+    func testReadinessTreatsEmptyOrExpiredItemsAsMissingCategory() {
+        let water = item("水", daysFromNow: 90)
+        water.category = ItemCategory.waterDrink.rawValue
+        water.quantity = 0
+        let rice = item("米", daysFromNow: -1)
+        rice.category = ItemCategory.stapleFood.rawValue
+        let medicine = item("薬", daysFromNow: 10)
+        medicine.category = ItemCategory.medicine.rawValue
+
+        let readiness = InventoryStore.readiness(of: [water, rice, medicine])
+        // 数量0の水と期限切れの米はジャンルを満たさない。30日以内の薬は満たす
+        XCTAssertEqual(readiness.coveredCategories, [.medicine])
+        XCTAssertTrue(readiness.missingCategories.contains(.waterDrink))
+        XCTAssertTrue(readiness.missingCategories.contains(.stapleFood))
+        // 数量0の水は期限に余裕があっても「余裕あり」に数えない
+        XCTAssertEqual(readiness.readyCount, 0)
+        // 期限 0% と、必須ジャンル 1/6 を半分ずつ
+        XCTAssertEqual(readiness.percent, 8)
     }
 
     func testAttentionItemsIncludeThirtyDaysAndExcludeLaterDatesInExpiryOrder() {

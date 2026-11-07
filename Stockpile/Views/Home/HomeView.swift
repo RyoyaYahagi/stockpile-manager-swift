@@ -129,23 +129,26 @@ struct HomeView: View {
     }
 
     private func readinessCard(items: [Item], attentionCount: Int) -> some View {
-        let readyCount = items.count - attentionCount
+        let readiness = InventoryStore.readiness(of: items)
+        let essentialCount = InventoryStore.essentialCategories.count
         return HStack(spacing: 20) {
             ReadinessRing(percent: displayedPercent)
                 .frame(width: 116, height: 116)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("期限に余裕がある備蓄")
-                    .font(.headline)
-                    .foregroundStyle(AppTheme.ink)
-                Text(L10n.format("%@品目のうち %@品目", String(items.count), String(readyCount)))
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.inkSecondary)
-                Text(
-                    attentionCount > 0
-                        ? L10n.format("期限が近い%@品を入れ替えると、安心度が上がります。", String(attentionCount))
-                        : L10n.string("すべての備蓄に余裕があります。")
+                readinessRow(
+                    title: "期限に余裕がある備蓄",
+                    value: L10n.format("%@品目のうち %@品目", String(readiness.itemCount), String(readiness.readyCount))
                 )
+                readinessRow(
+                    title: "必要なジャンル",
+                    value: L10n.format(
+                        "%@種類のうち %@種類",
+                        String(essentialCount),
+                        String(readiness.coveredCategories.count)
+                    )
+                )
+                Text(readinessHint(readiness, attentionCount: attentionCount))
                 .font(.footnote)
                 .foregroundStyle(AppTheme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -156,6 +159,31 @@ struct HomeView: View {
         .padding(20)
         .cardSurface()
         .accessibilityElement(children: .combine)
+    }
+
+    private func readinessRow(title: LocalizedStringKey, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.ink)
+            Text(value)
+                .font(.subheadline)
+                .foregroundStyle(AppTheme.inkSecondary)
+        }
+    }
+
+    /// 足りないジャンルを先に伝え、次に期限の近い品を伝える
+    private func readinessHint(_ readiness: InventoryStore.Readiness, attentionCount: Int) -> String {
+        if !readiness.missingCategories.isEmpty {
+            let names = readiness.missingCategories
+                .map(\.displayName)
+                .joined(separator: L10n.string("、"))
+            return L10n.format("%@がまだありません。", names)
+        }
+        if attentionCount > 0 {
+            return L10n.format("期限が近い%@品を入れ替えると、安心度が上がります。", String(attentionCount))
+        }
+        return L10n.string("すべての備蓄に余裕があります。")
     }
 
     private var allClearCard: some View {

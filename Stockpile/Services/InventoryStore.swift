@@ -25,11 +25,48 @@ enum InventoryStore {
         return deduplicated(bags.filter { $0.family == nil })
     }
 
-    /// 期限に余裕がある（期限切れでも30日以内でもない）備蓄の割合。0〜100
+    /// 安心度の内訳
+    struct Readiness: Equatable {
+        /// 期限に余裕があり（期限切れでも30日以内でもない）、数量が1以上の品目数
+        let readyCount: Int
+        let itemCount: Int
+        /// 必須ジャンルのうち、使える在庫があるもの
+        let coveredCategories: [ItemCategory]
+        /// 必須ジャンルのうち、使える在庫がないもの
+        let missingCategories: [ItemCategory]
+
+        /// 期限と品ぞろえを半分ずつ合わせた安心度。0〜100
+        var percent: Int {
+            let expiryScore = itemCount == 0 ? 0 : Double(readyCount) / Double(itemCount)
+            let essentialCount = coveredCategories.count + missingCategories.count
+            let coverageScore = essentialCount == 0 ? 1 : Double(coveredCategories.count) / Double(essentialCount)
+            return Int(((expiryScore + coverageScore) / 2 * 100).rounded())
+        }
+    }
+
+    /// 品ぞろえの判定に使う必須ジャンル（お菓子・その他は含めない）
+    static let essentialCategories: [ItemCategory] = [
+        .waterDrink, .stapleFood, .sideDish, .hygiene, .medicine, .powerLight
+    ]
+
+    static func readiness(of items: [Item]) -> Readiness {
+        let readyCount = items.filter { $0.quantity > 0 && !$0.expiryStatus.needsAttention }.count
+        // 期限切れでなく数量が1以上なら、そのジャンルは「ある」とみなす
+        let usableCategories = Set(
+            items
+                .filter { $0.quantity > 0 && $0.expiryStatus != .expired }
+                .map(\.resolvedCategory)
+        )
+        return Readiness(
+            readyCount: readyCount,
+            itemCount: items.count,
+            coveredCategories: essentialCategories.filter { usableCategories.contains($0) },
+            missingCategories: essentialCategories.filter { !usableCategories.contains($0) }
+        )
+    }
+
     static func readinessPercent(of items: [Item]) -> Int {
-        guard !items.isEmpty else { return 100 }
-        let readyCount = items.filter { !$0.expiryStatus.needsAttention }.count
-        return Int((Double(readyCount) / Double(items.count) * 100).rounded())
+        readiness(of: items).percent
     }
 
     /// 期限切れ・30日以内を、期限の近い順に並べたもの
