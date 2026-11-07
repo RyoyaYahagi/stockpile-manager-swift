@@ -38,6 +38,7 @@ backend/cloudflare-product-search-api/.dev.vars.*
 # Swift Package Manager
 .build/
 Package.resolved
+!Stockpile.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # CocoaPods
 Pods/
