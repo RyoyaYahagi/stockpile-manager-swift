@@ -131,6 +131,7 @@ struct StockpileApp: App {
 
     var body: some Scene {
         WindowGroup {
+            Group {
             if let container = modelStartup.container {
                 ContentView()
                     .environment(localizationController)
@@ -147,9 +148,10 @@ struct StockpileApp: App {
                     retry: modelStartup.retry
                 )
             }
-        }
-        .onOpenURL { url in
-            _ = GIDSignIn.sharedInstance.handle(url)
+            }
+            .onOpenURL { url in
+                _ = GIDSignIn.sharedInstance.handle(url)
+            }
         }
     }
 
