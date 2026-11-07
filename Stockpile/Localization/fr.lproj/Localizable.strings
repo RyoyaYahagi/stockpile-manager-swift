@@ -350,3 +350,9 @@
 "電池・電源・照明" = "Piles, électricité et éclairage";
 "その他のジャンル" = "Autres";
 "収納場所: %@" = "Emplacement : %@";
+
+/* 安心度: 必須ジャンル */
+"必要なジャンル" = "Catégories essentielles";
+"%@種類のうち %@種類" = "%2$@ sur %1$@ types";
+"%@がまだありません。" = "Pas encore de : %@.";
+"、" = ", ";
