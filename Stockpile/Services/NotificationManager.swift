@@ -91,6 +91,11 @@ final class NotificationManager: ObservableObject {
     private let immediateFallbackInterval: TimeInterval = 60
     /// 直前に登録した通知の内容。変わっていなければ登録し直さない
     private var lastRescheduleSignature: String?
+    /// 直前に登録した通知。アプリの外で予約が消えていないかを確かめるのに使う
+    private var lastScheduledNotifications: [(identifier: String, fireDate: Date)] = []
+    /// iOS が予約として持てる通知は 64 件まで。超えた分は知らせずに捨てられるため、
+    /// 届く日が早いものから、余裕を残した件数だけ登録する。残りは、日付が変わって登録し直すときに入る
+    nonisolated static let maxScheduledNotifications = 60
     private var isRescheduling = false
     private var pendingRescheduleRequest: (items: [Item], settings: NotificationSettings)?
     
@@ -185,6 +190,7 @@ final class NotificationManager: ObservableObject {
     private func performReschedule(items: [Item], settings: NotificationSettings) async {
         guard settings.isEnabled else {
             lastRescheduleSignature = nil
+            lastScheduledNotifications = []
             cancelAllNotifications()
             // 取り消した予定は届いていないので、記録からも外す
             var ledger = NotificationLedger.load()
@@ -196,9 +202,16 @@ final class NotificationManager: ObservableObject {
         let timingRules = settings.notificationTimingRules
         let signature = Self.rescheduleSignature(items: items, settings: settings)
         if signature == lastRescheduleSignature {
-            return
+            // 内容が同じでも、iOS の設定の変更などでアプリの外から予約が消えていれば登録し直す
+            let missing = await Self.hasMissingPendingNotifications(expected: lastScheduledNotifications)
+            if !missing {
+                return
+            }
+            debugLog("🔁 Pending notifications were removed outside the app. Rescheduling.")
         }
 
+        lastRescheduleSignature = nil
+        lastScheduledNotifications = []
         cancelAllNotifications()
         guard await ensureAuthorizationForScheduling() else { return }
         guard !timingRules.isEmpty else { return }
@@ -270,33 +283,39 @@ final class NotificationManager: ObservableObject {
         }
         
         // 通知の組み立ては値だけにして、登録は MainActor の外で行う
-        var scheduled: [(notification: ScheduledNotification, ledgerKeys: [String])] = []
-        scheduled.reserveCapacity(groupedNotifications.count)
+        var candidates: [(notification: ScheduledNotification, ledgerKeys: [String])] = []
+        candidates.reserveCapacity(groupedNotifications.count)
         for (notifyDate, notificationItems) in groupedNotifications {
             guard let notification = makeScheduledNotification(
                 notificationItems: notificationItems,
                 at: notifyDate,
                 settings: settings
             ) else { continue }
-            scheduled.append((notification, notificationItems.map(\.ledgerKey)))
+            candidates.append((notification, notificationItems.map(\.ledgerKey)))
         }
+        // 届く日が早いものから上限まで登録する。登録しなかった分は記録に残さないので、
+        // 次に登録し直すとき（遅くとも日付が変わったあと）に改めて候補になる
+        let scheduled = Self.earliestNotifications(candidates, limit: Self.maxScheduledNotifications)
 
         let results = await Self.addScheduledNotifications(scheduled.map(\.notification))
+        var registered: [(identifier: String, fireDate: Date)] = []
         for (index, success) in results.enumerated() where success {
             let entry = scheduled[index]
+            registered.append((entry.notification.identifier, entry.notification.effectiveDate))
             for ledgerKey in entry.ledgerKeys {
                 ledger.record(ledgerKey, fireDate: entry.notification.effectiveDate)
             }
         }
         ledger.prune(before: calendar.date(byAdding: .year, value: -1, to: today) ?? today)
         ledger.save()
+        lastScheduledNotifications = registered
         // 登録に失敗したものがあれば、次の機会にやり直せるよう署名を残さない
         if results.allSatisfy({ $0 }) {
             lastRescheduleSignature = signature
         }
 
         #if DEBUG
-        debugLog("📋 Scheduled \(groupedNotifications.count) grouped notifications")
+        debugLog("📋 Scheduled \(scheduled.count) of \(candidates.count) grouped notifications")
         #endif
     }
     
@@ -384,6 +403,40 @@ final class NotificationManager: ObservableObject {
             trigger: trigger,
             effectiveDate: effectiveScheduledDate
         )
+    }
+
+    /// 届く日時が早いものから `limit` 件を選ぶ
+    private static func earliestNotifications(
+        _ candidates: [(notification: ScheduledNotification, ledgerKeys: [String])],
+        limit: Int
+    ) -> [(notification: ScheduledNotification, ledgerKeys: [String])] {
+        earliestIndices(of: candidates.map(\.notification.effectiveDate), limit: limit)
+            .map { candidates[$0] }
+    }
+
+    /// 日時が早い順に、先頭から `limit` 件の位置を返す。同じ日時なら元の順を保つ
+    nonisolated static func earliestIndices(of dates: [Date], limit: Int) -> [Int] {
+        guard limit > 0 else { return [] }
+        return dates.indices
+            .sorted { lhs, rhs in
+                dates[lhs] == dates[rhs] ? lhs < rhs : dates[lhs] < dates[rhs]
+            }
+            .prefix(limit)
+            .map { $0 }
+    }
+
+    /// 前回登録した通知のうち、まだ届く前のはずのものが iOS の予約から消えていないか
+    nonisolated private static func hasMissingPendingNotifications(
+        expected: [(identifier: String, fireDate: Date)]
+    ) async -> Bool {
+        // 届く直前のものは、確かめている間に届いて予約から消えることがあるので除く
+        let threshold = Date().addingTimeInterval(5)
+        let stillPending = expected.filter { $0.fireDate > threshold }.map(\.identifier)
+        guard !stillPending.isEmpty else { return false }
+        let pendingIdentifiers = Set(
+            await UNUserNotificationCenter.current().pendingNotificationRequests().map(\.identifier)
+        )
+        return stillPending.contains { !pendingIdentifiers.contains($0) }
     }
 
     /// 通知の登録は待ち時間が長いため、MainActor を塞がないよう外で順番に行う

@@ -136,6 +136,17 @@ final class InventoryStoreTests: XCTestCase {
         XCTAssertFalse(ledger.hasDelivered(upcoming, now: now.addingTimeInterval(3_700)))
     }
 
+    func testNotificationLimitKeepsEarliestDatesInOrder() {
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        let dates = [5, 1, 3, 1, 4, 2].map { base.addingTimeInterval(Double($0) * 86_400) }
+
+        // 早い順。同じ日時（1 日後が 2 つ）は元の順を保つ
+        XCTAssertEqual(NotificationManager.earliestIndices(of: dates, limit: 4), [1, 3, 5, 2])
+        XCTAssertEqual(NotificationManager.earliestIndices(of: dates, limit: 10).count, dates.count)
+        XCTAssertEqual(NotificationManager.earliestIndices(of: dates, limit: 0), [])
+        XCTAssertLessThan(NotificationManager.maxScheduledNotifications, 64)
+    }
+
     func testNotificationLedgerKeyChangesWhenExpiryChanges() {
         let id = UUID()
         let rule = NotificationTimingRule(amount: 3, unit: .day)
