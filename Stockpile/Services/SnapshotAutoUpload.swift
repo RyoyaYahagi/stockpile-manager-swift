@@ -58,6 +58,8 @@ enum SnapshotAutoUploader {
   }
 
   static func uploadIfNeeded(items: [Item], familyName: String?) async -> Result {
+    // 送信先が Google Drive の間は URL 送信を行わない（Drive 送信は G-04 で統合する）
+    guard SnapshotLinkSettings.destination == .customURL else { return .skipped }
     let fingerprint = SnapshotFingerprint.compute(items: items, familyName: familyName)
     let endpoint = SnapshotLinkSettings.validatedEndpoint(
       SnapshotLinkSettings.endpointURLString)

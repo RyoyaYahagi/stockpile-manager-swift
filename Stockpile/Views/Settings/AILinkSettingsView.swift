@@ -11,6 +11,7 @@ struct AILinkSettingsView: View {
   @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
 
   @State private var isEnabled = SnapshotLinkSettings.isEnabled
+  @State private var destination = SnapshotLinkSettings.destination
   @State private var autoUploadEnabled = SnapshotLinkSettings.autoUploadEnabled
   @State private var endpointString = SnapshotLinkSettings.endpointURLString
   @State private var writeToken = SnapshotLinkKeychain.readWriteToken() ?? ""
@@ -18,6 +19,10 @@ struct AILinkSettingsView: View {
   @State private var showSendConfirmation = false
   @State private var sendResult: SendResult?
   @State private var promptCopied = false
+
+  @Environment(GoogleDriveLinkManager.self) private var googleLink
+  @State private var isGoogleSigningIn = false
+  @State private var googleError: String?
 
   enum SendResult {
     case success(String)
@@ -88,8 +93,10 @@ struct AILinkSettingsView: View {
           sendCard
             .riseIn(index: 5)
 
-          promptCard
-            .riseIn(index: 6)
+          if destination == .customURL {
+            promptCard
+              .riseIn(index: 6)
+          }
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
@@ -116,6 +123,9 @@ struct AILinkSettingsView: View {
       .onChange(of: isEnabled) { _, newValue in
         SnapshotLinkSettings.isEnabled = newValue
       }
+      .onChange(of: destination) { _, newValue in
+        SnapshotLinkSettings.destination = newValue
+      }
       .onChange(of: autoUploadEnabled) { _, newValue in
         SnapshotLinkSettings.autoUploadEnabled = newValue
       }
@@ -137,7 +147,19 @@ struct AILinkSettingsView: View {
 
       if isEnabled {
         VStack(alignment: .leading, spacing: 6) {
-          Text(L10n.string("送信先URL"))
+          Text(L10n.string("送信先"))
+            .font(.subheadline.weight(.semibold))
+          Picker(L10n.string("送信先"), selection: $destination) {
+            Text(L10n.string("カスタムURL")).tag(SnapshotDestination.customURL)
+            Text("Google Drive").tag(SnapshotDestination.googleDrive)
+          }
+          .pickerStyle(.segmented)
+          .labelsHidden()
+        }
+
+        if destination == .customURL {
+          VStack(alignment: .leading, spacing: 6) {
+            Text(L10n.string("送信先URL"))
             .font(.subheadline.weight(.semibold))
           TextField(
             "https://stockpile-snapshot.example.workers.dev/v1/snapshot", text: $endpointString
@@ -158,6 +180,9 @@ struct AILinkSettingsView: View {
           Text(L10n.string("トークンはこの端末のKeychainにだけ保存されます。読み取りトークンはMuse側に別途渡してください。"))
             .font(.caption)
             .foregroundStyle(AppTheme.inkSecondary)
+          }
+        } else {
+          googleDriveSection
         }
 
         Divider()
@@ -176,6 +201,78 @@ struct AILinkSettingsView: View {
     .cardSurface(radius: 20)
   }
 
+  /// Google Drive 選択時の連携セクション（G-02。Drive への実送信は G-03 / G-04）
+  @ViewBuilder
+  private var googleDriveSection: some View {
+    if googleLink.isRestoring {
+      HStack(spacing: 8) {
+        ProgressView()
+        Text(L10n.string("連携状態を確認しています…"))
+          .font(.caption)
+          .foregroundStyle(AppTheme.inkSecondary)
+      }
+    } else if googleLink.isSignedIn {
+      HStack(spacing: 10) {
+        Image(systemName: "checkmark.circle.fill")
+          .foregroundStyle(AppTheme.accent)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(L10n.string("Google Driveと連携中"))
+            .font(.subheadline.weight(.semibold))
+          if let email = googleLink.accountEmail {
+            Text(email)
+              .font(.caption)
+              .foregroundStyle(AppTheme.inkSecondary)
+          }
+        }
+        Spacer()
+        Button(L10n.string("連携を解除")) {
+          googleLink.signOut()
+        }
+        .font(.subheadline)
+      }
+
+      if !googleLink.hasDriveScope {
+        Text(L10n.string("Driveへの保存権限が許可されていません。一度連携を解除して、連携し直してください。"))
+          .font(.caption)
+          .foregroundStyle(AppTheme.inkSecondary)
+      }
+    } else {
+      Button {
+        Task { await performGoogleSignIn() }
+      } label: {
+        Label(
+          isGoogleSigningIn ? L10n.string("サインイン中…") : L10n.string("Google Driveと連携"),
+          systemImage: "link"
+        )
+        .font(.subheadline.weight(.semibold))
+      }
+      .buttonStyle(.plain)
+      .foregroundStyle(AppTheme.accent)
+      .disabled(isGoogleSigningIn)
+
+      if let googleError {
+        Text(googleError)
+          .font(.caption)
+          .foregroundStyle(.red)
+      }
+    }
+
+    Text(L10n.string("スナップショットは、あなたのGoogle Driveに「Stockpile」フォルダを作って保存されます。このアプリが作ったファイルにだけアクセスします。"))
+      .font(.caption)
+      .foregroundStyle(AppTheme.inkSecondary)
+  }
+
+  private func performGoogleSignIn() async {
+    isGoogleSigningIn = true
+    googleError = nil
+    defer { isGoogleSigningIn = false }
+    do {
+      _ = try await googleLink.signIn()
+    } catch {
+      googleError = error.localizedDescription
+    }
+  }
+
   private var sendCard: some View {
     VStack(spacing: 10) {
       Button {
@@ -189,7 +286,13 @@ struct AILinkSettingsView: View {
         .padding(.vertical, 6)
       }
       .buttonStyle(PrimaryActionButtonStyle())
-      .disabled(!isEnabled || isSending)
+      .disabled(!isEnabled || isSending || destination == .googleDrive)
+
+      if isEnabled && destination == .googleDrive {
+        Text(L10n.string("Google Driveへの送信は次のアップデートで有効になります。先に連携だけ済ませておけます。"))
+          .font(.caption)
+          .foregroundStyle(AppTheme.inkSecondary)
+      }
 
       if let lastSentText {
         Text(L10n.format("最終送信: %@", lastSentText))
@@ -285,5 +388,6 @@ struct AILinkSettingsView: View {
 
 #Preview("AILinkSettingsView") {
   AILinkSettingsView()
+    .environment(GoogleDriveLinkManager.shared)
     .modelContainer(for: [Family.self, Item.self], inMemory: true)
 }

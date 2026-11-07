@@ -84,12 +84,29 @@ enum SnapshotBuilder {
 
 // MARK: - 連携設定の保存（URL・有効状態は UserDefaults、トークンは Keychain）
 
+/// 送信先の種類（G-02）。自分の送信先URL（Cloudflare Worker 等）と
+/// Google Drive は併存し、利用者がどちらか一方を選ぶ。
+enum SnapshotDestination: String {
+  case customURL
+  case googleDrive
+}
+
 enum SnapshotLinkSettings {
   private static let enabledKey = "snapshotLink.enabled"
   private static let endpointKey = "snapshotLink.endpointURL"
+  private static let destinationKey = "snapshotLink.destination"
   private static let lastSentAtKey = "snapshotLink.lastSentAt"
   private static let autoUploadEnabledKey = "snapshotLink.autoUploadEnabled"
   private static let lastUploadedFingerprintKey = "snapshotLink.lastUploadedFingerprint"
+
+  /// 選択中の送信先。未設定時は従来どおりカスタムURL。
+  static var destination: SnapshotDestination {
+    get {
+      SnapshotDestination(
+        rawValue: UserDefaults.standard.string(forKey: destinationKey) ?? "") ?? .customURL
+    }
+    set { UserDefaults.standard.set(newValue.rawValue, forKey: destinationKey) }
+  }
 
   static var isEnabled: Bool {
     get { UserDefaults.standard.bool(forKey: enabledKey) }
