@@ -39,6 +39,8 @@ final class Item {
     var quantity: Int = 1
     var expiryDate: Date?
     var locationNote: String?
+    /// ジャンル（`ItemCategory.rawValue`）。未設定の既存データは表示時に推定する。
+    var category: String?
     var notified30: Bool = false
     var notified7: Bool = false
     var notified1: Bool = false
@@ -53,7 +55,8 @@ final class Item {
         janCode: String? = nil,
         quantity: Int = 1,
         expiryDate: Date? = nil,
-        locationNote: String? = nil
+        locationNote: String? = nil,
+        category: String? = nil
     ) {
         self.id = UUID()
         self.name = name
@@ -61,11 +64,17 @@ final class Item {
         self.quantity = quantity
         self.expiryDate = expiryDate
         self.locationNote = locationNote
+        self.category = category
         self.notified30 = false
         self.notified7 = false
         self.notified1 = false
         self.createdAt = Date()
         self.updatedAt = createdAt
+    }
+
+    /// 表示に使うジャンル。保存値 → 品名からの推定 → その他の順で決める。
+    var resolvedCategory: ItemCategory {
+        ItemCategoryInference.resolvedCategory(storedCategory: category, name: name)
     }
     
     /// 期限状態を計算

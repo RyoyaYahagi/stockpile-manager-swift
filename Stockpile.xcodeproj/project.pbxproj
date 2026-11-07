@@ -15,6 +15,7 @@
 		004 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104 /* User.swift */; };
 		005 /* Bag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105 /* Bag.swift */; };
 		006 /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106 /* Item.swift */; };
+		A5B100000000000000000001 /* ItemCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5B100000000000000000002 /* ItemCategory.swift */; };
 		007 /* Router.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107 /* Router.swift */; };
 		008 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 108 /* DashboardView.swift */; };
 		009 /* ItemRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109 /* ItemRow.swift */; };
@@ -105,6 +106,7 @@
 		104 /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
 		105 /* Bag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bag.swift; sourceTree = "<group>"; };
 		106 /* Item.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Item.swift; sourceTree = "<group>"; };
+		A5B100000000000000000002 /* ItemCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCategory.swift; sourceTree = "<group>"; };
 		107 /* Router.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Router.swift; sourceTree = "<group>"; };
 		108 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		109 /* ItemRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemRow.swift; sourceTree = "<group>"; };
@@ -277,6 +279,7 @@
 				104 /* User.swift */,
 				105 /* Bag.swift */,
 				106 /* Item.swift */,
+				A5B100000000000000000002 /* ItemCategory.swift */,
 				146 /* CloudKitDeletionMarker.swift */,
 				123 /* NotificationSettings.swift */,
 			);
@@ -591,6 +594,7 @@
 				004 /* User.swift in Sources */,
 				005 /* Bag.swift in Sources */,
 				006 /* Item.swift in Sources */,
+				A5B100000000000000000001 /* ItemCategory.swift in Sources */,
 				007 /* Router.swift in Sources */,
 				008 /* DashboardView.swift in Sources */,
 				009 /* ItemRow.swift in Sources */,
