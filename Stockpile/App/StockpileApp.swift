@@ -127,6 +127,7 @@ struct StockpileApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var localizationController = LocalizationController()
     @State private var premiumAccessManager = PremiumAccessManager.shared
+    @State private var googleDriveLinkManager = GoogleDriveLinkManager.shared
     @State private var modelStartup = ModelContainerStartup()
 
     var body: some Scene {
@@ -136,6 +137,7 @@ struct StockpileApp: App {
                 ContentView()
                     .environment(localizationController)
                     .environment(premiumAccessManager)
+                    .environment(googleDriveLinkManager)
                     .environment(\.locale, localizationController.locale)
                     .modelContainer(container)
                     .preferredColorScheme(design == .modern ? appearance.colorScheme : nil)
