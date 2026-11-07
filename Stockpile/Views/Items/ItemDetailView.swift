@@ -75,6 +75,11 @@ struct ItemDetailView: View {
                 .riseIn(index: 2)
 
                 VStack(alignment: .leading, spacing: 0) {
+                    detailRow(
+                        "ジャンル",
+                        systemImage: item.resolvedCategory.systemImage,
+                        value: item.resolvedCategory.displayName
+                    )
                     if let janCode = item.janCode, !janCode.isEmpty {
                         detailRow("JANコード", systemImage: "barcode", value: janCode)
                     }
@@ -129,6 +134,7 @@ struct ItemDetailView: View {
                     quantity: item.quantity,
                     expiryDate: item.expiryDate,
                     locationNote: item.locationNote,
+                    category: item.category,
                     bagId: item.bag?.id
                 )
                 do {

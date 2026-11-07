@@ -339,3 +339,14 @@
 "システム" = "System";
 "ライトモード" = "Heller Modus";
 "ダークモード" = "Dunkler Modus";
+
+"ジャンル" = "Kategorie";
+"水・飲料" = "Wasser & Getränke";
+"主食" = "Grundnahrungsmittel";
+"おかず・缶詰" = "Beilagen & Konserven";
+"お菓子・栄養補助" = "Snacks & Nahrungsergänzung";
+"衛生用品" = "Hygieneartikel";
+"医薬品" = "Medikamente";
+"電池・電源・照明" = "Batterien, Strom & Licht";
+"その他のジャンル" = "Sonstiges";
+"収納場所: %@" = "Aufbewahrungsort: %@";

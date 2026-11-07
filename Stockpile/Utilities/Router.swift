@@ -115,6 +115,8 @@ final class Router {
         var name: String?
         var janCode: String?
         var expiryDate: Date?
+        /// 商品検索で取得したジャンル文字列（ジャンル推定の手がかり）
+        var productCategory: String?
         /// フォームの上に出す「〜を入れました」
         var message: String
     }
