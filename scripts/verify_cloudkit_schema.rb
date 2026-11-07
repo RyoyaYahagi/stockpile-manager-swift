@@ -16,6 +16,7 @@ EXPECTED_RECORD_FIELDS = {
   "Item" => {
     "id" => "STRING", "name" => "STRING", "janCode" => "STRING",
     "quantity" => "INT64", "expiryDate" => "TIMESTAMP", "locationNote" => "STRING",
+    "category" => "STRING",
     "notified30" => "INT64", "notified7" => "INT64", "notified1" => "INT64",
     "createdAt" => "TIMESTAMP", "updatedAt" => "TIMESTAMP",
     "bagID" => "STRING", "familyID" => "STRING"
