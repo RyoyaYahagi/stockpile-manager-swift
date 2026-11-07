@@ -31,6 +31,7 @@ class VerifyCloudKitSchemaTest < Minitest::Test
         quantity INT64,
         expiryDate TIMESTAMP,
         locationNote STRING,
+        category STRING,
         notified30 INT64,
         notified7 INT64,
         notified1 INT64,
@@ -72,6 +73,15 @@ class VerifyCloudKitSchemaTest < Minitest::Test
 
     refute status.success?
     assert_includes stderr, "Item.locationNote がありません"
+  end
+
+  def test_rejects_missing_category_field
+    _stdout, stderr, status = run_verifier(
+      COMPLETE_SCHEMA.sub(/\s*category STRING,/, "")
+    )
+
+    refute status.success?
+    assert_includes stderr, "Item.category がありません"
   end
 
   def test_rejects_wrong_field_type
