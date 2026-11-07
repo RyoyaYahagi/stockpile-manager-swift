@@ -20,6 +20,11 @@ fastlane/test_output/
 .env.fastlane
 .env.fastlane.local
 
+# Local agent / editor environments
+.claude/worktrees/
+.claude/settings.local.json
+.codex/environments/
+
 # macOS
 .DS_Store
 *.swp

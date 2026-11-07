@@ -29,3 +29,7 @@ SwiftUI / SwiftData / CloudKit / AVFoundation / Vision / UserNotifications
 - `Secrets.plist` は配布用 bundle に含めません
 - バーコード検索は Cloudflare Workers backend 経由で Yahoo API / Open Food Facts を利用します
 - バックアップ export は平文 JSON なので、安全な保存先で管理してください
+
+## License
+
+[MIT License](LICENSE)
