@@ -626,16 +626,24 @@ struct DashboardView: View {
         }
     }
 
-    /// ホームの収納場所カードから来たとき、収納場所表示に切り替えてその場所を開く
+    /// ホームのカードから来たとき、対応する表示に切り替えてそのまとまりを開く
     private func scrollToFocusedBag(using proxy: ScrollViewProxy) {
         guard let request = router.stockFocusRequest else { return }
         router.stockFocusRequest = nil
-        grouping = .storage
-        let groupId = request.bagId?.uuidString ?? Self.unassignedGroupId
+        let groupId: String
+        switch request.target {
+        case .bag(let bagId):
+            grouping = .storage
+            groupId = bagId?.uuidString ?? Self.unassignedGroupId
+        case .category(let category):
+            grouping = .category
+            categoryFilterBagId = nil
+            groupId = Self.categoryGroupPrefix + category.rawValue
+        }
         selectedExpiryFilter = .all
         searchText = ""
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            let allGroupIds = Set(storageGroups(for: filteredItems).map(\.id))
+            let allGroupIds = Set(groups(for: filteredItems).map(\.id))
             collapsedGroupIds = allGroupIds.subtracting([groupId])
             withAnimation(AppTheme.accordionAnimation) {
                 proxy.scrollTo(groupId, anchor: .top)
