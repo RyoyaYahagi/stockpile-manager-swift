@@ -484,7 +484,8 @@ struct LegacyDashboardView: View {
                 janCode: info.janCode,
                 quantity: info.quantity,
                 expiryDate: info.expiryDate,
-                locationNote: info.locationNote
+                locationNote: info.locationNote,
+                category: info.category
             )
             newItem.id = info.id
             newItem.markUpdated(at: restoredAt)
@@ -575,7 +576,8 @@ struct LegacyDashboardView: View {
                 janCode: item.janCode,
                 quantity: item.quantity,
                 expiryDate: item.expiryDate,
-                locationNote: item.locationNote
+                locationNote: item.locationNote,
+                category: item.category
             )
             newItem.bag = targetBag
             newItem.family = currentFamily
@@ -635,6 +637,7 @@ struct LegacyDashboardView: View {
             quantity: item.quantity,
             expiryDate: item.expiryDate,
             locationNote: item.locationNote,
+            category: item.category,
             bagId: item.bag?.id
         )
     }
@@ -794,6 +797,7 @@ struct LegacyDeletedItemInfo {
     let quantity: Int
     let expiryDate: Date?
     let locationNote: String?
+    let category: String?
     let bagId: UUID?
 }
 

@@ -129,6 +129,7 @@ struct LegacyItemDetailView: View {
                     quantity: item.quantity,
                     expiryDate: item.expiryDate,
                     locationNote: item.locationNote,
+                    category: item.category,
                     bagId: item.bag?.id
                 )
                 do {
