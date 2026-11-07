@@ -162,9 +162,17 @@ struct DashboardView: View {
         let name: String
         let systemImage: String
         let items: [Item]
+        let attentionCount: Int
 
-        var attentionCount: Int {
-            items.filter { $0.expiryStatus.needsAttention }.count
+        init(id: String, bagId: UUID?, name: String, systemImage: String, items: [Item]) {
+            self.id = id
+            self.bagId = bagId
+            self.name = name
+            self.systemImage = systemImage
+            self.items = items
+            self.attentionCount = items.reduce(0) { count, item in
+                count + (item.expiryStatus.needsAttention ? 1 : 0)
+            }
         }
     }
 
@@ -264,9 +272,9 @@ struct DashboardView: View {
     }
 
     private func categoryGroups(for filtered: [Item]) -> [ItemGroup] {
-        ItemCategory.allCases.compactMap { category in
-            let categoryItems = filtered.filter { $0.resolvedCategory == category }
-            guard !categoryItems.isEmpty else { return nil }
+        let grouped = InventoryStore.groupedByCategory(filtered)
+        return ItemCategory.allCases.compactMap { category in
+            guard let categoryItems = grouped[category], !categoryItems.isEmpty else { return nil }
             return ItemGroup(
                 id: Self.categoryGroupPrefix + category.rawValue,
                 bagId: nil,

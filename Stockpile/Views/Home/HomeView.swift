@@ -25,7 +25,9 @@ struct HomeView: View {
     var body: some View {
         let items = scopedItems
         let attention = InventoryStore.attentionItems(in: items)
-        let readiness = InventoryStore.readinessPercent(of: items)
+        let readiness = InventoryStore.readiness(of: items)
+        let readinessPercent = readiness.percent
+        let entries = categoryEntries(for: items)
 
         TutorialScrollReader {
         ScrollView {
@@ -36,7 +38,7 @@ struct HomeView: View {
                     emptyState
                         .padding(.top, 20)
                 } else {
-                    readinessCard(items: items, attentionCount: attention.count)
+                    readinessCard(readiness: readiness, attentionCount: attention.count)
                         .tutorialTarget(.homeReadiness)
                         .padding(.top, 20)
                         .riseIn()
@@ -69,7 +71,7 @@ struct HomeView: View {
                     SectionHeading(title: "ジャンル")
                         .padding(.top, 28)
                         .padding(.bottom, 12)
-                    categoryGrid(items: items)
+                    categoryGrid(entries: entries)
                 }
             }
             .padding(.horizontal, 20)
@@ -91,8 +93,8 @@ struct HomeView: View {
             try? await Task.sleep(for: .seconds(2.4))
             withAnimation(AppTheme.popAnimation) { toastMessage = nil }
         }
-        .onAppear { animatePercent(to: readiness) }
-        .onChange(of: readiness) { _, newValue in animatePercent(to: newValue) }
+        .onAppear { animatePercent(to: readinessPercent) }
+        .onChange(of: readinessPercent) { _, newValue in animatePercent(to: newValue) }
     }
 
     // MARK: - Sections
@@ -128,8 +130,7 @@ struct HomeView: View {
         .padding(.top, 12)
     }
 
-    private func readinessCard(items: [Item], attentionCount: Int) -> some View {
-        let readiness = InventoryStore.readiness(of: items)
+    private func readinessCard(readiness: InventoryStore.Readiness, attentionCount: Int) -> some View {
         let essentialCount = InventoryStore.essentialCategories.count
         return HStack(spacing: 20) {
             ReadinessRing(percent: displayedPercent)
@@ -221,14 +222,18 @@ struct HomeView: View {
         .cardSurface()
     }
 
-    /// ジャンルのタイル。「その他」以外は 0 品目でも出し、足りないジャンルに気づけるようにする
-    private func categoryGrid(items: [Item]) -> some View {
-        let columns = [GridItem(.adaptive(minimum: 100), spacing: 10)]
-        let entries: [(category: ItemCategory, items: [Item])] = ItemCategory.allCases.compactMap { category in
-            let categoryItems = items.filter { $0.resolvedCategory == category }
+    /// ジャンルごとの品目。「その他」以外は 0 品目でも出し、足りないジャンルに気づけるようにする
+    private func categoryEntries(for items: [Item]) -> [(category: ItemCategory, items: [Item])] {
+        let grouped = InventoryStore.groupedByCategory(items)
+        return ItemCategory.allCases.compactMap { category in
+            let categoryItems = grouped[category] ?? []
             if category == .other && categoryItems.isEmpty { return nil }
             return (category, categoryItems)
         }
+    }
+
+    private func categoryGrid(entries: [(category: ItemCategory, items: [Item])]) -> some View {
+        let columns = [GridItem(.adaptive(minimum: 100), spacing: 10)]
 
         return LazyVGrid(columns: columns, spacing: 10) {
             ForEach(Array(entries.enumerated()), id: \.element.category) { index, entry in
