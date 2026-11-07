@@ -262,7 +262,7 @@ struct AILinkSettingsView: View {
       }
     }
 
-    Text(L10n.string("スナップショットは、あなたのGoogle Driveに「Stockpile」フォルダを作って保存されます。このアプリが作ったファイルにだけアクセスします。"))
+    Text(L10n.format("スナップショットは、あなたのGoogle Driveに「%@」フォルダを作って保存されます。このアプリが作ったファイルにだけアクセスします。", GoogleDriveSnapshotWriter.folderName))
       .font(.caption)
       .foregroundStyle(AppTheme.inkSecondary)
   }

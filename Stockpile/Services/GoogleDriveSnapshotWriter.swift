@@ -32,14 +32,18 @@ enum GoogleDriveUploadError: Error, LocalizedError {
 // MARK: - Google Drive へのスナップショット書き込み（G-03）
 
 /// Drive API v3 を REST で直接叩く書き込み担当。専用クライアントライブラリは使わない。
-/// 配置先は「Stockpile」フォルダ直下の `snapshot.json` 固定（Gシリーズの決定事項）。
+/// 配置先はアプリ名フォルダ（日本語環境では「らくストック」、その他の環境では「RakuStock」）直下の `snapshot.json` 固定。
 /// スコープは drive.file のため、ここから見えるのはこのアプリが作ったファイルだけ。
 /// 送信タイミングの制御（手動・自動の振り分け）は G-04 が担い、ここは書き込みだけを行う。
 /// GIDGoogleUser は Sendable ではないため、型全体を MainActor に寄せて
 /// ユーザーオブジェクトを隔離境界の外へ送らないようにしている。
 @MainActor
 enum GoogleDriveSnapshotWriter {
-  static let folderName = "Stockpile"
+  /// フォルダ名はアプリの表示名（CFBundleDisplayName のローカライズ解決値）。
+  /// 日本語環境では「らくストック」、その他の環境では「RakuStock」になる。
+  static var folderName: String {
+    (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ?? "RakuStock"
+  }
   static let fileName = "snapshot.json"
 
   private static let folderMimeType = "application/vnd.google-apps.folder"
@@ -70,7 +74,7 @@ enum GoogleDriveSnapshotWriter {
 
   // MARK: フォルダ・ファイルの解決
 
-  /// 「Stockpile」フォルダの id を返す。なければ作る（同名が複数ある場合は最初の1つを使う）。
+  /// アプリ名フォルダの id を返す。なければ作る（同名が複数ある場合は最初の1つを使う）。
   private static func ensureFolder(accessToken: String) async throws -> String {
     if let id = try await findFile(
       accessToken: accessToken,
