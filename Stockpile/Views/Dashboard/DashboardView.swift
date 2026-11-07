@@ -115,7 +115,7 @@ struct DashboardView: View {
     @State private var collapsedGroupIds: Set<String> = []
     @State private var showBagReorder = false
     @AppStorage(BagOrderStore.revisionKey) private var bagOrderRevision = 0
-    @AppStorage(InventoryGrouping.storageKey) private var grouping: InventoryGrouping = .storage
+    @AppStorage(InventoryGrouping.storageKey) private var grouping: InventoryGrouping = .category
     @State private var selectedItems: Set<UUID> = []
     @State private var isSelectionMode = false
     @State private var searchText = ""
