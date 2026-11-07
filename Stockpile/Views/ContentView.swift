@@ -86,32 +86,14 @@ struct ContentView: View {
     @State private var pendingSharedFamilyRefreshTask: Task<Void, Never>?
     @State private var snapshotAutoUploadTrigger = 0
     @State private var showScreenshotAddItemFullScreen = false
+    @State private var signatureCache = ContentViewSignatureCache()
     
     private var currentFamily: Family? {
         CurrentFamilyResolver.currentFamily(from: families)
     }
 
     private var notificationRescheduleSignature: String {
-        let settingsSignature: String
-        if let settings = notificationSettingsList.first {
-            settingsSignature = [
-                settings.isEnabled ? "1" : "0",
-                settings.notificationTimingSignature,
-                "\(settings.notificationHour)",
-                "\(settings.notificationMinute)"
-            ].joined(separator: ":")
-        } else {
-            settingsSignature = "missing"
-        }
-
-        let itemSignature = items
-            .map { item in
-                "\(item.id.uuidString):\(item.expiryDate?.timeIntervalSince1970 ?? -1):\(item.quantity)"
-            }
-            .sorted()
-            .joined(separator: "|")
-
-        return "\(settingsSignature)#\(itemSignature)"
+        signatureCache.notificationSignature(items: items, settings: notificationSettingsList.first)
     }
 
     /// Muse連携の自動送信（S-05）用タスクID。
@@ -119,8 +101,7 @@ struct ContentView: View {
     /// デバウンスとして働く。起動・復帰時はトリガーを進めて再評価する。
     private var snapshotAutoUploadTaskID: String {
         let scoped = SnapshotLinkScope.resolved(items: items, families: families)
-        let fingerprint = SnapshotFingerprint.compute(
-            items: scoped.items, familyName: scoped.family?.name)
+        let fingerprint = signatureCache.snapshotFingerprint(items: scoped.items, family: scoped.family)
         return "\(fingerprint)#\(snapshotAutoUploadTrigger)"
     }
 
@@ -777,4 +758,80 @@ private struct LanguageOptionCard: View {
     ContentView()
         .modelContainer(for: [Family.self, User.self, Bag.self, Item.self, NotificationSettings.self], inMemory: true)
         .environment(PremiumAccessManager.shared)
+}
+
+/// ContentView の body で毎回組み立てていた文字列を、品目が変わったときだけ作り直す
+@MainActor
+private final class ContentViewSignatureCache {
+    private var notificationItemSignature: Int?
+    private var notificationSettingsSignature: String?
+    private var notificationValue = ""
+    private var snapshotItemSignature: Int?
+    private var snapshotFamilyKey: String?
+    private var snapshotValue = ""
+
+    func notificationSignature(items: [Item], settings: NotificationSettings?) -> String {
+        let itemKey = Self.itemSignature(items)
+        let languageKey = "\(AppLanguage.current.rawValue):\(AppLanguage.currentLanguageCandidates.first ?? "")"
+        let settingsKey = "\(languageKey)#\(settings.map(Self.settingsSignature) ?? "missing")"
+        if itemKey != notificationItemSignature || settingsKey != notificationSettingsSignature {
+            notificationItemSignature = itemKey
+            notificationSettingsSignature = settingsKey
+            notificationValue = Self.makeNotificationSignature(items: items, settings: settings)
+        }
+        return notificationValue
+    }
+
+    func snapshotFingerprint(items: [Item], family: Family?) -> String {
+        let itemKey = Self.itemSignature(items)
+        let familyKey = family.map { "\($0.id.uuidString)|\($0.name)" } ?? "none"
+        if itemKey != snapshotItemSignature || familyKey != snapshotFamilyKey {
+            snapshotItemSignature = itemKey
+            snapshotFamilyKey = familyKey
+            snapshotValue = SnapshotFingerprint.compute(items: items, familyName: family?.name)
+        }
+        return snapshotValue
+    }
+
+    private static func settingsSignature(_ settings: NotificationSettings) -> String {
+        [
+            settings.isEnabled ? "1" : "0",
+            settings.notificationTimingSignature,
+            "\(settings.notificationHour)",
+            "\(settings.notificationMinute)"
+        ].joined(separator: ":")
+    }
+
+    private static func makeNotificationSignature(
+        items: [Item],
+        settings: NotificationSettings?
+    ) -> String {
+        let settingsKey = settings.map(Self.settingsSignature) ?? "missing"
+        let languageKey = "\(AppLanguage.current.rawValue):\(AppLanguage.currentLanguageCandidates.first ?? "")"
+        let itemSignature = items
+            .map { item in
+                "\(item.id.uuidString):\(item.expiryDate?.timeIntervalSince1970 ?? -1):\(item.quantity)"
+            }
+            .sorted()
+            .joined(separator: "|")
+        return "\(languageKey)#\(settingsKey)#\(itemSignature)"
+    }
+
+    private static func itemSignature(_ items: [Item]) -> Int {
+        var hasher = Hasher()
+        for item in items {
+            hasher.combine(item.id)
+            hasher.combine(item.name)
+            hasher.combine(item.janCode)
+            hasher.combine(item.quantity)
+            hasher.combine(item.expiryDate)
+            hasher.combine(item.locationNote)
+            hasher.combine(item.category)
+            hasher.combine(item.updatedAt)
+            hasher.combine(item.createdAt)
+            hasher.combine(item.bag?.id)
+            hasher.combine(item.bag?.name)
+        }
+        return hasher.finalize()
+    }
 }

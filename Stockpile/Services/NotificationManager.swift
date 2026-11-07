@@ -9,6 +9,35 @@ private struct NotificationItem {
     let ledgerKey: String
 }
 
+/// MainActor の外で通知を登録するための、値だけを持った通知
+private struct ScheduledNotification: Sendable {
+    enum Trigger: Sendable {
+        case calendar(DateComponents)
+        case timeInterval(TimeInterval)
+    }
+
+    enum UserInfo: Sendable {
+        case singleItem(String)
+        case multipleItems([String])
+
+        var dictionary: [AnyHashable: Any] {
+            switch self {
+            case .singleItem(let itemId):
+                return ["itemId": itemId]
+            case .multipleItems(let itemIds):
+                return ["itemIds": itemIds]
+            }
+        }
+    }
+
+    let identifier: String
+    let title: String
+    let body: String
+    let userInfo: UserInfo
+    let trigger: Trigger
+    let effectiveDate: Date
+}
+
 /// 予定した通知の発火日時を端末に記録し、届け済みの通知を出し直さないようにする
 struct NotificationLedger {
     private static let storageKey = "notificationLedger.fireDates"
@@ -60,6 +89,10 @@ final class NotificationManager: ObservableObject {
     private var pendingRescheduleWorkItem: DispatchWorkItem?
     private let rescheduleDebounceInterval: TimeInterval = 0.25
     private let immediateFallbackInterval: TimeInterval = 60
+    /// 直前に登録した通知の内容。変わっていなければ登録し直さない
+    private var lastRescheduleSignature: String?
+    private var isRescheduling = false
+    private var pendingRescheduleRequest: (items: [Item], settings: NotificationSettings)?
     
     private init() {
         Task {
@@ -128,19 +161,46 @@ final class NotificationManager: ObservableObject {
     }
     
     /// すべてのアイテムの通知を再スケジュール（日付でグループ化）
+    /// 実行中に次の要求が来たら、終わってから最新の内容で 1 回だけやり直す
     func rescheduleAllNotifications(items: [Item], settings: NotificationSettings) async {
         cancelPendingReschedule()
-        cancelAllNotifications()
+        if isRescheduling {
+            pendingRescheduleRequest = (items, settings)
+            return
+        }
+        isRescheduling = true
+        defer { isRescheduling = false }
 
+        var nextItems = items
+        var nextSettings = settings
+        while true {
+            pendingRescheduleRequest = nil
+            await performReschedule(items: nextItems, settings: nextSettings)
+            guard let pending = pendingRescheduleRequest else { break }
+            nextItems = pending.items
+            nextSettings = pending.settings
+        }
+    }
+
+    private func performReschedule(items: [Item], settings: NotificationSettings) async {
         guard settings.isEnabled else {
+            lastRescheduleSignature = nil
+            cancelAllNotifications()
             // 取り消した予定は届いていないので、記録からも外す
             var ledger = NotificationLedger.load()
             ledger.forgetPending(after: Date())
             ledger.save()
             return
         }
-        guard await ensureAuthorizationForScheduling() else { return }
+
         let timingRules = settings.notificationTimingRules
+        let signature = Self.rescheduleSignature(items: items, settings: settings)
+        if signature == lastRescheduleSignature {
+            return
+        }
+
+        cancelAllNotifications()
+        guard await ensureAuthorizationForScheduling() else { return }
         guard !timingRules.isEmpty else { return }
         
         var calendar = Calendar.current
@@ -209,19 +269,31 @@ final class NotificationManager: ObservableObject {
             }
         }
         
-        // グループ化された通知をスケジュール
+        // 通知の組み立ては値だけにして、登録は MainActor の外で行う
+        var scheduled: [(notification: ScheduledNotification, ledgerKeys: [String])] = []
+        scheduled.reserveCapacity(groupedNotifications.count)
         for (notifyDate, notificationItems) in groupedNotifications {
-            guard let fireDate = await scheduleGroupedNotification(
+            guard let notification = makeScheduledNotification(
                 notificationItems: notificationItems,
                 at: notifyDate,
                 settings: settings
             ) else { continue }
-            for notificationItem in notificationItems {
-                ledger.record(notificationItem.ledgerKey, fireDate: fireDate)
+            scheduled.append((notification, notificationItems.map(\.ledgerKey)))
+        }
+
+        let results = await Self.addScheduledNotifications(scheduled.map(\.notification))
+        for (index, success) in results.enumerated() where success {
+            let entry = scheduled[index]
+            for ledgerKey in entry.ledgerKeys {
+                ledger.record(ledgerKey, fireDate: entry.notification.effectiveDate)
             }
         }
         ledger.prune(before: calendar.date(byAdding: .year, value: -1, to: today) ?? today)
         ledger.save()
+        // 登録に失敗したものがあれば、次の機会にやり直せるよう署名を残さない
+        if results.allSatisfy({ $0 }) {
+            lastRescheduleSignature = signature
+        }
 
         #if DEBUG
         debugLog("📋 Scheduled \(groupedNotifications.count) grouped notifications")
@@ -256,88 +328,126 @@ final class NotificationManager: ObservableObject {
         await rescheduleAllNotifications(items: allItems, settings: settings)
     }
     
-    /// グループ化された通知をスケジュールし、発火日時を返す（予定できなかったときは nil）
-    private func scheduleGroupedNotification(
+    /// グループ化された通知を、MainActor の外に渡せる値に組み立てる
+    private func makeScheduledNotification(
         notificationItems: [NotificationItem],
         at date: Date,
         settings: NotificationSettings
-    ) async -> Date? {
-        let content = UNMutableNotificationContent()
-        content.sound = .default
-        if #available(iOS 15.0, *) {
-            content.interruptionLevel = .timeSensitive
-        }
-        
-        // 通知タイトルとメッセージを生成
+    ) -> ScheduledNotification? {
         let (title, body) = generateNotificationContent(notificationItems: notificationItems)
-        content.title = title
-        content.body = body
-        
+
         // 複数アイテムの場合はitemIdsを配列で渡す
         let allItemIds = notificationItems.map { $0.item.id.uuidString }
-        if allItemIds.count == 1 {
-            content.userInfo = ["itemId": allItemIds[0]]
-        } else {
-            content.userInfo = ["itemIds": allItemIds]
-        }
-        
+        let userInfo: ScheduledNotification.UserInfo = allItemIds.count == 1
+            ? .singleItem(allItemIds[0])
+            : .multipleItems(allItemIds)
+
         // 通知時刻を設定
         var calendar = Calendar.current
         calendar.timeZone = TimeZone.current
-        
+
         var dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
         dateComponents.hour = settings.notificationHour
         dateComponents.minute = settings.notificationMinute
-        
+
         // 実際の通知発火日時を計算
         guard let scheduledDate = calendar.date(from: dateComponents) else {
             debugLog("⚠️ Failed to create scheduled date")
             return nil
         }
-        
+
         let now = Date()
-        
-        let trigger: UNNotificationTrigger
+        let trigger: ScheduledNotification.Trigger
         let effectiveScheduledDate: Date
         if scheduledDate > now {
-            trigger = UNCalendarNotificationTrigger(
-                dateMatching: dateComponents,
-                repeats: false
-            )
+            trigger = .calendar(dateComponents)
             effectiveScheduledDate = scheduledDate
         } else if calendar.isDate(date, inSameDayAs: now) {
             // 追加直後などで当日通知時刻を過ぎていた場合、通知を取りこぼさないよう近い将来にフォールバックする
-            trigger = UNTimeIntervalNotificationTrigger(
-                timeInterval: immediateFallbackInterval,
-                repeats: false
-            )
+            trigger = .timeInterval(immediateFallbackInterval)
             effectiveScheduledDate = now.addingTimeInterval(immediateFallbackInterval)
         } else {
             debugLog("⚠️ Skipped grouped notification - \(formatDate(scheduledDate)) is in the past")
             return nil
         }
-        
+
         // 日付でユニークなidentifierを生成
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyyMMdd"
         let identifier = "grouped-\(dateFormatter.string(from: date))"
-        
-        let request = UNNotificationRequest(
+
+        return ScheduledNotification(
             identifier: identifier,
-            content: content,
-            trigger: trigger
+            title: title,
+            body: body,
+            userInfo: userInfo,
+            trigger: trigger,
+            effectiveDate: effectiveScheduledDate
         )
-        
-        do {
-            try await UNUserNotificationCenter.current().add(request)
-            debugLog("✅ Scheduled grouped: \(notificationItems.count)件 at \(formatDate(effectiveScheduledDate))")
-            return effectiveScheduledDate
-        } catch {
-            debugLog("❌ Failed to schedule grouped notification: \(error)")
-            return nil
-        }
     }
-    
+
+    /// 通知の登録は待ち時間が長いため、MainActor を塞がないよう外で順番に行う
+    nonisolated private static func addScheduledNotifications(
+        _ notifications: [ScheduledNotification]
+    ) async -> [Bool] {
+        let center = UNUserNotificationCenter.current()
+        var results: [Bool] = []
+        results.reserveCapacity(notifications.count)
+        for notification in notifications {
+            let content = UNMutableNotificationContent()
+            content.sound = .default
+            if #available(iOS 15.0, *) {
+                content.interruptionLevel = .timeSensitive
+            }
+            content.title = notification.title
+            content.body = notification.body
+            content.userInfo = notification.userInfo.dictionary
+
+            let trigger: UNNotificationTrigger
+            switch notification.trigger {
+            case .calendar(let components):
+                trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            case .timeInterval(let interval):
+                trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
+            }
+
+            let request = UNNotificationRequest(
+                identifier: notification.identifier,
+                content: content,
+                trigger: trigger
+            )
+            do {
+                try await center.add(request)
+                results.append(true)
+            } catch {
+                results.append(false)
+            }
+        }
+        return results
+    }
+
+    /// 通知の内容が変わったかを見るための署名。同じなら登録し直さない
+    private static func rescheduleSignature(
+        items: [Item],
+        settings: NotificationSettings
+    ) -> String {
+        var hasher = Hasher()
+        hasher.combine(settings.notificationTimingSignature)
+        hasher.combine(settings.notificationHour)
+        hasher.combine(settings.notificationMinute)
+        // 表示言語が変わると通知文も変わるため、言語も含める
+        hasher.combine(AppLanguage.current.rawValue)
+        hasher.combine(AppLanguage.currentLanguageCandidates.first ?? "")
+        // 日付が変わると通知対象が変わるため、その日も含める
+        hasher.combine(Calendar.current.startOfDay(for: Date()))
+        for item in items {
+            hasher.combine(item.id)
+            hasher.combine(item.expiryDate)
+            hasher.combine(item.name)
+        }
+        return String(hasher.finalize())
+    }
+
     /// 通知内容を生成（日付ごとにグループ化、種類別に表示）
     private func generateNotificationContent(notificationItems: [NotificationItem]) -> (title: String, body: String) {
         let totalCount = notificationItems.count
