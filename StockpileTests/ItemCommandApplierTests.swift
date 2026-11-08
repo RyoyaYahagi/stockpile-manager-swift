@@ -1,3 +1,4 @@
+import CloudKit
 import Foundation
 import SwiftData
 import Testing
@@ -5,6 +6,64 @@ import Testing
 @testable import Stockpile
 
 // MARK: - テスト用の入れ物
+
+/// テストで本物の `CKContainer` を作らないための、呼ばれない CloudKit 実装。
+private struct UnusedSharingBackendError: Error {}
+
+private final class UnusedCloudKitFamilySharingBackend: CloudKitFamilySharingBackend {
+  func accountStatus() async throws -> CKAccountStatus {
+    throw UnusedSharingBackendError()
+  }
+
+  func ensureZoneExists(_ zoneID: CKRecordZone.ID) async throws {
+    throw UnusedSharingBackendError()
+  }
+
+  func fetchAllRecordZoneIDs(scope: FamilyCloudKitDatabaseScope) async throws -> [CKRecordZone.ID] {
+    throw UnusedSharingBackendError()
+  }
+
+  func fetchRecords(
+    recordType: String,
+    in zoneID: CKRecordZone.ID,
+    scope: FamilyCloudKitDatabaseScope
+  ) async throws -> [CKRecord] {
+    throw UnusedSharingBackendError()
+  }
+
+  func fetchRecord(
+    with recordID: CKRecord.ID,
+    scope: FamilyCloudKitDatabaseScope
+  ) async throws -> CKRecord {
+    throw UnusedSharingBackendError()
+  }
+
+  func fetchRecords(
+    with recordIDs: [CKRecord.ID],
+    scope: FamilyCloudKitDatabaseScope
+  ) async throws -> [CKRecord] {
+    throw UnusedSharingBackendError()
+  }
+
+  func modify(
+    recordsToSave: [CKRecord],
+    recordIDsToDelete: [CKRecord.ID],
+    scope: FamilyCloudKitDatabaseScope
+  ) async throws -> [CKRecord] {
+    throw UnusedSharingBackendError()
+  }
+
+  func deleteZone(
+    with zoneID: CKRecordZone.ID,
+    scope: FamilyCloudKitDatabaseScope
+  ) async throws {
+    throw UnusedSharingBackendError()
+  }
+
+  func accept(metadata: CKShare.Metadata) async throws -> CKShare {
+    throw UnusedSharingBackendError()
+  }
+}
 
 /// インメモリの SwiftData で `ItemCommandApplier` を動かすための入れ物。
 @MainActor
@@ -62,9 +121,15 @@ private struct ItemCommandTestHarness {
     return item
   }
 
-  func applier() -> ItemCommandApplier {
+  func applier(
+    sharingBackend: (any CloudKitFamilySharingBackend)? = UnusedCloudKitFamilySharingBackend()
+  ) -> ItemCommandApplier {
     // 通知の組み直しは非同期で後から context を読むため、テストでは止める
-    ItemCommandApplier(modelContext: context, reschedulesNotifications: false)
+    ItemCommandApplier(
+      modelContext: context,
+      reschedulesNotifications: false,
+      sharingBackend: sharingBackend,
+      syncsFamilyData: false)
   }
 
   func allItems() -> [Item] {
@@ -77,6 +142,18 @@ private struct ItemCommandTestHarness {
 
   func itemCount() -> Int {
     allItems().count
+  }
+
+  func allBags() -> [Bag] {
+    (try? context.fetch(FetchDescriptor<Bag>())) ?? []
+  }
+
+  func bag(named name: String) -> Bag? {
+    allBags().first { $0.name == name }
+  }
+
+  func bagCount() -> Int {
+    allBags().count
   }
 }
 
@@ -106,6 +183,37 @@ private enum ItemCommandFixture {
         payload: payload,
         baseUpdatedAt: baseUpdatedAt ?? CommandInboxDate.string(from: item.syncTimestamp)
       )
+    )!
+  }
+
+  static func delete(
+    item: Item,
+    baseUpdatedAt: String? = nil,
+    id: String = UUID().uuidString
+  ) -> CommandInboxEnvelope {
+    CommandInboxTestFixture.envelope(
+      CommandInboxTestFixture.command(
+        id: id,
+        type: "item.delete",
+        payload: "{\"id\":\"\(item.id.uuidString)\"}",
+        baseUpdatedAt: baseUpdatedAt ?? CommandInboxDate.string(from: item.syncTimestamp)
+      )
+    )!
+  }
+
+  static func bag(
+    type: String,
+    name: String,
+    newName: String? = nil,
+    id: String = UUID().uuidString
+  ) -> CommandInboxEnvelope {
+    var payload = "{\"name\":\"\(name)\""
+    if let newName {
+      payload += ",\"newName\":\"\(newName)\""
+    }
+    payload += "}"
+    return CommandInboxTestFixture.envelope(
+      CommandInboxTestFixture.command(id: id, type: type, payload: payload)
     )!
   }
 
@@ -440,27 +548,331 @@ struct ItemCommandUpdateTests {
   }
 
   @Test
-  func unsupportedTypesAreStillReported() async throws {
+  func unknownTypesAreReportedAsUnsupported() async throws {
+    let harness = try ItemCommandTestHarness()
+    harness.makeFamily()
+    let envelope = ItemCommandFixture.other(type: "item.archive", payload: "{}")
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .unsupported)
+    #expect(result.reason == .unknownType)
+    #expect(harness.itemCount() == 0)
+  }
+}
+
+// MARK: - item.delete（W-05）
+
+@MainActor
+struct ItemCommandDeleteTests {
+  @Test
+  func deleteRemovesItemInScope() async throws {
     let harness = try ItemCommandTestHarness()
     let family = harness.makeFamily()
-    let item = harness.makeItem(family: family)
-    try harness.context.save()
+    let item = harness.makeItem(name: "水 2L", family: family)
+    let envelope = ItemCommandFixture.delete(item: item)
 
-    let delete = ItemCommandFixture.other(
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .applied)
+    #expect(result.itemId == item.id.uuidString)
+    #expect(result.message == "水 2L を削除しました")
+    #expect(harness.itemCount() == 0)
+  }
+
+  @Test
+  func deleteWithUnknownIdReturnsNotFound() async throws {
+    let harness = try ItemCommandTestHarness()
+    harness.makeFamily()
+    let envelope = ItemCommandFixture.other(
       type: "item.delete",
-      payload: "{\"id\":\"\(item.id.uuidString)\"}",
-      baseUpdatedAt: CommandInboxDate.string(from: item.syncTimestamp)
+      payload: "{\"id\":\"\(UUID().uuidString)\"}",
+      baseUpdatedAt: CommandInboxTestFixture.baseUpdatedAt
     )
-    let bagAdd = ItemCommandFixture.other(
-      type: "bag.add", payload: "{\"name\":\"新しい場所\"}")
 
-    let deleteResult = await harness.applier().apply(delete, now: CommandInboxTestFixture.now)
-    let bagResult = await harness.applier().apply(bagAdd, now: CommandInboxTestFixture.now)
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
 
-    #expect(deleteResult.status == .unsupported)
-    #expect(deleteResult.reason == .unknownType)
-    #expect(bagResult.status == .unsupported)
+    #expect(result.status == .rejected)
+    #expect(result.reason == .notFound)
+    #expect(harness.itemCount() == 0)
+  }
+
+  @Test
+  func deleteRejectsItemOutsideSnapshotScope() async throws {
+    let harness = try ItemCommandTestHarness()
+    let currentFamily = harness.makeFamily(
+      name: "いまの家族", selectedAt: CommandInboxTestFixture.now)
+    let otherFamily = harness.makeFamily(
+      name: "別の家族", selectedAt: CommandInboxTestFixture.date(-86_400))
+    let item = harness.makeItem(name: "別家族の水", family: otherFamily)
+    let envelope = ItemCommandFixture.delete(item: item)
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .rejected)
+    #expect(result.reason == .notFound)
     #expect(harness.itemCount() == 1)
+    #expect(currentFamily.id != otherFamily.id)
+  }
+
+  @Test
+  func deleteWithStaleBaseChangesNothing() async throws {
+    let harness = try ItemCommandTestHarness()
+    let family = harness.makeFamily()
+    let item = harness.makeItem(name: "水 2L", family: family)
+    let envelope = ItemCommandFixture.delete(
+      item: item,
+      baseUpdatedAt: CommandInboxDate.string(
+        from: item.syncTimestamp.addingTimeInterval(-1))
+    )
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .conflict)
+    #expect(result.reason == .staleBase)
+    #expect(harness.itemCount() == 1)
+    #expect(harness.item(named: "水 2L") != nil)
+  }
+
+  @Test
+  func deleteInSharedFamilyCreatesDeletionMarker() async throws {
+    let harness = try ItemCommandTestHarness()
+    let family = harness.makeFamily()
+    family.cloudKitDatabaseScope = .sharedDatabase
+    family.cloudKitZoneName = "shared-zone"
+    family.cloudKitZoneOwnerName = "owner"
+    try harness.context.save()
+    let item = harness.makeItem(name: "水 2L", family: family)
+    let envelope = ItemCommandFixture.delete(item: item)
+
+    let result = await harness.applier(
+      sharingBackend: UnusedCloudKitFamilySharingBackend()
+    ).apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .applied)
+    #expect(harness.itemCount() == 0)
+    let markers = try harness.context.fetch(FetchDescriptor<CloudKitDeletionMarker>())
+    #expect(markers.count == 1)
+    let marker = try #require(markers.first)
+    #expect(marker.familyID == family.id)
+    #expect(marker.entityType == .item)
+    #expect(marker.targetRecordID == item.id.uuidString)
+  }
+
+  @Test
+  func approvalRequiredDeleteStaysPendingWithoutApproval() async throws {
+    let harness = try ItemCommandTestHarness()
+    let family = harness.makeFamily()
+    let item = harness.makeItem(name: "水 2L", family: family)
+    // itemDelete の既定は承認制
+    let policy = CommandWritePermissionPolicy(writesEnabled: true)
+    let handler = PermissionedCommandHandler(
+      policyProvider: { policy },
+      applier: harness.applier()
+    )
+    let envelope = ItemCommandFixture.delete(item: item)
+
+    let result = await handler.handle(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .pendingApproval)
+    #expect(result.reason == .approvalRequired)
+    #expect(harness.itemCount() == 1)
+  }
+
+  @Test
+  func allowedDeleteIsAppliedThroughHandler() async throws {
+    let harness = try ItemCommandTestHarness()
+    let family = harness.makeFamily()
+    let item = harness.makeItem(name: "水 2L", family: family)
+    let policy = CommandWritePermissionPolicy(
+      writesEnabled: true,
+      permissions: [.itemDelete: .allowed]
+    )
+    let handler = PermissionedCommandHandler(
+      policyProvider: { policy },
+      applier: harness.applier()
+    )
+    let envelope = ItemCommandFixture.delete(item: item)
+
+    let result = await handler.handle(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .applied)
+    #expect(harness.itemCount() == 0)
+  }
+}
+
+// MARK: - bag.add / bag.rename / bag.delete（W-05）
+
+@MainActor
+struct BagCommandTests {
+  @Test
+  func bagAddCreatesBagInCurrentFamily() async throws {
+    let harness = try ItemCommandTestHarness()
+    let family = harness.makeFamily()
+    let envelope = ItemCommandFixture.bag(type: "bag.add", name: " 車載 ")
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .applied)
+    #expect(result.message == "バッグ「車載」を追加しました")
+    let bag = try #require(harness.bag(named: "車載"))
+    #expect(bag.family?.id == family.id)
+    #expect(bag.createdAt == CommandInboxTestFixture.now)
+    #expect(bag.updatedAt == CommandInboxTestFixture.now)
+    #expect(harness.bagCount() == 1)
+  }
+
+  @Test
+  func bagAddRejectsExistingName() async throws {
+    let harness = try ItemCommandTestHarness()
+    let family = harness.makeFamily()
+    harness.makeBag("車載", family: family)
+    let envelope = ItemCommandFixture.bag(type: "bag.add", name: " 車載 ")
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .rejected)
+    #expect(result.reason == .bagExists)
+    #expect(harness.bagCount() == 1)
+  }
+
+  @Test
+  func bagAddWithoutFamilyLeavesBagUnscoped() async throws {
+    let harness = try ItemCommandTestHarness()
+    let envelope = ItemCommandFixture.bag(type: "bag.add", name: "車載")
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .applied)
+    #expect(harness.bag(named: "車載")?.family == nil)
+  }
+
+  @Test
+  func bagRenameChangesNameAndUpdatedAt() async throws {
+    let harness = try ItemCommandTestHarness()
+    let family = harness.makeFamily()
+    let bag = harness.makeBag("非常袋", family: family)
+    // 既存データに前後の空白があっても同じ名前として解決する
+    bag.name = " 非常袋 "
+    try harness.context.save()
+    let envelope = ItemCommandFixture.bag(
+      type: "bag.rename", name: "非常袋", newName: "玄関の非常袋")
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .applied)
+    #expect(result.message == "バッグ「非常袋」を「玄関の非常袋」に名前変更しました")
+    let renamed = try #require(harness.allBags().first)
+    #expect(renamed.id == bag.id)
+    #expect(renamed.name == "玄関の非常袋")
+    #expect(renamed.updatedAt == CommandInboxTestFixture.now)
+  }
+
+  @Test
+  func bagRenameWithUnknownNameReturnsBagNotFound() async throws {
+    let harness = try ItemCommandTestHarness()
+    harness.makeFamily()
+    let envelope = ItemCommandFixture.bag(
+      type: "bag.rename", name: "存在しない場所", newName: "新しい名前")
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .rejected)
+    #expect(result.reason == .bagNotFound)
+    #expect(harness.bagCount() == 0)
+  }
+
+  @Test
+  func bagRenameWithDuplicateNameReturnsBagAmbiguous() async throws {
+    let harness = try ItemCommandTestHarness()
+    let family = harness.makeFamily()
+    let first = harness.makeBag("非常袋", family: family)
+    let second = harness.makeBag("非常袋", family: family)
+    let envelope = ItemCommandFixture.bag(
+      type: "bag.rename", name: "非常袋", newName: "玄関の非常袋")
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .rejected)
+    #expect(result.reason == .bagAmbiguous)
+    #expect(first.name == "非常袋")
+    #expect(second.name == "非常袋")
+  }
+
+  @Test
+  func bagRenameRejectsNameUsedByAnotherBag() async throws {
+    let harness = try ItemCommandTestHarness()
+    let family = harness.makeFamily()
+    let bag = harness.makeBag("非常袋", family: family)
+    let other = harness.makeBag("車載", family: family)
+    let envelope = ItemCommandFixture.bag(
+      type: "bag.rename", name: "非常袋", newName: "車載")
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .rejected)
+    #expect(result.reason == .bagExists)
+    #expect(bag.name == "非常袋")
+    #expect(other.name == "車載")
+  }
+
+  @Test
+  func bagRenameToSameNameIsApplied() async throws {
+    let harness = try ItemCommandTestHarness()
+    let family = harness.makeFamily()
+    harness.makeBag("非常袋", family: family)
+    let envelope = ItemCommandFixture.bag(
+      type: "bag.rename", name: "非常袋", newName: "非常袋")
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .applied)
+    #expect(harness.bag(named: "非常袋") != nil)
+  }
+
+  @Test
+  func bagDeleteRemovesEmptyBag() async throws {
+    let harness = try ItemCommandTestHarness()
+    let family = harness.makeFamily()
+    harness.makeBag("車載", family: family)
+    let envelope = ItemCommandFixture.bag(type: "bag.delete", name: "車載")
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .applied)
+    #expect(result.message == "空のバッグ「車載」を削除しました")
+    #expect(harness.bagCount() == 0)
+  }
+
+  @Test
+  func bagDeleteRejectsBagWithItemsAndKeepsEverything() async throws {
+    let harness = try ItemCommandTestHarness()
+    let family = harness.makeFamily()
+    let bag = harness.makeBag("車載", family: family)
+    let item = harness.makeItem(name: "水 2L", family: family, bag: bag)
+    let envelope = ItemCommandFixture.bag(type: "bag.delete", name: "車載")
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .rejected)
+    #expect(result.reason == .bagNotEmpty)
+    #expect(result.message?.contains("1 件") == true)
+    #expect(harness.bagCount() == 1)
+    #expect(harness.itemCount() == 1)
+    #expect(item.bag?.id == bag.id)
+  }
+
+  @Test
+  func bagDeleteWithUnknownNameReturnsBagNotFound() async throws {
+    let harness = try ItemCommandTestHarness()
+    harness.makeFamily()
+    let envelope = ItemCommandFixture.bag(type: "bag.delete", name: "存在しない場所")
+
+    let result = await harness.applier().apply(envelope, now: CommandInboxTestFixture.now)
+
+    #expect(result.status == .rejected)
+    #expect(result.reason == .bagNotFound)
+    #expect(harness.bagCount() == 0)
   }
 }
 
@@ -709,5 +1121,70 @@ struct CommandDescriberTests {
     #expect(
       CommandDescriber.appliedMessage(envelope, items: [item])
         == "「水 2L」に変更はありませんでした")
+  }
+
+  @Test
+  func describesItemDelete() throws {
+    let harness = try ItemCommandTestHarness()
+    let item = harness.makeItem(name: "水 2L", family: nil)
+    let envelope = ItemCommandFixture.delete(item: item)
+
+    #expect(
+      CommandDescriber.describe(envelope, items: [item])
+        == "水 2L を削除します")
+    #expect(
+      CommandDescriber.appliedMessage(envelope, items: [item])
+        == "水 2L を削除しました")
+  }
+
+  @Test
+  func describesItemDeleteWithoutTarget() throws {
+    let harness = try ItemCommandTestHarness()
+    let item = harness.makeItem(name: "水 2L", family: nil)
+    let envelope = ItemCommandFixture.delete(item: item)
+
+    #expect(
+      CommandDescriber.describe(envelope, items: [])
+        == "アイテムを削除します")
+    #expect(
+      CommandDescriber.appliedMessage(envelope, items: [])
+        == "アイテムを削除しました")
+  }
+
+  @Test
+  func describesBagAdd() throws {
+    let envelope = ItemCommandFixture.bag(type: "bag.add", name: "車載")
+
+    #expect(
+      CommandDescriber.describe(envelope, items: [])
+        == "バッグ「車載」を追加します")
+    #expect(
+      CommandDescriber.appliedMessage(envelope, items: [])
+        == "バッグ「車載」を追加しました")
+  }
+
+  @Test
+  func describesBagRename() throws {
+    let envelope = ItemCommandFixture.bag(
+      type: "bag.rename", name: "非常袋", newName: "玄関の非常袋")
+
+    #expect(
+      CommandDescriber.describe(envelope, items: [])
+        == "バッグ「非常袋」を「玄関の非常袋」に名前変更します")
+    #expect(
+      CommandDescriber.appliedMessage(envelope, items: [])
+        == "バッグ「非常袋」を「玄関の非常袋」に名前変更しました")
+  }
+
+  @Test
+  func describesBagDelete() throws {
+    let envelope = ItemCommandFixture.bag(type: "bag.delete", name: "車載")
+
+    #expect(
+      CommandDescriber.describe(envelope, items: [])
+        == "空のバッグ「車載」を削除します")
+    #expect(
+      CommandDescriber.appliedMessage(envelope, items: [])
+        == "空のバッグ「車載」を削除しました")
   }
 }

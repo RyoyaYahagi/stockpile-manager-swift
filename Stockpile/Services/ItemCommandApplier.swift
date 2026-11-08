@@ -1,9 +1,10 @@
 import Foundation
 import SwiftData
 
-// MARK: - 適用処理の入口（W-03）
+// MARK: - 適用処理の入口（W-03 / W-05）
 
-/// `item.add` / `item.update` を SwiftData のデータへ適用する `CommandApplier`。
+/// `item.add` / `item.update` / `item.delete` / `bag.*` を SwiftData のデータへ
+/// 適用する `CommandApplier`。
 ///
 /// `ModelContext` は Sendable ではないため、MainActor に閉じ込めた
 /// `ItemCommandApplierHost` を介して受け取る。`apply` は MainActor へ移ってから
@@ -17,10 +18,22 @@ struct ItemCommandApplier: CommandApplier {
   /// - Parameter reschedulesNotifications: 保存後に期限通知を組み直すか。
   ///   通知の組み直しは非同期で後から ModelContext を読むため、
   ///   すぐ破棄するインメモリのコンテナを使うテストでは false にする。
+  /// - Parameter sharingBackend: 家族共有の削除マーカーを作るときに使う CloudKit の差し替え口。
+  ///   テストでは本物の `CKContainer` を作らずに済むよう、偽の実装を渡す。
+  /// - Parameter syncsFamilyData: 保存後に家族へ同期するか。同期は非同期で後から
+  ///   ModelContext を読むため、すぐ破棄するインメモリのコンテナを使うテストでは false にする。
   @MainActor
-  init(modelContext: ModelContext, reschedulesNotifications: Bool = true) {
+  init(
+    modelContext: ModelContext,
+    reschedulesNotifications: Bool = true,
+    sharingBackend: (any CloudKitFamilySharingBackend)? = nil,
+    syncsFamilyData: Bool = true
+  ) {
     self.host = ItemCommandApplierHost(
-      modelContext: modelContext, reschedulesNotifications: reschedulesNotifications)
+      modelContext: modelContext,
+      reschedulesNotifications: reschedulesNotifications,
+      sharingBackend: sharingBackend,
+      syncsFamilyData: syncsFamilyData)
   }
 
   func apply(_ command: CommandInboxEnvelope, now: Date) async -> CommandInboxHandlingResult {
@@ -33,16 +46,27 @@ struct ItemCommandApplier: CommandApplier {
 final class ItemCommandApplierHost {
   private let modelContext: ModelContext
   private let reschedulesNotifications: Bool
+  private let sharingBackend: (any CloudKitFamilySharingBackend)?
+  private let syncsFamilyData: Bool
 
-  init(modelContext: ModelContext, reschedulesNotifications: Bool = true) {
+  init(
+    modelContext: ModelContext,
+    reschedulesNotifications: Bool = true,
+    sharingBackend: (any CloudKitFamilySharingBackend)? = nil,
+    syncsFamilyData: Bool = true
+  ) {
     self.modelContext = modelContext
     self.reschedulesNotifications = reschedulesNotifications
+    self.sharingBackend = sharingBackend
+    self.syncsFamilyData = syncsFamilyData
   }
 
   func apply(_ command: CommandInboxEnvelope, now: Date) -> CommandInboxHandlingResult {
     ItemCommandApplication.apply(
       command, now: now, modelContext: modelContext,
-      reschedulesNotifications: reschedulesNotifications)
+      reschedulesNotifications: reschedulesNotifications,
+      sharingBackend: sharingBackend,
+      syncsFamilyData: syncsFamilyData)
   }
 }
 
@@ -52,14 +76,20 @@ final class ItemCommandApplierHost {
 ///
 /// 対象はスナップショットで Muse に見せている範囲（`SnapshotLinkScope`）の
 /// アイテムとバッグだけ。範囲外の id は `not_found`、範囲外のバッグ名は
-/// `bag_not_found` として扱う。バッグは作らない。
+/// `bag_not_found` として扱う。バッグは `bag.add` 以外では作らない。
+///
+/// 削除は画面と同じ `CloudKitFamilySharingService.deleteItemLocally` /
+/// `deleteBagLocally` を通す（家族共有なら削除マーカーを作ってから即時削除）。
+/// ゴミ箱は作らず、元に戻せるのは画面のスナックバーが出ている間だけ。
 @MainActor
 enum ItemCommandApplication {
   static func apply(
     _ command: CommandInboxEnvelope,
     now: Date,
     modelContext: ModelContext,
-    reschedulesNotifications: Bool = true
+    reschedulesNotifications: Bool = true,
+    sharingBackend: (any CloudKitFamilySharingBackend)? = nil,
+    syncsFamilyData: Bool = true
   ) -> CommandInboxHandlingResult {
     // 承認画面（W-04）から直接呼ばれた場合に備えて、検証をやり直す
     guard CommandInboxPayloadValidator.validate(command) else {
@@ -70,13 +100,36 @@ enum ItemCommandApplication {
     case .itemAdd:
       return applyAdd(
         command, now: now, modelContext: modelContext,
-        reschedulesNotifications: reschedulesNotifications)
+        reschedulesNotifications: reschedulesNotifications,
+        syncsFamilyData: syncsFamilyData)
     case .itemUpdate:
       return applyUpdate(
         command, now: now, modelContext: modelContext,
-        reschedulesNotifications: reschedulesNotifications)
-    default:
-      // item.delete / bag.* は W-05 で実装する
+        reschedulesNotifications: reschedulesNotifications,
+        syncsFamilyData: syncsFamilyData)
+    case .itemDelete:
+      return applyDelete(
+        command, now: now, modelContext: modelContext,
+        reschedulesNotifications: reschedulesNotifications,
+        sharingBackend: sharingBackend,
+        syncsFamilyData: syncsFamilyData)
+    case .bagAdd:
+      return applyBagAdd(
+        command, now: now, modelContext: modelContext,
+        reschedulesNotifications: reschedulesNotifications,
+        syncsFamilyData: syncsFamilyData)
+    case .bagRename:
+      return applyBagRename(
+        command, now: now, modelContext: modelContext,
+        reschedulesNotifications: reschedulesNotifications,
+        syncsFamilyData: syncsFamilyData)
+    case .bagDelete:
+      return applyBagDelete(
+        command, now: now, modelContext: modelContext,
+        reschedulesNotifications: reschedulesNotifications,
+        sharingBackend: sharingBackend,
+        syncsFamilyData: syncsFamilyData)
+    case nil:
       return .unsupported(
         reason: .unknownType,
         message: L10n.string("このアプリの版ではまだ適用できません")
@@ -118,7 +171,8 @@ enum ItemCommandApplication {
     _ command: CommandInboxEnvelope,
     now: Date,
     modelContext: ModelContext,
-    reschedulesNotifications: Bool
+    reschedulesNotifications: Bool,
+    syncsFamilyData: Bool
   ) -> CommandInboxHandlingResult {
     let payload = command.payload
     guard let itemId = UUID(uuidString: command.commandId),
@@ -193,7 +247,8 @@ enum ItemCommandApplication {
 
     guard InventoryStore.saveAndSync(
         modelContext, family: scope.family,
-        needsNotificationReschedule: reschedulesNotifications) else {
+        needsNotificationReschedule: reschedulesNotifications,
+        syncsFamilyData: syncsFamilyData) else {
       modelContext.rollback()
       return internalError()
     }
@@ -210,7 +265,8 @@ enum ItemCommandApplication {
     _ command: CommandInboxEnvelope,
     now: Date,
     modelContext: ModelContext,
-    reschedulesNotifications: Bool
+    reschedulesNotifications: Bool,
+    syncsFamilyData: Bool
   ) -> CommandInboxHandlingResult {
     let payload = command.payload
     guard let idString = payload["id"]?.stringValue,
@@ -260,12 +316,237 @@ enum ItemCommandApplication {
 
     guard InventoryStore.saveAndSync(
         modelContext, family: scope.family,
-        needsNotificationReschedule: reschedulesNotifications) else {
+        needsNotificationReschedule: reschedulesNotifications,
+        syncsFamilyData: syncsFamilyData) else {
       modelContext.rollback()
       return internalError()
     }
 
     return .applied(message: message, itemId: item.id.uuidString)
+  }
+
+  // MARK: item.delete
+
+  private static func applyDelete(
+    _ command: CommandInboxEnvelope,
+    now: Date,
+    modelContext: ModelContext,
+    reschedulesNotifications: Bool,
+    sharingBackend: (any CloudKitFamilySharingBackend)?,
+    syncsFamilyData: Bool
+  ) -> CommandInboxHandlingResult {
+    let payload = command.payload
+    guard let idString = payload["id"]?.stringValue,
+      let itemId = UUID(uuidString: idString),
+      let baseUpdatedAt = command.baseUpdatedAt
+    else {
+      return invalidPayload()
+    }
+
+    let scope: Scope
+    do {
+      scope = try loadScope(modelContext)
+    } catch {
+      return internalError()
+    }
+
+    guard let item = scope.items.first(where: { $0.id == itemId }) else {
+      return .rejected(
+        reason: .notFound,
+        message: L10n.string("対象のアイテムが見つからないため、適用しませんでした")
+      )
+    }
+
+    // 競合検出: 秒単位に切り捨てて比べる（仕様 3 章）
+    guard seconds(baseUpdatedAt) == seconds(item.syncTimestamp) else {
+      return .conflict(
+        message: L10n.format(
+          "「%@」はアプリ側で先に変更されていたため、適用しませんでした", display(item.name))
+      )
+    }
+
+    // 削除前の値で説明文を作る
+    let message = CommandDescriber.appliedMessage(command, items: scope.items)
+
+    // 画面の削除と同じ経路（家族共有なら削除マーカーを作ってから即時削除）
+    do {
+      let sharingService = CloudKitFamilySharingService(
+        modelContext: modelContext, backend: sharingBackend)
+      try sharingService.deleteItemLocally(item, in: scope.family)
+    } catch {
+      modelContext.rollback()
+      return internalError()
+    }
+
+    guard InventoryStore.saveAndSync(
+        modelContext, family: scope.family,
+        needsNotificationReschedule: reschedulesNotifications,
+        sharingBackend: sharingBackend,
+        syncsFamilyData: syncsFamilyData) else {
+      modelContext.rollback()
+      return internalError()
+    }
+
+    return .applied(message: message, itemId: itemId.uuidString)
+  }
+
+  // MARK: bag.add
+
+  private static func applyBagAdd(
+    _ command: CommandInboxEnvelope,
+    now: Date,
+    modelContext: ModelContext,
+    reschedulesNotifications: Bool,
+    syncsFamilyData: Bool
+  ) -> CommandInboxHandlingResult {
+    guard let rawName = command.payload["name"]?.stringValue,
+      let name = trimmedName(rawName)
+    else {
+      return invalidPayload()
+    }
+
+    let scope: Scope
+    do {
+      scope = try loadScope(modelContext)
+    } catch {
+      return internalError()
+    }
+
+    guard matchingBags(named: name, in: scope.bags).isEmpty else {
+      return result(for: .bagExists(name))
+    }
+
+    // 画面の BagFormSheet と同じく、現在の Family を設定して作る
+    let bag = Bag(name: name)
+    bag.createdAt = now
+    bag.markUpdated(at: now)
+    bag.family = scope.family
+    modelContext.insert(bag)
+
+    guard InventoryStore.saveAndSync(
+        modelContext, family: scope.family,
+        needsNotificationReschedule: reschedulesNotifications,
+        syncsFamilyData: syncsFamilyData) else {
+      modelContext.rollback()
+      return internalError()
+    }
+
+    return .applied(message: CommandDescriber.appliedMessage(command, items: scope.items))
+  }
+
+  // MARK: bag.rename
+
+  private static func applyBagRename(
+    _ command: CommandInboxEnvelope,
+    now: Date,
+    modelContext: ModelContext,
+    reschedulesNotifications: Bool,
+    syncsFamilyData: Bool
+  ) -> CommandInboxHandlingResult {
+    let payload = command.payload
+    guard let rawName = payload["name"]?.stringValue,
+      let rawNewName = payload["newName"]?.stringValue,
+      let newName = trimmedName(rawNewName)
+    else {
+      return invalidPayload()
+    }
+
+    let scope: Scope
+    do {
+      scope = try loadScope(modelContext)
+    } catch {
+      return internalError()
+    }
+
+    let bag: Bag
+    do {
+      bag = try resolveBag(named: rawName, in: scope.bags)
+    } catch let error as ApplicationError {
+      return result(for: error)
+    } catch {
+      return internalError()
+    }
+
+    // 自分以外に同じ名前のバッグがあれば、画面から名前を変えるのと同じく作らせない
+    let duplicates = matchingBags(named: newName, in: scope.bags).filter { $0.id != bag.id }
+    guard duplicates.isEmpty else {
+      return result(for: .bagExists(newName))
+    }
+
+    let message = CommandDescriber.appliedMessage(command, items: scope.items)
+
+    bag.name = newName
+    bag.markUpdated(at: now)
+
+    guard InventoryStore.saveAndSync(
+        modelContext, family: scope.family,
+        needsNotificationReschedule: reschedulesNotifications,
+        syncsFamilyData: syncsFamilyData) else {
+      modelContext.rollback()
+      return internalError()
+    }
+
+    return .applied(message: message)
+  }
+
+  // MARK: bag.delete
+
+  private static func applyBagDelete(
+    _ command: CommandInboxEnvelope,
+    now: Date,
+    modelContext: ModelContext,
+    reschedulesNotifications: Bool,
+    sharingBackend: (any CloudKitFamilySharingBackend)?,
+    syncsFamilyData: Bool
+  ) -> CommandInboxHandlingResult {
+    guard let rawName = command.payload["name"]?.stringValue else {
+      return invalidPayload()
+    }
+
+    let scope: Scope
+    do {
+      scope = try loadScope(modelContext)
+    } catch {
+      return internalError()
+    }
+
+    let bag: Bag
+    do {
+      bag = try resolveBag(named: rawName, in: scope.bags)
+    } catch let error as ApplicationError {
+      return result(for: error)
+    } catch {
+      return internalError()
+    }
+
+    // アイテムが入っているバッグは消さない（仕様 4 章）
+    let itemCount = bag.resolvedItems.count
+    guard itemCount == 0 else {
+      return result(for: .bagNotEmpty(bag.name, itemCount: itemCount))
+    }
+
+    let message = CommandDescriber.appliedMessage(command, items: scope.items)
+
+    // 画面の BagListView と同じ経路（不要な削除マーカーは作らない）
+    do {
+      let sharingService = CloudKitFamilySharingService(
+        modelContext: modelContext, backend: sharingBackend)
+      try sharingService.deleteBagLocally(bag, in: scope.family)
+    } catch {
+      modelContext.rollback()
+      return internalError()
+    }
+
+    guard InventoryStore.saveAndSync(
+        modelContext, family: scope.family,
+        needsNotificationReschedule: reschedulesNotifications,
+        sharingBackend: sharingBackend,
+        syncsFamilyData: syncsFamilyData) else {
+      modelContext.rollback()
+      return internalError()
+    }
+
+    return .applied(message: message)
   }
 
   /// 省略は「変更なし」、`null` は「空にする」を表す項目の変更。
@@ -388,6 +669,7 @@ enum ItemCommandApplication {
   }
 
   /// バッグは名前で既存のものに解決する（仕様 4 章）。同じ名前が 2 つ以上なら曖昧。
+  /// 前後の空白を除いた完全一致で比べる（画面から追加するときも名前を trim している）。
   private static func bagChange(
     _ value: CommandJSONValue,
     bags: [Bag]
@@ -396,18 +678,29 @@ enum ItemCommandApplication {
       return .cleared
     }
     guard let raw = value.stringValue else { throw ApplicationError.invalidPayload }
-    let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !name.isEmpty else { return .cleared }
+    guard let name = trimmedName(raw) else { return .cleared }
 
-    let matches = bags.filter { $0.name == name }
+    return .set(try resolveBag(named: name, in: bags))
+  }
+
+  private static func resolveBag(named rawName: String, in bags: [Bag]) throws -> Bag {
+    guard let name = trimmedName(rawName) else {
+      throw ApplicationError.bagNotFound(rawName)
+    }
+    let matches = matchingBags(named: name, in: bags)
     switch matches.count {
     case 0:
       throw ApplicationError.bagNotFound(name)
     case 1:
-      return .set(matches[0])
+      return matches[0]
     default:
       throw ApplicationError.bagAmbiguous(name)
     }
+  }
+
+  /// 前後の空白を除いた完全一致で、同名のバッグを探す。
+  private static func matchingBags(named name: String, in bags: [Bag]) -> [Bag] {
+    bags.filter { trimmedName($0.name) == name }
   }
 
   /// バッグ名の解決。省略・null・空文字は「バッグなし」。
@@ -445,6 +738,8 @@ enum ItemCommandApplication {
     case invalidPayload
     case bagNotFound(String)
     case bagAmbiguous(String)
+    case bagExists(String)
+    case bagNotEmpty(String, itemCount: Int)
   }
 
   private static func result(for error: ApplicationError) -> CommandInboxHandlingResult {
@@ -460,6 +755,18 @@ enum ItemCommandApplication {
       return .rejected(
         reason: .bagAmbiguous,
         message: L10n.format("バッグ「%@」が複数あるため、適用しませんでした", display(name))
+      )
+    case .bagExists(let name):
+      return .rejected(
+        reason: .bagExists,
+        message: L10n.format("バッグ「%@」は既にあるため、適用しませんでした", display(name))
+      )
+    case .bagNotEmpty(let name, let itemCount):
+      return .rejected(
+        reason: .bagNotEmpty,
+        message: L10n.format(
+          "バッグ「%@」にはアイテムが %@ 件入っているため、削除しませんでした",
+          display(name), String(itemCount))
       )
     }
   }
@@ -484,6 +791,11 @@ enum ItemCommandApplication {
 
   private static func normalizedText(_ text: String?) -> String? {
     guard let text else { return nil }
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
+  }
+
+  private static func trimmedName(_ text: String) -> String? {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? nil : trimmed
   }
