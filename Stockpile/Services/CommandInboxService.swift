@@ -31,7 +31,7 @@ final class CommandInboxService {
 
   init(
     store: CommandInboxStore = CommandInboxStore(),
-    handler: any CommandHandler = WritesDisabledCommandHandler(),
+    handler: any CommandHandler = PermissionedCommandHandler(),
     now: @escaping () -> Date = Date.init
   ) {
     self.store = store
