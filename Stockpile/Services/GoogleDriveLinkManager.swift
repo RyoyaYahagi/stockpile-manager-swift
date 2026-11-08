@@ -95,7 +95,7 @@ final class GoogleDriveLinkManager {
   func signOut() {
     GIDSignIn.sharedInstance.signOut()
     currentUser = nil
-    CommandInboxApprovalCoordinator.discardForLinkRemoval()
+    CommandInboxService.shared.discardForLinkRemoval()
   }
 
   /// サインイン UI の提示元（最前面のビューコントローラ）

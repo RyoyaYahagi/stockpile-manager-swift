@@ -137,7 +137,7 @@ struct AILinkSettingsView: View {
         SnapshotLinkSettings.isEnabled = newValue
         // 連携そのものを無効にしたら、承認待ちと未送信の結果は送り先を失うため破棄する。
         if !newValue {
-          CommandInboxApprovalCoordinator.discardForLinkRemoval()
+          CommandInboxService.shared.discardForLinkRemoval()
         }
       }
       .onChange(of: destination) { oldValue, newValue in
@@ -145,7 +145,7 @@ struct AILinkSettingsView: View {
         promptCopied = false
         // 送信先の切り替えでも、前の送信先向けの承認待ちは破棄する。
         if oldValue != newValue {
-          CommandInboxApprovalCoordinator.discardForLinkRemoval()
+          CommandInboxService.shared.discardForLinkRemoval()
         }
       }
       .onChange(of: autoUploadEnabled) { _, newValue in
@@ -155,7 +155,7 @@ struct AILinkSettingsView: View {
         CommandWritePermissionSettings.writesEnabled = newValue
         // キルスイッチ: OFF にした時点で承認待ちをすべて writes_disabled にする。
         if !newValue {
-          CommandInboxApprovalCoordinator.killSwitchTurnedOff()
+          CommandInboxService.shared.killSwitchTurnedOff()
         }
       }
       .onChange(of: endpointString) { _, newValue in

@@ -51,6 +51,32 @@ final class CommandInboxService {
     return CommandInboxResultsFile(results: merged, updatedAt: remote?.updatedAt)
   }
 
+  /// 取り込み中に頼まれた状態の後始末。取り込みは通信の前後で状態を読み書きするため、
+  /// 途中で別に保存すると取り込みの保存で上書きされる。終わってから順に実行する。
+  private var deferredMaintenance: [() -> Void] = []
+
+  /// 書き込み連携スイッチを OFF にしたときの後始末（キルスイッチ）。
+  func killSwitchTurnedOff() {
+    performMaintenance { [store, now] in
+      CommandInboxApprovalCoordinator.killSwitchTurnedOff(store: store, now: now())
+    }
+  }
+
+  /// 連携解除時の後始末（承認キューと未送信の結果を破棄）。
+  func discardForLinkRemoval() {
+    performMaintenance { [store, now] in
+      CommandInboxApprovalCoordinator.discardForLinkRemoval(store: store, now: now())
+    }
+  }
+
+  private func performMaintenance(_ action: @escaping () -> Void) {
+    if isRunning {
+      deferredMaintenance.append(action)
+    } else {
+      action()
+    }
+  }
+
   /// 受信箱を 1 回取り込む。
   func processIfNeeded() async -> RunOutcome {
     guard !isRunning else { return .skipped }
@@ -59,7 +85,12 @@ final class CommandInboxService {
     guard let user = GoogleDriveLinkManager.shared.currentUser else { return .skipped }
 
     isRunning = true
-    defer { isRunning = false }
+    defer {
+      isRunning = false
+      let actions = deferredMaintenance
+      deferredMaintenance = []
+      actions.forEach { $0() }
+    }
 
     do {
       let transport = GoogleDriveCommandInboxTransport(user: user)
