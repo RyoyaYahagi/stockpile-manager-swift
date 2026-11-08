@@ -1,0 +1,107 @@
+import Foundation
+import GoogleSignIn
+
+// MARK: - 受信箱の取り込み（W-01）
+
+/// 起動時・フォアグラウンド復帰時・スナップショット送信成功後に呼ばれる取り込み処理。
+/// 連携が有効・送信先が Google Drive・サインイン済みのときだけ動き、
+/// 同時に 2 つ以上の取り込みを走らせない（仕様 1 章）。
+@MainActor
+final class CommandInboxService {
+  static let shared = CommandInboxService()
+
+  struct RunOutcome {
+    /// 取り込みを実行したか（前提条件を満たさない・実行中は false）
+    var didRun: Bool
+    /// 適用したコマンド数（1 件以上ならスナップショット送信のきっかけにする）
+    var appliedCount: Int
+    /// 結果ファイルを書き戻したか
+    var wroteResults: Bool
+    /// 通信・保存の失敗（画面には出さず、次の機会に再試行する）
+    var errorMessage: String?
+
+    static let skipped = RunOutcome(
+      didRun: false, appliedCount: 0, wroteResults: false, errorMessage: nil)
+  }
+
+  private let store: CommandInboxStore
+  private let handler: any CommandHandler
+  private let now: () -> Date
+  private var isRunning = false
+
+  init(
+    store: CommandInboxStore = CommandInboxStore(),
+    handler: any CommandHandler = WritesDisabledCommandHandler(),
+    now: @escaping () -> Date = Date.init
+  ) {
+    self.store = store
+    self.handler = handler
+    self.now = now
+  }
+
+  /// 受信箱を 1 回取り込む。
+  func processIfNeeded() async -> RunOutcome {
+    guard !isRunning else { return .skipped }
+    guard SnapshotLinkSettings.isEnabled else { return .skipped }
+    guard case .googleDrive = SnapshotLinkSettings.destination else { return .skipped }
+    guard let user = GoogleDriveLinkManager.shared.currentUser else { return .skipped }
+
+    isRunning = true
+    defer { isRunning = false }
+
+    do {
+      let transport = GoogleDriveCommandInboxTransport(user: user)
+      var commandsData = try await transport.readCommands()
+      var resultsData = try await transport.readResults()
+
+      // ファイルが見つからないときはアプリが作る（仕様 2 章）。
+      // commands.json は作成時以外に書き換えない。
+      if commandsData == nil || resultsData == nil {
+        try await transport.ensureFiles()
+        if commandsData == nil {
+          commandsData = CommandInboxParser.emptyCommandsData()
+        }
+        if resultsData == nil {
+          resultsData = CommandInboxParser.emptyResultsData()
+        }
+      }
+
+      let now = self.now()
+      let existingResults = resultsData.flatMap(CommandInboxParser.parseResultsFile)
+      let output = await CommandInboxProcessor.process(
+        commandsData: commandsData ?? CommandInboxParser.emptyCommandsData(),
+        existingResults: existingResults,
+        state: store.load(),
+        now: now,
+        handler: handler
+      )
+
+      // 結果の書き戻しを先に行い、そのあとで端末内の状態を保存する（仕様 1 章）。
+      if output.resultsChanged {
+        try await transport.writeResults(
+          CommandInboxParser.encodeResultsFile(output.results))
+      }
+
+      var saveError: String?
+      do {
+        try store.save(output.state)
+      } catch {
+        saveError = error.localizedDescription
+      }
+
+      return RunOutcome(
+        didRun: true,
+        appliedCount: output.appliedCount,
+        wroteResults: output.resultsChanged,
+        errorMessage: saveError
+      )
+    } catch {
+      return RunOutcome(
+        didRun: true,
+        appliedCount: 0,
+        wroteResults: false,
+        errorMessage: error.localizedDescription
+      )
+    }
+  }
+}
