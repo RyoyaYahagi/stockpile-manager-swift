@@ -61,31 +61,51 @@ enum SnapshotAutoUploader {
   static func uploadIfNeeded(items: [Item], familyName: String?) async -> Result {
     switch SnapshotLinkSettings.destination {
     case .customURL:
-      return await uploadToCustomURLIfNeeded(items: items, familyName: familyName)
+      return await uploadToCustomURL(items: items, familyName: familyName, force: false)
     case .googleDrive:
-      return await uploadToDriveIfNeeded(items: items, familyName: familyName)
+      return await uploadToDrive(items: items, familyName: familyName, force: false)
     }
   }
 
-  private static func uploadToCustomURLIfNeeded(items: [Item], familyName: String?) async
-    -> Result
-  {
+  /// コマンドの適用後にスナップショットを送る（仕様 1 章）。
+  /// 自動送信の設定に関係なく、連携が有効なら送る。
+  static func uploadAfterCommandApplied(items: [Item], familyName: String?) async -> Result {
+    guard SnapshotLinkSettings.isEnabled else { return .skipped }
+    switch SnapshotLinkSettings.destination {
+    case .customURL:
+      return await uploadToCustomURL(items: items, familyName: familyName, force: true)
+    case .googleDrive:
+      return await uploadToDrive(items: items, familyName: familyName, force: true)
+    }
+  }
+
+  private static func uploadToCustomURL(
+    items: [Item],
+    familyName: String?,
+    force: Bool
+  ) async -> Result {
     let fingerprint = SnapshotFingerprint.compute(items: items, familyName: familyName)
     let endpoint = SnapshotLinkSettings.validatedEndpoint(
       SnapshotLinkSettings.endpointURLString)
-    let token = SnapshotLinkKeychain.readWriteToken()
-
-    guard
-      SnapshotAutoUploadPolicy.shouldUpload(
-        isLinkEnabled: SnapshotLinkSettings.isEnabled,
-        isAutoUploadEnabled: SnapshotLinkSettings.autoUploadEnabled,
-        endpoint: endpoint,
-        hasWriteToken: token != nil,
-        fingerprint: fingerprint,
-        lastUploadedFingerprint: SnapshotLinkSettings.lastUploadedFingerprint(for: .customURL)
-      ), let endpoint, let token
-    else {
+    guard let endpoint, let token = SnapshotLinkKeychain.readWriteToken() else {
       return .skipped
+    }
+
+    if force {
+      guard SnapshotLinkSettings.isEnabled, !fingerprint.isEmpty else { return .skipped }
+    } else {
+      guard
+        SnapshotAutoUploadPolicy.shouldUpload(
+          isLinkEnabled: SnapshotLinkSettings.isEnabled,
+          isAutoUploadEnabled: SnapshotLinkSettings.autoUploadEnabled,
+          endpoint: endpoint,
+          hasWriteToken: true,
+          fingerprint: fingerprint,
+          lastUploadedFingerprint: SnapshotLinkSettings.lastUploadedFingerprint(for: .customURL)
+        )
+      else {
+        return .skipped
+      }
     }
 
     do {
@@ -99,18 +119,23 @@ enum SnapshotAutoUploader {
     }
   }
 
-  private static func uploadToDriveIfNeeded(items: [Item], familyName: String?) async
-    -> Result
-  {
-    guard SnapshotLinkSettings.isEnabled, SnapshotLinkSettings.autoUploadEnabled else {
+  private static func uploadToDrive(
+    items: [Item],
+    familyName: String?,
+    force: Bool
+  ) async -> Result {
+    guard SnapshotLinkSettings.isEnabled, GoogleDriveLinkManager.shared.currentUser != nil else {
       return .skipped
     }
     let fingerprint = SnapshotFingerprint.compute(items: items, familyName: familyName)
-    guard !fingerprint.isEmpty,
-      fingerprint != SnapshotLinkSettings.lastUploadedFingerprint(for: .googleDrive),
-      GoogleDriveLinkManager.shared.currentUser != nil
-    else {
-      return .skipped
+    guard !fingerprint.isEmpty else { return .skipped }
+    if !force {
+      guard
+        SnapshotLinkSettings.autoUploadEnabled,
+        fingerprint != SnapshotLinkSettings.lastUploadedFingerprint(for: .googleDrive)
+      else {
+        return .skipped
+      }
     }
 
     do {

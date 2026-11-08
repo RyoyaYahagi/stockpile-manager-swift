@@ -40,6 +40,17 @@
 		F03 /* SnapshotAutoUpload.swift in Sources */ = {isa = PBXBuildFile; fileRef = F13 /* SnapshotAutoUpload.swift */; };
 		F04 /* GoogleDriveLinkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F14 /* GoogleDriveLinkManager.swift */; };
 		F05 /* GoogleDriveSnapshotWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15 /* GoogleDriveSnapshotWriter.swift */; };
+		F06 /* CommandInboxModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16 /* CommandInboxModels.swift */; };
+		F07 /* CommandInboxParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = F17 /* CommandInboxParser.swift */; };
+		F08 /* CommandInboxProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F18 /* CommandInboxProcessor.swift */; };
+		F09 /* CommandInboxHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F19 /* CommandInboxHandler.swift */; };
+		F0A /* CommandInboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A /* CommandInboxStore.swift */; };
+		F0B /* CommandInboxTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B /* CommandInboxTransport.swift */; };
+		F0C /* GoogleDriveCommandInboxTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C /* GoogleDriveCommandInboxTransport.swift */; };
+		F0D /* GoogleDriveREST.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D /* GoogleDriveREST.swift */; };
+		F0E /* CommandInboxService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E /* CommandInboxService.swift */; };
+		A4B100000000000000000106 /* CommandInboxParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000007 /* CommandInboxParsingTests.swift */; };
+		A4B100000000000000000107 /* CommandInboxProcessingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000008 /* CommandInboxProcessingTests.swift */; };
 		028 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128 /* APIConfig.swift */; };
 		031 /* FamilySharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131 /* FamilySharingService.swift */; };
 		032 /* FamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132 /* FamilySettingsView.swift */; };
@@ -131,6 +142,15 @@
 		F13 /* SnapshotAutoUpload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotAutoUpload.swift; sourceTree = "<group>"; };
 		F14 /* GoogleDriveLinkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveLinkManager.swift; sourceTree = "<group>"; };
 		F15 /* GoogleDriveSnapshotWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveSnapshotWriter.swift; sourceTree = "<group>"; };
+		F16 /* CommandInboxModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxModels.swift; sourceTree = "<group>"; };
+		F17 /* CommandInboxParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxParser.swift; sourceTree = "<group>"; };
+		F18 /* CommandInboxProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxProcessor.swift; sourceTree = "<group>"; };
+		F19 /* CommandInboxHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxHandler.swift; sourceTree = "<group>"; };
+		F1A /* CommandInboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxStore.swift; sourceTree = "<group>"; };
+		F1B /* CommandInboxTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxTransport.swift; sourceTree = "<group>"; };
+		F1C /* GoogleDriveCommandInboxTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveCommandInboxTransport.swift; sourceTree = "<group>"; };
+		F1D /* GoogleDriveREST.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveREST.swift; sourceTree = "<group>"; };
+		F1E /* CommandInboxService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxService.swift; sourceTree = "<group>"; };
 		128 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
 		131 /* FamilySharingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySharingService.swift; sourceTree = "<group>"; };
 		132 /* FamilySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FamilySettingsView.swift; sourceTree = "<group>"; };
@@ -170,6 +190,8 @@
 		A4B100000000000000000004 /* PremiumAccessManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumAccessManagerTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000005 /* AppLocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalizationTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000006 /* SnapshotLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotLinkTests.swift; sourceTree = "<group>"; };
+		A4B100000000000000000007 /* CommandInboxParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxParsingTests.swift; sourceTree = "<group>"; };
+		A4B100000000000000000008 /* CommandInboxProcessingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxProcessingTests.swift; sourceTree = "<group>"; };
 		AF14E1C1F18CC52D575E8FE7 /* RenewExpirySheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RenewExpirySheet.swift; sourceTree = "<group>"; };
 		AF966BDA61B4847C53006459 /* ScannerFrame.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScannerFrame.swift; sourceTree = "<group>"; };
 		C176BB208A4D750919424EB0 /* LegacyItemFormSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemFormSheet.swift; sourceTree = "<group>"; };
@@ -391,6 +413,15 @@
 				F13 /* SnapshotAutoUpload.swift */,
 				F14 /* GoogleDriveLinkManager.swift */,
 				F15 /* GoogleDriveSnapshotWriter.swift */,
+				F16 /* CommandInboxModels.swift */,
+				F17 /* CommandInboxParser.swift */,
+				F18 /* CommandInboxProcessor.swift */,
+				F19 /* CommandInboxHandler.swift */,
+				F1A /* CommandInboxStore.swift */,
+				F1B /* CommandInboxTransport.swift */,
+				F1C /* GoogleDriveCommandInboxTransport.swift */,
+				F1D /* GoogleDriveREST.swift */,
+				F1E /* CommandInboxService.swift */,
 				131 /* FamilySharingService.swift */,
 				147 /* PremiumAccessManager.swift */,
 				D1E49F77D9DD9670638E3672 /* InventoryStore.swift */,
@@ -450,6 +481,8 @@
 			children = (
 				A4B100000000000000000005 /* AppLocalizationTests.swift */,
 				A4B100000000000000000006 /* SnapshotLinkTests.swift */,
+				A4B100000000000000000007 /* CommandInboxParsingTests.swift */,
+				A4B100000000000000000008 /* CommandInboxProcessingTests.swift */,
 				A4B100000000000000000004 /* PremiumAccessManagerTests.swift */,
 				A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */,
 				A4B100000000000000000002 /* ProductSearchServiceTests.swift */,
@@ -576,6 +609,15 @@
 				F03 /* SnapshotAutoUpload.swift in Sources */,
 				F04 /* GoogleDriveLinkManager.swift in Sources */,
 				F05 /* GoogleDriveSnapshotWriter.swift in Sources */,
+				F06 /* CommandInboxModels.swift in Sources */,
+				F07 /* CommandInboxParser.swift in Sources */,
+				F08 /* CommandInboxProcessor.swift in Sources */,
+				F09 /* CommandInboxHandler.swift in Sources */,
+				F0A /* CommandInboxStore.swift in Sources */,
+				F0B /* CommandInboxTransport.swift in Sources */,
+				F0C /* GoogleDriveCommandInboxTransport.swift in Sources */,
+				F0D /* GoogleDriveREST.swift in Sources */,
+				F0E /* CommandInboxService.swift in Sources */,
 				A659FF64C07B539D8D70E351 /* LegacyBagListView.swift in Sources */,
 				2F1CF689B3FC96E0216335AD /* LegacyDashboardView.swift in Sources */,
 				6C0081EE497E11DB8EC51EFE /* LegacyFamilySettingsView.swift in Sources */,
@@ -645,6 +687,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				A4B100000000000000000105 /* SnapshotLinkTests.swift in Sources */,
+				A4B100000000000000000106 /* CommandInboxParsingTests.swift in Sources */,
+				A4B100000000000000000107 /* CommandInboxProcessingTests.swift in Sources */,
 				A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */,
 				A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */,
 				A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */,
