@@ -90,10 +90,12 @@ final class GoogleDriveLinkManager {
     try await GoogleDriveSnapshotWriter.upload(data: data, user: currentUser)
   }
 
-  /// 連携解除（アプリ側のサインアウトのみ）
+  /// 連携解除（アプリ側のサインアウトのみ）。
+  /// 承認待ちのコマンドは送信先を失うため、キューと未送信の結果を破棄する（W-02）。
   func signOut() {
     GIDSignIn.sharedInstance.signOut()
     currentUser = nil
+    CommandInboxService.shared.discardForLinkRemoval()
   }
 
   /// サインイン UI の提示元（最前面のビューコントローラ）

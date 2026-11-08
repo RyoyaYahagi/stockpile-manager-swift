@@ -25,6 +25,10 @@ struct CommandInboxHandlingResult: Equatable, Sendable {
     CommandInboxHandlingResult(status: .pendingApproval, reason: reason, message: message)
   }
 
+  static func unsupported(reason: CommandInboxReason, message: String) -> Self {
+    CommandInboxHandlingResult(status: .unsupported, reason: reason, message: message)
+  }
+
   static func failed(message: String) -> Self {
     CommandInboxHandlingResult(status: .error, reason: .internalError, message: message)
   }
@@ -34,10 +38,10 @@ struct CommandInboxHandlingResult: Equatable, Sendable {
 
 /// 検証・処理済み判定・失効判定を通ったコマンドを受け取り、適用可否を決める処理部。
 ///
-/// - W-01（本 Issue）の既定実装は `WritesDisabledCommandHandler`。
-///   権限判定がまだないため、既知の type はすべて `rejected` / `writes_disabled` を返す。
-/// - W-02 は権限判定（書き込み連携スイッチ・能力ごとの設定・承認キュー）を、
-///   W-03 以降は実際のデータ適用をこのプロトコルの実装として足す。
+/// - W-01 の既定実装は `WritesDisabledCommandHandler`（常に `writes_disabled`）。
+/// - W-02 で `PermissionedCommandHandler` を既定にした。書き込み連携スイッチと
+///   能力別の権限を見て、適用・承認キュー・拒否を振り分ける。
+/// - W-03 以降は実際のデータ適用を `CommandApplier` の実装として足す。
 ///   受信箱の処理ループは `CommandInboxService` にハンドラを注入して差し替える。
 protocol CommandHandler: Sendable {
   /// - Parameters:

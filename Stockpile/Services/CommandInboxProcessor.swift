@@ -197,8 +197,15 @@ enum CommandInboxProcessor {
           continue
         }
 
-        // 適用可否はハンドラが決める（W-02 以降で能力ごとの判定に使う）
+        // 適用可否はハンドラが決める（W-02 で能力ごとの判定に使う）
         let handled = await handler.handle(envelope, now: now)
+        // 承認制: データには触れず、封筒をキューへ入れる（仕様 7 章）。
+        // キューの一覧・許可・却下・順序保持は W-04 が担う。
+        if handled.status == .pendingApproval,
+          (handled.reason == .approvalRequired || handled.reason == .waitingForEarlier)
+        {
+          state.enqueueApproval(envelope, at: now)
+        }
         record(
           result(
             for: envelope,

@@ -54,7 +54,7 @@ enum CommandInboxDate {
 
 /// payload の中身を型安全に保持するための値。
 /// 未知のフィールドを捨てずに後続（W-03 以降）へ渡せるようにする。
-enum CommandJSONValue: Equatable, Sendable {
+enum CommandJSONValue: Equatable, Codable, Sendable {
   case object([String: CommandJSONValue])
   case array([CommandJSONValue])
   case string(String)
@@ -113,6 +113,46 @@ enum CommandJSONValue: Equatable, Sendable {
   var objectValue: [String: CommandJSONValue]? {
     guard case .object(let value) = self else { return nil }
     return value
+  }
+
+  // 承認キュー（CommandInboxPendingApproval）を状態ファイルに保存するために Codable にする。
+  // JSON 上の見た目は元の値のまま（object / array / string / number / bool / null）。
+  init(from decoder: Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    if container.decodeNil() {
+      self = .null
+    } else if let object = try? container.decode([String: CommandJSONValue].self) {
+      self = .object(object)
+    } else if let array = try? container.decode([CommandJSONValue].self) {
+      self = .array(array)
+    } else if let string = try? container.decode(String.self) {
+      self = .string(string)
+    } else if let bool = try? container.decode(Bool.self) {
+      self = .bool(bool)
+    } else if let number = try? container.decode(Double.self) {
+      self = .number(number)
+    } else {
+      throw DecodingError.dataCorruptedError(
+        in: container, debugDescription: "未対応のJSON値")
+    }
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.singleValueContainer()
+    switch self {
+    case .object(let value):
+      try container.encode(value)
+    case .array(let value):
+      try container.encode(value)
+    case .string(let value):
+      try container.encode(value)
+    case .number(let value):
+      try container.encode(value)
+    case .bool(let value):
+      try container.encode(value)
+    case .null:
+      try container.encodeNil()
+    }
   }
 }
 
@@ -177,6 +217,8 @@ enum CommandInboxReason: String, Codable, CaseIterable, Sendable {
   case writesDisabled = "writes_disabled"
   case permissionDenied = "permission_denied"
   case deniedByUser = "denied_by_user"
+  /// 連携解除（Drive のサインアウト・送信先の切り替え・連携の無効化）で承認待ちを破棄した
+  case linkRemoved = "link_removed"
   case notFound = "not_found"
   case bagNotFound = "bag_not_found"
   case bagAmbiguous = "bag_ambiguous"
@@ -297,7 +339,7 @@ struct CommandInboxResultsFile: Codable, Equatable, Sendable {
 
 // MARK: - 端末内の状態
 
-/// 適用履歴の 1 件（8 章）。画面には出さず、後続の確認用に残す。
+/// 適用履歴の 1 件（8 章）。設定画面の「適用履歴」に表示する。
 struct CommandInboxHistoryEntry: Codable, Equatable, Sendable {
   var occurredAt: String
   var origin: String?
@@ -307,8 +349,43 @@ struct CommandInboxHistoryEntry: Codable, Equatable, Sendable {
   var message: String?
 }
 
+/// 承認待ちの 1 件（仕様 7 章）。封筒の内容をそのまま保存し、
+/// W-04 の承認画面から許可されたときに検証・競合判定をやり直せるようにする。
+struct CommandInboxPendingApproval: Codable, Equatable, Sendable {
+  var commandId: String
+  var issuedAt: String
+  var origin: String
+  var type: String
+  var payload: [String: CommandJSONValue]
+  var baseUpdatedAt: String?
+  /// キューに入れた日時（ISO 8601）。古い順の判定に使う。
+  var queuedAt: String
+
+  init(envelope: CommandInboxEnvelope, queuedAt: Date) {
+    self.commandId = envelope.commandId
+    self.issuedAt = CommandInboxDate.string(from: envelope.issuedAt)
+    self.origin = envelope.origin
+    self.type = envelope.type
+    self.payload = envelope.payload
+    self.baseUpdatedAt = envelope.baseUpdatedAt.map(CommandInboxDate.string(from:))
+    self.queuedAt = CommandInboxDate.string(from: queuedAt)
+  }
+
+  /// 保存した内容から封筒に戻す。日時が壊れている場合は nil。
+  var envelope: CommandInboxEnvelope? {
+    guard let issuedAt = CommandInboxDate.parse(issuedAt) else { return nil }
+    return CommandInboxEnvelope(
+      commandId: commandId,
+      issuedAt: issuedAt,
+      origin: origin,
+      type: type,
+      payload: payload,
+      baseUpdatedAt: baseUpdatedAt.flatMap(CommandInboxDate.parse)
+    )
+  }
+}
+
 /// Application Support 配下の JSON に保存する受信箱の状態。
-/// 承認キューは W-04 でこの型に追加する。
 struct CommandInboxState: Codable, Equatable, Sendable {
   /// 正規化した commandId → 処理日時（ISO 8601）
   var processedCommandIds: [String: String]
@@ -320,17 +397,21 @@ struct CommandInboxState: Codable, Equatable, Sendable {
   /// 処理済みの記録を先に保存し、書き戻しに失敗した分は次回の取り込みで送り直す
   /// （適用済みのコマンドを二重に適用しないため）。
   var unsentResults: [CommandInboxResult]?
+  /// 承認制のコマンドのキュー（古い順）。既存の状態ファイルとの互換のため Optional。
+  var pendingApprovals: [CommandInboxPendingApproval]?
 
   init(
     processedCommandIds: [String: String] = [:],
     fileErrorHashes: [String: String] = [:],
     history: [CommandInboxHistoryEntry] = [],
-    unsentResults: [CommandInboxResult]? = nil
+    unsentResults: [CommandInboxResult]? = nil,
+    pendingApprovals: [CommandInboxPendingApproval]? = nil
   ) {
     self.processedCommandIds = processedCommandIds
     self.fileErrorHashes = fileErrorHashes
     self.history = history
     self.unsentResults = unsentResults
+    self.pendingApprovals = pendingApprovals
   }
 
   static let empty = CommandInboxState()
@@ -356,6 +437,24 @@ struct CommandInboxState: Codable, Equatable, Sendable {
     if history.count > CommandInboxConstants.maxHistory {
       history.removeLast(history.count - CommandInboxConstants.maxHistory)
     }
+  }
+
+  /// 承認待ちのキュー（保存されていなければ空）。
+  var approvalQueue: [CommandInboxPendingApproval] {
+    pendingApprovals ?? []
+  }
+
+  /// 承認制のコマンドをキューの末尾に足す。同じ commandId は二重に積まない。
+  mutating func enqueueApproval(_ envelope: CommandInboxEnvelope, at date: Date) {
+    var queue = pendingApprovals ?? []
+    guard !queue.contains(where: { $0.commandId == envelope.commandId }) else { return }
+    queue.append(CommandInboxPendingApproval(envelope: envelope, queuedAt: date))
+    pendingApprovals = queue
+  }
+
+  /// 承認キューを空にする（キルスイッチ・連携解除）。
+  mutating func removeAllPendingApprovals() {
+    pendingApprovals = nil
   }
 
   /// 保持期間を過ぎた記録を落とす（処理済み・ファイル単位エラーとも 30 日）。

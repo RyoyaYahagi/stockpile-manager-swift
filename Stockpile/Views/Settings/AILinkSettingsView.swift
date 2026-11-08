@@ -13,6 +13,13 @@ struct AILinkSettingsView: View {
   @State private var isEnabled = SnapshotLinkSettings.isEnabled
   @State private var destination = SnapshotLinkSettings.destination
   @State private var autoUploadEnabled = SnapshotLinkSettings.autoUploadEnabled
+  @State private var writeEnabled = CommandWritePermissionSettings.writesEnabled
+  @State private var writePermissions: [CommandWriteCapability: CommandWritePermission] =
+    Dictionary(
+      uniqueKeysWithValues: CommandWriteCapability.allCases.map {
+        ($0, CommandWritePermissionSettings.permission(for: $0))
+      }
+    )
   @State private var endpointString = SnapshotLinkSettings.endpointURLString
   @State private var writeToken = SnapshotLinkKeychain.readWriteToken() ?? ""
   @State private var isSending = false
@@ -63,7 +70,7 @@ struct AILinkSettingsView: View {
           BackupHeaderCard(
             icon: "sparkles",
             title: "Muse連携",
-            subtitle: "備蓄データをMuseに読み取り専用で渡します（上級者向け）"
+            subtitle: "備蓄データをMuseと連携します（上級者向け）"
           )
           .riseIn(index: 0)
 
@@ -75,12 +82,15 @@ struct AILinkSettingsView: View {
           settingsCard
             .riseIn(index: 2)
 
+          writePermissionCard
+            .riseIn(index: 3)
+
           if isSharedFamily {
             BackupWarningCard(
               title: L10n.string("家族共有中のデータが含まれます"),
               message: L10n.string("この連携を有効にすると、共有中の家族の備蓄データが、あなたが設定した送信先に送られます。送信はこの端末からのみ行われます。")
             )
-            .riseIn(index: 3)
+            .riseIn(index: 4)
           }
 
           BackupWarningCard(
@@ -88,13 +98,13 @@ struct AILinkSettingsView: View {
             message: L10n.string(
               "スナップショットは平文のJSONです。アイテム名、JAN、期限、収納場所メモが含まれます。送信先は自分で管理する場所だけを設定してください。")
           )
-          .riseIn(index: 4)
+          .riseIn(index: 5)
 
           sendCard
-            .riseIn(index: 5)
+            .riseIn(index: 6)
 
           promptCard
-            .riseIn(index: 6)
+            .riseIn(index: 7)
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
@@ -125,13 +135,28 @@ struct AILinkSettingsView: View {
       }
       .onChange(of: isEnabled) { _, newValue in
         SnapshotLinkSettings.isEnabled = newValue
+        // 連携そのものを無効にしたら、承認待ちと未送信の結果は送り先を失うため破棄する。
+        if !newValue {
+          CommandInboxService.shared.discardForLinkRemoval()
+        }
       }
-      .onChange(of: destination) { _, newValue in
+      .onChange(of: destination) { oldValue, newValue in
         SnapshotLinkSettings.destination = newValue
         promptCopied = false
+        // 送信先の切り替えでも、前の送信先向けの承認待ちは破棄する。
+        if oldValue != newValue {
+          CommandInboxService.shared.discardForLinkRemoval()
+        }
       }
       .onChange(of: autoUploadEnabled) { _, newValue in
         SnapshotLinkSettings.autoUploadEnabled = newValue
+      }
+      .onChange(of: writeEnabled) { _, newValue in
+        CommandWritePermissionSettings.writesEnabled = newValue
+        // キルスイッチ: OFF にした時点で承認待ちをすべて writes_disabled にする。
+        if !newValue {
+          CommandInboxService.shared.killSwitchTurnedOff()
+        }
       }
       .onChange(of: endpointString) { _, newValue in
         SnapshotLinkSettings.endpointURLString = newValue
@@ -275,6 +300,79 @@ struct AILinkSettingsView: View {
     } catch {
       googleError = error.localizedDescription
     }
+  }
+
+  /// 書き込み権限の設定（W-02）。スイッチはキルスイッチを兼ねる。
+  private var writePermissionCard: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text(L10n.string("書き込み権限"))
+        .font(.headline)
+
+      Toggle(isOn: $writeEnabled) {
+        Text(L10n.string("書き込み連携を使う"))
+          .font(.subheadline.weight(.semibold))
+      }
+
+      Text(L10n.string("Museが権限の範囲で備蓄データを変更できるようにします。既定はオフです。オフの間はすべてのコマンドを適用しません。"))
+        .font(.caption)
+        .foregroundStyle(AppTheme.inkSecondary)
+
+      if writeEnabled {
+        Text(L10n.string("能力ごとに「許可」「承認制」「不可」を選べます。承認制はアプリ内で承認するまでデータを変更しません。"))
+          .font(.caption)
+          .foregroundStyle(AppTheme.inkSecondary)
+
+        ForEach(CommandWriteCapability.allCases, id: \.self) { capability in
+          VStack(alignment: .leading, spacing: 6) {
+            Text(capability.displayName)
+              .font(.subheadline.weight(.semibold))
+              .foregroundStyle(AppTheme.ink)
+            Picker(capability.displayName, selection: permissionBinding(for: capability)) {
+              ForEach(CommandWritePermission.allCases, id: \.self) { permission in
+                Text(permission.displayName).tag(permission)
+              }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+          }
+        }
+      }
+
+      Divider()
+
+      NavigationLink {
+        CommandInboxHistoryView()
+      } label: {
+        HStack(spacing: 14) {
+          SettingsIconTile(symbol: "clock.arrow.circlepath", tint: AppTheme.accent)
+          Text(L10n.string("適用履歴"))
+            .font(.body.weight(.semibold))
+            .foregroundStyle(AppTheme.ink)
+          Spacer(minLength: 8)
+          Image(systemName: "chevron.right")
+            .font(.footnote.weight(.bold))
+            .foregroundStyle(AppTheme.inkSecondary.opacity(0.6))
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+    }
+    .padding(16)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .cardSurface(radius: 20)
+  }
+
+  private func permissionBinding(
+    for capability: CommandWriteCapability
+  ) -> Binding<CommandWritePermission> {
+    Binding(
+      get: { writePermissions[capability] ?? capability.defaultPermission },
+      set: { newValue in
+        writePermissions[capability] = newValue
+        CommandWritePermissionSettings.setPermission(newValue, for: capability)
+      }
+    )
   }
 
   private var sendCard: some View {
