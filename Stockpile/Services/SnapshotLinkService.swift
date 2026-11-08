@@ -33,7 +33,19 @@ enum SnapshotBuilder {
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
     formatter.dateFormat = "yyyy-MM-dd"
+    formatter.isLenient = false
     return formatter
+  }
+
+  /// スナップショット v1 の `yyyy-MM-dd` を、スナップショット生成と同じ暦・
+  /// タイムゾーンで Date にする。コマンドの `expiryDate` の解釈にも使う。
+  static func date(fromDayString string: String) -> Date? {
+    dayFormatter.date(from: string)
+  }
+
+  /// Date をスナップショット v1 の `yyyy-MM-dd` にする。
+  static func dayString(from date: Date) -> String {
+    dayFormatter.string(from: date)
   }
 
   private static var dateTimeFormatter: ISO8601DateFormatter {

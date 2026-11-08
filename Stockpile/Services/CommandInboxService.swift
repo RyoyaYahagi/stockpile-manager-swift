@@ -1,5 +1,6 @@
 import Foundation
 import GoogleSignIn
+import SwiftData
 
 // MARK: - 受信箱の取り込み（W-01）
 
@@ -25,7 +26,7 @@ final class CommandInboxService {
   }
 
   private let store: CommandInboxStore
-  private let handler: any CommandHandler
+  private var handler: any CommandHandler
   private let now: () -> Date
   private var isRunning = false
 
@@ -37,6 +38,15 @@ final class CommandInboxService {
     self.store = store
     self.handler = handler
     self.now = now
+  }
+
+  /// アプリの `ModelContext` を渡し、アイテム系コマンドを実データへ適用できるようにする。
+  /// 画面の `processCommandInboxIfNeeded()` から、取り込みのたびに呼ぶ。
+  /// 渡さない間は既定の `UnavailableCommandApplier` のまま（データには触れない）。
+  func configure(modelContext: ModelContext) {
+    handler = PermissionedCommandHandler(
+      applier: ItemCommandApplier(modelContext: modelContext)
+    )
   }
 
   /// 結果ファイルの中身に、前回書き戻せなかった結果行を重ねる。

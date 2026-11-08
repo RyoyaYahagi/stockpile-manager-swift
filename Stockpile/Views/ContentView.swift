@@ -547,9 +547,14 @@ struct ContentView: View {
     /// 1 件以上適用されたら、自動送信の設定に関係なくスナップショットを送る（仕様 1 章）。
     private func processCommandInboxIfNeeded() async {
         guard !ScreenshotMode.isActive else { return }
+        // 適用処理（W-03）にアプリの ModelContext を渡す
+        CommandInboxService.shared.configure(modelContext: modelContext)
         let outcome = await CommandInboxService.shared.processIfNeeded()
         guard outcome.appliedCount > 0 else { return }
-        let scoped = SnapshotLinkScope.resolved(items: items, families: families)
+        // 取り込みの直前に描画されていた items ではなく、保存済みの最新状態を送る
+        let storedItems = (try? modelContext.fetch(FetchDescriptor<Item>())) ?? items
+        let storedFamilies = (try? modelContext.fetch(FetchDescriptor<Family>())) ?? families
+        let scoped = SnapshotLinkScope.resolved(items: storedItems, families: storedFamilies)
         _ = await SnapshotAutoUploader.uploadAfterCommandApplied(
             items: scoped.items,
             familyName: scoped.family?.name
