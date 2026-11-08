@@ -128,6 +128,22 @@ enum CommandInboxProcessor {
       )
     }
 
+    // 承認待ちの失効と、先のコマンドが片付いたことによる待機解除を先に行う（仕様 7 章）。
+    // ここで権限を「許可」に変えただけの項目は処理しない（利用者の承認を待つ）。
+    let queueBefore = state.approvalQueue
+    if !queueBefore.isEmpty {
+      let resolution = await CommandInboxApprovalCoordinator.resolveQueue(
+        queueBefore,
+        previousQueue: queueBefore,
+        handler: handler,
+        now: now
+      )
+      state.pendingApprovals = resolution.remaining.isEmpty ? nil : resolution.remaining
+      for entry in resolution.results {
+        record(entry, historyFor: nil)
+      }
+    }
+
     switch CommandInboxParser.parseCommandsFile(commandsData) {
     case .fileError(let reason, let dedupeHash):
       if !state.hasRecordedFileError(hash: dedupeHash) {
@@ -197,10 +213,28 @@ enum CommandInboxProcessor {
           continue
         }
 
+        // 順序の保持（仕様 7 章）: 同じ対象の承認待ちが先にあるなら、自分の権限が
+        // 「許可」でも適用せず、キューの後ろに並べて待たせる。
+        if CommandInboxTargetKey.hasEarlierPendingApproval(
+          for: envelope, in: state.approvalQueue)
+        {
+          state.enqueueApproval(envelope, at: now)
+          record(
+            result(
+              for: envelope,
+              status: .pendingApproval,
+              reason: .waitingForEarlier,
+              processedAt: processedAt
+            ),
+            historyFor: raw
+          )
+          state.markProcessed(key, at: now)
+          continue
+        }
+
         // 適用可否はハンドラが決める（W-02 で能力ごとの判定に使う）
         let handled = await handler.handle(envelope, now: now)
         // 承認制: データには触れず、封筒をキューへ入れる（仕様 7 章）。
-        // キューの一覧・許可・却下・順序保持は W-04 が担う。
         if handled.status == .pendingApproval,
           (handled.reason == .approvalRequired || handled.reason == .waitingForEarlier)
         {
@@ -298,6 +332,10 @@ enum CommandInboxProcessor {
       return L10n.string("書き込み連携がオフのため、このコマンドは適用していません")
     case (.rejected, .permissionDenied):
       return L10n.string("この操作は許可されていないため、適用しませんでした")
+    case (.rejected, .deniedByUser):
+      return L10n.string("利用者が却下しました")
+    case (.pendingApproval, .waitingForEarlier):
+      return L10n.string("先のコマンドの承認待ちです")
     case (.pendingApproval, _):
       return L10n.string("承認待ちです")
     case (.error, _):

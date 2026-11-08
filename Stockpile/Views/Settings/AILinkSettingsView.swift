@@ -14,6 +14,7 @@ struct AILinkSettingsView: View {
   @State private var destination = SnapshotLinkSettings.destination
   @State private var autoUploadEnabled = SnapshotLinkSettings.autoUploadEnabled
   @State private var writeEnabled = CommandWritePermissionSettings.writesEnabled
+  @State private var pendingApprovalCount = CommandInboxStore().load().approvalQueue.count
   @State private var writePermissions: [CommandWriteCapability: CommandWritePermission] =
     Dictionary(
       uniqueKeysWithValues: CommandWriteCapability.allCases.map {
@@ -138,6 +139,7 @@ struct AILinkSettingsView: View {
         // 連携そのものを無効にしたら、承認待ちと未送信の結果は送り先を失うため破棄する。
         if !newValue {
           CommandInboxService.shared.discardForLinkRemoval()
+          pendingApprovalCount = 0
         }
       }
       .onChange(of: destination) { oldValue, newValue in
@@ -146,6 +148,7 @@ struct AILinkSettingsView: View {
         // 送信先の切り替えでも、前の送信先向けの承認待ちは破棄する。
         if oldValue != newValue {
           CommandInboxService.shared.discardForLinkRemoval()
+          pendingApprovalCount = 0
         }
       }
       .onChange(of: autoUploadEnabled) { _, newValue in
@@ -156,7 +159,11 @@ struct AILinkSettingsView: View {
         // キルスイッチ: OFF にした時点で承認待ちをすべて writes_disabled にする。
         if !newValue {
           CommandInboxService.shared.killSwitchTurnedOff()
+          pendingApprovalCount = 0
         }
+      }
+      .onAppear {
+        pendingApprovalCount = CommandInboxService.shared.pendingApprovals().count
       }
       .onChange(of: endpointString) { _, newValue in
         SnapshotLinkSettings.endpointURLString = newValue
@@ -341,6 +348,26 @@ struct AILinkSettingsView: View {
       Divider()
 
       NavigationLink {
+        CommandInboxApprovalView { count in
+          pendingApprovalCount = count
+        }
+      } label: {
+        HStack(spacing: 14) {
+          SettingsIconTile(symbol: "checkmark.seal", tint: AppTheme.accent)
+          Text(L10n.format("承認待ち（%@件）", String(pendingApprovalCount)))
+            .font(.body.weight(.semibold))
+            .foregroundStyle(AppTheme.ink)
+          Spacer(minLength: 8)
+          Image(systemName: "chevron.right")
+            .font(.footnote.weight(.bold))
+            .foregroundStyle(AppTheme.inkSecondary.opacity(0.6))
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+
+      NavigationLink {
         CommandInboxHistoryView()
       } label: {
         HStack(spacing: 14) {
@@ -371,6 +398,9 @@ struct AILinkSettingsView: View {
       set: { newValue in
         writePermissions[capability] = newValue
         CommandWritePermissionSettings.setPermission(newValue, for: capability)
+        // 承認待ちの既存キューは、ここで権限を変えても自動では処理しない。
+        // 「不可」に変えた分も「許可」に変えた分も、利用者が承認画面で判断するまで残す。
+        // 待機中のコマンドは、先のコマンドが片付いたときにだけ権限判定をやり直す。
       }
     )
   }

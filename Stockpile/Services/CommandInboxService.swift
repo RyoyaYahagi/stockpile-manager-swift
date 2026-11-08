@@ -25,18 +25,31 @@ final class CommandInboxService {
       didRun: false, appliedCount: 0, wroteResults: false, errorMessage: nil)
   }
 
+  struct ApprovalQueueRefresh {
+    var queue: [CommandInboxPendingApproval]
+    /// 失効・待機解除・取り込みで適用した件数（1 件以上ならスナップショットを送る）
+    var appliedCount: Int
+  }
+
   private let store: CommandInboxStore
   private var handler: any CommandHandler
+  /// 承認画面から直接適用するときに使う。`configure(modelContext:)` で差し替える。
+  private var applier: any CommandApplier
   private let now: () -> Date
+  /// 取り込み・承認・却下のうち、状態ファイルを読み書きする処理を 1 つに絞る。
   private var isRunning = false
+  /// 実行中の処理が終わるのを待っている呼び出し（承認画面の操作）。
+  private var idleWaiters: [CheckedContinuation<Void, Never>] = []
 
   init(
     store: CommandInboxStore = CommandInboxStore(),
     handler: any CommandHandler = PermissionedCommandHandler(),
+    applier: any CommandApplier = UnavailableCommandApplier(),
     now: @escaping () -> Date = Date.init
   ) {
     self.store = store
     self.handler = handler
+    self.applier = applier
     self.now = now
   }
 
@@ -44,9 +57,14 @@ final class CommandInboxService {
   /// 画面の `processCommandInboxIfNeeded()` から、取り込みのたびに呼ぶ。
   /// 渡さない間は既定の `UnavailableCommandApplier` のまま（データには触れない）。
   func configure(modelContext: ModelContext) {
-    handler = PermissionedCommandHandler(
-      applier: ItemCommandApplier(modelContext: modelContext)
-    )
+    let applier = ItemCommandApplier(modelContext: modelContext)
+    self.applier = applier
+    handler = PermissionedCommandHandler(applier: applier)
+  }
+
+  /// 承認画面の件数表示用。状態ファイルを読むだけで、失効判定はしない。
+  func pendingApprovals() -> [CommandInboxPendingApproval] {
+    store.load().approvalQueue
   }
 
   /// 結果ファイルの中身に、前回書き戻せなかった結果行を重ねる。
@@ -87,6 +105,83 @@ final class CommandInboxService {
     }
   }
 
+  /// 実行中の処理が終わるまで待つ。待っている間は MainActor を手放す。
+  private func waitUntilIdle() async {
+    while isRunning {
+      await withCheckedContinuation { continuation in
+        idleWaiters.append(continuation)
+      }
+    }
+  }
+
+  /// 状態を読み書きする処理を 1 つだけ実行する。
+  private func withExclusive<T>(_ operation: () async -> T) async -> T {
+    await waitUntilIdle()
+    isRunning = true
+    defer { finishExclusive() }
+    return await operation()
+  }
+
+  /// 実行を終え、取り込み中に頼まれた後始末を済ませてから待ち手を起こす。
+  private func finishExclusive() {
+    isRunning = false
+    let actions = deferredMaintenance
+    deferredMaintenance = []
+    actions.forEach { $0() }
+    let waiters = idleWaiters
+    idleWaiters = []
+    waiters.forEach { $0.resume() }
+  }
+
+  // MARK: 承認キュー（W-04）
+
+  /// 承認画面を開いたときの失効判定と待機解除。
+  /// 終わったら結果ファイルへの書き戻しを 1 回試す（送れなければ unsentResults に残る）。
+  func refreshApprovalQueue(modelContext: ModelContext) async -> ApprovalQueueRefresh {
+    let outcome = await withExclusive {
+      // 取り込み中に差し替えないよう、実行を確保してから ModelContext を渡す。
+      configure(modelContext: modelContext)
+      return await CommandInboxApprovalCoordinator.resolvePendingApprovals(
+        store: store, handler: handler, now: now())
+    }
+
+    var appliedCount = outcome.appliedCount
+    if !outcome.results.isEmpty {
+      // 失効した結果を書き戻す。取り込みで適用された分も件数に足す。
+      appliedCount += await processIfNeeded().appliedCount
+    }
+    return ApprovalQueueRefresh(
+      queue: store.load().approvalQueue,
+      appliedCount: appliedCount
+    )
+  }
+
+  /// 承認画面で「許可」されたコマンドを適用する。
+  func approve(commandId: String) async -> CommandInboxApprovalOutcome {
+    await withExclusive {
+      await CommandInboxApprovalCoordinator.approve(
+        commandId: commandId,
+        store: store,
+        applier: applier,
+        handler: handler,
+        policy: CommandWritePermissionSettings.policy(),
+        now: now()
+      )
+    }
+  }
+
+  /// 承認画面で「却下」されたコマンドを `denied_by_user` にする。
+  func deny(commandId: String) async -> CommandInboxApprovalOutcome {
+    await withExclusive {
+      await CommandInboxApprovalCoordinator.deny(
+        commandId: commandId,
+        store: store,
+        handler: handler,
+        now: now()
+      )
+    }
+  }
+
   /// 受信箱を 1 回取り込む。
   func processIfNeeded() async -> RunOutcome {
     guard !isRunning else { return .skipped }
@@ -95,12 +190,7 @@ final class CommandInboxService {
     guard let user = GoogleDriveLinkManager.shared.currentUser else { return .skipped }
 
     isRunning = true
-    defer {
-      isRunning = false
-      let actions = deferredMaintenance
-      deferredMaintenance = []
-      actions.forEach { $0() }
-    }
+    defer { finishExclusive() }
 
     do {
       let transport = GoogleDriveCommandInboxTransport(user: user)
