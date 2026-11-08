@@ -129,7 +129,9 @@ enum InventoryStore {
             NotificationManager.shared.requestReschedule(using: modelContext)
         }
 
-        guard let family else { return true }
+        // 共有していない家族は同期しても何もしない（syncFamilyDataToCloudKit の先頭で
+        // 同じ判定をして戻る）。CloudKit の準備を無駄に作らないよう、ここで止める。
+        guard let family, family.isCloudKitSharedFamily else { return true }
         Task {
             do {
                 let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
