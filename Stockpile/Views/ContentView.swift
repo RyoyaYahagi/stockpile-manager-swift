@@ -145,6 +145,7 @@ struct ContentView: View {
             }
 
             await refreshCloudKitSharedFamilies()
+            await processCommandInboxIfNeeded()
 
             presentPendingFirstLaunchFlowIfNeeded()
         }
@@ -174,8 +175,12 @@ struct ContentView: View {
             try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled else { return }
             let scoped = SnapshotLinkScope.resolved(items: items, families: families)
-            _ = await SnapshotAutoUploader.uploadIfNeeded(
+            let result = await SnapshotAutoUploader.uploadIfNeeded(
                 items: scoped.items, familyName: scoped.family?.name)
+            if case .uploaded = result {
+                // スナップショット送信の成功後にも受信箱を読む（仕様 1 章）
+                await processCommandInboxIfNeeded()
+            }
         }
         .onChange(of: scenePhase) { _, newValue in
             guard newValue == .active, !ScreenshotMode.isActive else { return }
@@ -186,6 +191,7 @@ struct ContentView: View {
             Task {
                 await premiumAccessManager.refresh()
                 await refreshCloudKitSharedFamilies()
+                await processCommandInboxIfNeeded()
             }
             presentPendingFirstLaunchFlowIfNeeded()
         }
@@ -534,6 +540,20 @@ struct ContentView: View {
         }
 
         updatePendingSharedFamilyRefreshSchedule()
+    }
+
+    /// コマンド受信箱の取り込み（W-01）。
+    /// 連携が有効で送信先が Google Drive かつサインイン済みのときだけ動く。
+    /// 1 件以上適用されたら、自動送信の設定に関係なくスナップショットを送る（仕様 1 章）。
+    private func processCommandInboxIfNeeded() async {
+        guard !ScreenshotMode.isActive else { return }
+        let outcome = await CommandInboxService.shared.processIfNeeded()
+        guard outcome.appliedCount > 0 else { return }
+        let scoped = SnapshotLinkScope.resolved(items: items, families: families)
+        _ = await SnapshotAutoUploader.uploadAfterCommandApplied(
+            items: scoped.items,
+            familyName: scoped.family?.name
+        )
     }
 
     private func cloudKitFamiliesForRefresh() -> [Family] {

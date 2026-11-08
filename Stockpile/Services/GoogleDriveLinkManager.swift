@@ -69,6 +69,9 @@ final class GoogleDriveLinkManager {
         additionalScopes: [Self.driveScope]
       )
       currentUser = result.user
+      // 受信箱（commands.json / command-results.json）をサインイン完了時に作る（W-01）。
+      // 失敗してもサインインは成功として扱い、取り込み時に作り直す。
+      await CommandInboxFileBootstrap.ensureFiles(for: result.user)
       return true
     } catch {
       if (error as NSError).code == GIDSignInError.canceled.rawValue {
