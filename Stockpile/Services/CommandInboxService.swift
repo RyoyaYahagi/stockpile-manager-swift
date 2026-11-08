@@ -39,6 +39,18 @@ final class CommandInboxService {
     self.now = now
   }
 
+  /// 結果ファイルの中身に、前回書き戻せなかった結果行を重ねる。
+  nonisolated static func combine(
+    remote: CommandInboxResultsFile?,
+    carried: [CommandInboxResult],
+    now: Date
+  ) -> CommandInboxResultsFile? {
+    guard !carried.isEmpty else { return remote }
+    let merged = CommandInboxResultsMerger.merge(
+      existing: remote?.results ?? [], adding: carried, now: now)
+    return CommandInboxResultsFile(results: merged, updatedAt: remote?.updatedAt)
+  }
+
   /// 受信箱を 1 回取り込む。
   func processIfNeeded() async -> RunOutcome {
     guard !isRunning else { return .skipped }
@@ -67,33 +79,46 @@ final class CommandInboxService {
       }
 
       let now = self.now()
-      let existingResults = resultsData.flatMap(CommandInboxParser.parseResultsFile)
+      let remoteResults = resultsData.flatMap(CommandInboxParser.parseResultsFile)
+      var initialState = store.load()
+      let carried = initialState.unsentResults ?? []
+      initialState.unsentResults = nil
+      // 前回書き戻せなかった結果行を、結果ファイルに載っているものとして扱う
+      let existingResults = Self.combine(remote: remoteResults, carried: carried, now: now)
       let output = await CommandInboxProcessor.process(
         commandsData: commandsData ?? CommandInboxParser.emptyCommandsData(),
         existingResults: existingResults,
-        state: store.load(),
+        state: initialState,
         now: now,
         handler: handler
       )
 
-      // 結果の書き戻しを先に行い、そのあとで端末内の状態を保存する（仕様 1 章）。
-      if output.resultsChanged {
-        try await transport.writeResults(
-          CommandInboxParser.encodeResultsFile(output.results))
+      // 処理済みの記録を先に保存する。書き戻しが失敗しても、適用済みのコマンドを
+      // 次回もう一度適用しないため。書き戻す内容は unsentResults に残しておく。
+      let needsWrite = output.resultsChanged || !carried.isEmpty
+      var state = output.state
+      state.unsentResults = needsWrite ? output.results.results : nil
+      try store.save(state)
+
+      var writeError: String?
+      if needsWrite {
+        do {
+          try await transport.writeResults(
+            CommandInboxParser.encodeResultsFile(output.results))
+          state.unsentResults = nil
+          try? store.save(state)
+        } catch {
+          writeError = error.localizedDescription
+        }
       }
 
-      var saveError: String?
-      do {
-        try store.save(output.state)
-      } catch {
-        saveError = error.localizedDescription
-      }
-
+      // 書き戻しに失敗しても適用は済んでいるので、適用件数はそのまま返す
+      // （スナップショット送信はデータの実態に合わせて行う）。
       return RunOutcome(
         didRun: true,
         appliedCount: output.appliedCount,
-        wroteResults: output.resultsChanged,
-        errorMessage: saveError
+        wroteResults: needsWrite && writeError == nil,
+        errorMessage: writeError
       )
     } catch {
       return RunOutcome(

@@ -316,15 +316,21 @@ struct CommandInboxState: Codable, Equatable, Sendable {
   var fileErrorHashes: [String: String]
   /// 適用履歴（新しい順・最大 500 件）
   var history: [CommandInboxHistoryEntry]
+  /// 結果ファイルへまだ書き戻せていない結果行。
+  /// 処理済みの記録を先に保存し、書き戻しに失敗した分は次回の取り込みで送り直す
+  /// （適用済みのコマンドを二重に適用しないため）。
+  var unsentResults: [CommandInboxResult]?
 
   init(
     processedCommandIds: [String: String] = [:],
     fileErrorHashes: [String: String] = [:],
-    history: [CommandInboxHistoryEntry] = []
+    history: [CommandInboxHistoryEntry] = [],
+    unsentResults: [CommandInboxResult]? = nil
   ) {
     self.processedCommandIds = processedCommandIds
     self.fileErrorHashes = fileErrorHashes
     self.history = history
+    self.unsentResults = unsentResults
   }
 
   static let empty = CommandInboxState()

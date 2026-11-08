@@ -364,4 +364,32 @@ struct CommandInboxResultsMergerTests {
     #expect(merged.count == 1)
     #expect(merged.first?.reason == .tooManyCommands)
   }
+
+  @Test
+  func carriedUnsentResultsAreTreatedAsAlreadyReported() async throws {
+    // 前回書き戻せなかった applied 行は、結果ファイルに載っているものとして扱い再処理しない
+    let carried = CommandInboxTestFixture.result(
+      id: "CARRIED", status: .applied, at: CommandInboxTestFixture.date(-60))
+    let combined = CommandInboxService.combine(
+      remote: nil, carried: [carried], now: CommandInboxTestFixture.now)
+
+    #expect(combined?.results.map(\.commandId) == ["CARRIED"])
+    #expect(
+      CommandInboxService.combine(remote: nil, carried: [], now: CommandInboxTestFixture.now)
+        == nil)
+  }
+
+  @Test
+  func unsentResultsSurviveStateRoundTrip() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = CommandInboxStore(fileURL: directory.appendingPathComponent("state.json"))
+    let row = CommandInboxTestFixture.result(
+      id: "UNSENT", status: .applied, at: CommandInboxTestFixture.now)
+
+    try store.save(CommandInboxState(unsentResults: [row]))
+
+    #expect(store.load().unsentResults?.map(\.commandId) == ["UNSENT"])
+  }
 }
