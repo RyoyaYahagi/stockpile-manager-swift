@@ -196,6 +196,100 @@ struct CommandInboxEnvelope: Equatable, Sendable {
   }
 }
 
+// MARK: - 対象の同一性（仕様 7 章「順序の保持」）
+
+/// 承認キューの中で「同じ対象を指すコマンド」を判定するためのキー。
+///
+/// - `item.update` / `item.delete` は payload の `id`（大文字小文字を無視）
+/// - `bag.add` / `bag.rename` / `bag.delete` は payload の `name`
+///   （`bag.rename` は変更後の `newName` も対象にする）
+/// - `item.add` は新しいアイテムを作るため、既存の対象と重ならない扱いにする
+enum CommandInboxTargetKey {
+  static func keys(for envelope: CommandInboxEnvelope) -> Set<String> {
+    keys(type: envelope.type, payload: envelope.payload)
+  }
+
+  static func keys(for entry: CommandInboxPendingApproval) -> Set<String> {
+    guard let envelope = entry.envelope else { return [] }
+    return keys(for: envelope)
+  }
+
+  static func keys(type: String, payload: [String: CommandJSONValue]) -> Set<String> {
+    guard let commandType = CommandInboxCommandType(rawValue: type) else { return [] }
+    switch commandType {
+    case .itemAdd:
+      return []
+    case .itemUpdate, .itemDelete:
+      guard let id = normalizedID(payload["id"]?.stringValue) else { return [] }
+      return ["item:\(id)"]
+    case .bagAdd, .bagDelete:
+      guard let name = normalizedName(payload["name"]?.stringValue) else { return [] }
+      return ["bag:\(name)"]
+    case .bagRename:
+      var keys: Set<String> = []
+      if let name = normalizedName(payload["name"]?.stringValue) {
+        keys.insert("bag:\(name)")
+      }
+      if let newName = normalizedName(payload["newName"]?.stringValue) {
+        keys.insert("bag:\(newName)")
+      }
+      return keys
+    }
+  }
+
+  /// 2 つのコマンドが同じ対象を指すか。対象を持たない `item.add` は常に false。
+  static func overlaps(
+    _ left: CommandInboxEnvelope,
+    _ right: CommandInboxEnvelope
+  ) -> Bool {
+    !keys(for: left).isDisjoint(with: keys(for: right))
+  }
+
+  static func overlaps(
+    _ left: CommandInboxPendingApproval,
+    _ right: CommandInboxPendingApproval
+  ) -> Bool {
+    !keys(for: left).isDisjoint(with: keys(for: right))
+  }
+
+  /// 承認キューの中に、このコマンドと同じ対象を指す先行の承認待ちがあるか。
+  static func hasEarlierPendingApproval(
+    for envelope: CommandInboxEnvelope,
+    in queue: [CommandInboxPendingApproval]
+  ) -> Bool {
+    queue.contains { !keys(for: $0).isDisjoint(with: keys(for: envelope)) }
+  }
+
+  /// キューの並びの中で、この項目より前にある項目が同じ対象を指しているか。
+  /// 承認画面の「先のコマンド待ち」の表示と、待機解除の判定に使う。
+  static func isWaitingForEarlier(
+    _ entry: CommandInboxPendingApproval,
+    in queue: [CommandInboxPendingApproval]
+  ) -> Bool {
+    guard
+      let index = queue.firstIndex(where: {
+        $0.commandId.caseInsensitiveCompare(entry.commandId) == .orderedSame
+      })
+    else {
+      return false
+    }
+    return queue[..<index].contains { overlaps($0, entry) }
+  }
+
+  private static func normalizedID(_ value: String?) -> String? {
+    guard let value else { return nil }
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+    return trimmed.lowercased()
+  }
+
+  private static func normalizedName(_ value: String?) -> String? {
+    guard let value else { return nil }
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
+  }
+}
+
 // MARK: - 結果
 
 /// command-results.json の `status`

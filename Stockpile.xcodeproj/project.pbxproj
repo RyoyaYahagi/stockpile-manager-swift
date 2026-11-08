@@ -55,10 +55,12 @@
 		F24 /* CommandInboxHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F22 /* CommandInboxHistoryView.swift */; };
 		F29 /* ItemCommandApplier.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A /* ItemCommandApplier.swift */; };
 		F2B /* CommandDescriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C /* CommandDescriber.swift */; };
+		F30 /* CommandInboxApprovalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F31 /* CommandInboxApprovalView.swift */; };
 		A4B100000000000000000106 /* CommandInboxParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000007 /* CommandInboxParsingTests.swift */; };
 		A4B100000000000000000107 /* CommandInboxProcessingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000008 /* CommandInboxProcessingTests.swift */; };
 		A4B100000000000000000108 /* CommandInboxPermissionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000009 /* CommandInboxPermissionTests.swift */; };
 		A4B100000000000000000109 /* ItemCommandApplierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B10000000000000000000A /* ItemCommandApplierTests.swift */; };
+		A4B100000000000000000141 /* CommandInboxApprovalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000142 /* CommandInboxApprovalTests.swift */; };
 		028 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128 /* APIConfig.swift */; };
 		031 /* FamilySharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131 /* FamilySharingService.swift */; };
 		032 /* FamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132 /* FamilySettingsView.swift */; };
@@ -163,6 +165,7 @@
 		F20 /* PermissionedCommandHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionedCommandHandler.swift; sourceTree = "<group>"; };
 		F21 /* CommandInboxApprovalCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxApprovalCoordinator.swift; sourceTree = "<group>"; };
 		F22 /* CommandInboxHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxHistoryView.swift; sourceTree = "<group>"; };
+		F31 /* CommandInboxApprovalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxApprovalView.swift; sourceTree = "<group>"; };
 		F2A /* ItemCommandApplier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCommandApplier.swift; sourceTree = "<group>"; };
 		F2C /* CommandDescriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandDescriber.swift; sourceTree = "<group>"; };
 		128 /* APIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIConfig.swift; sourceTree = "<group>"; };
@@ -208,6 +211,7 @@
 		A4B100000000000000000008 /* CommandInboxProcessingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxProcessingTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000009 /* CommandInboxPermissionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxPermissionTests.swift; sourceTree = "<group>"; };
 		A4B10000000000000000000A /* ItemCommandApplierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCommandApplierTests.swift; sourceTree = "<group>"; };
+		A4B100000000000000000142 /* CommandInboxApprovalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxApprovalTests.swift; sourceTree = "<group>"; };
 		AF14E1C1F18CC52D575E8FE7 /* RenewExpirySheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RenewExpirySheet.swift; sourceTree = "<group>"; };
 		AF966BDA61B4847C53006459 /* ScannerFrame.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScannerFrame.swift; sourceTree = "<group>"; };
 		C176BB208A4D750919424EB0 /* LegacyItemFormSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemFormSheet.swift; sourceTree = "<group>"; };
@@ -391,6 +395,7 @@
 				118 /* ImportJSONView.swift */,
 				F12 /* AILinkSettingsView.swift */,
 				F22 /* CommandInboxHistoryView.swift */,
+				F31 /* CommandInboxApprovalView.swift */,
 				125 /* NotificationSettingsView.swift */,
 				148 /* PremiumPlanView.swift */,
 				1258E2F415494C32B165F443 /* NotificationReminderCard.swift */,
@@ -507,6 +512,7 @@
 				A4B100000000000000000008 /* CommandInboxProcessingTests.swift */,
 				A4B100000000000000000009 /* CommandInboxPermissionTests.swift */,
 				A4B10000000000000000000A /* ItemCommandApplierTests.swift */,
+				A4B100000000000000000142 /* CommandInboxApprovalTests.swift */,
 				A4B100000000000000000004 /* PremiumAccessManagerTests.swift */,
 				A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */,
 				A4B100000000000000000002 /* ProductSearchServiceTests.swift */,
@@ -646,6 +652,7 @@
 				F10 /* PermissionedCommandHandler.swift in Sources */,
 				F23 /* CommandInboxApprovalCoordinator.swift in Sources */,
 				F24 /* CommandInboxHistoryView.swift in Sources */,
+				F30 /* CommandInboxApprovalView.swift in Sources */,
 				F29 /* ItemCommandApplier.swift in Sources */,
 				F2B /* CommandDescriber.swift in Sources */,
 				A659FF64C07B539D8D70E351 /* LegacyBagListView.swift in Sources */,
@@ -721,6 +728,7 @@
 				A4B100000000000000000107 /* CommandInboxProcessingTests.swift in Sources */,
 				A4B100000000000000000108 /* CommandInboxPermissionTests.swift in Sources */,
 				A4B100000000000000000109 /* ItemCommandApplierTests.swift in Sources */,
+				A4B100000000000000000141 /* CommandInboxApprovalTests.swift in Sources */,
 				A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */,
 				A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */,
 				A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */,
