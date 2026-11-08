@@ -200,3 +200,21 @@ locationNote 2,000文字以下、category はスナップショット v1 の8種
 | item.add の id | 指定なし | commandId と同じ | 複数端末での二重追加を防ぐ |
 | Worker の結果 | `/v1/commands` のみ | `/v1/command-results` を追加 | 結果を Muse に返す経路が必要 |
 | Drive のファイル | 作成のみ | Muse は作り直し禁止 | drive.file ではアプリが作ったファイルしか読めない |
+
+## 10. 削除方式（W-05）
+
+`item.delete` と `bag.delete` は、画面からの削除と同じ「削除マーカー＋即時削除」にした。
+家族共有のデータでは、削除前に `CloudKitDeletionMarker` を作ってから
+`modelContext.delete` し、保存と CloudKit 同期は `InventoryStore.saveAndSync` に任せる
+（`CloudKitFamilySharingService.deleteItemLocally` / `deleteBagLocally` と同じ経路）。
+画面の「元に戻す」はスナックバーが出ている 5 秒間だけで、それを過ぎると戻せない。
+コマンド経由の削除もこの既存の挙動に合わせ、独自のゴミ箱（一定期間復元できる仕組み）は
+作っていない。
+
+削除の既定は承認制（D1）。Muse からの削除は、W-04 の承認画面で内容を確認してから
+許可する。承認画面では `CommandDescriber` の「〜を削除します」を確認ダイアログに出す。
+`bag.delete` は空のバッグだけを対象にし、アイテムが 1 件でも入っていれば
+`bag_not_empty` で何もしない。
+
+一定期間は削除を取り消せるようにしたい場合は、削除マーカーの保持期間や復元 UI を
+別 Issue として提案する（スナップショット v1 と SwiftData のスキーマは変えない）。
