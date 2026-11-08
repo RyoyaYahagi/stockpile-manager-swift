@@ -58,6 +58,7 @@
 		A4B100000000000000000106 /* CommandInboxParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000007 /* CommandInboxParsingTests.swift */; };
 		A4B100000000000000000107 /* CommandInboxProcessingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000008 /* CommandInboxProcessingTests.swift */; };
 		A4B100000000000000000108 /* CommandInboxPermissionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000009 /* CommandInboxPermissionTests.swift */; };
+		A4B100000000000000000109 /* ItemCommandApplierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B10000000000000000000A /* ItemCommandApplierTests.swift */; };
 		028 /* APIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128 /* APIConfig.swift */; };
 		031 /* FamilySharingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 131 /* FamilySharingService.swift */; };
 		032 /* FamilySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 132 /* FamilySettingsView.swift */; };
@@ -206,6 +207,7 @@
 		A4B100000000000000000007 /* CommandInboxParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxParsingTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000008 /* CommandInboxProcessingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxProcessingTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000009 /* CommandInboxPermissionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxPermissionTests.swift; sourceTree = "<group>"; };
+		A4B10000000000000000000A /* ItemCommandApplierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCommandApplierTests.swift; sourceTree = "<group>"; };
 		AF14E1C1F18CC52D575E8FE7 /* RenewExpirySheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RenewExpirySheet.swift; sourceTree = "<group>"; };
 		AF966BDA61B4847C53006459 /* ScannerFrame.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScannerFrame.swift; sourceTree = "<group>"; };
 		C176BB208A4D750919424EB0 /* LegacyItemFormSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemFormSheet.swift; sourceTree = "<group>"; };
@@ -504,6 +506,7 @@
 				A4B100000000000000000007 /* CommandInboxParsingTests.swift */,
 				A4B100000000000000000008 /* CommandInboxProcessingTests.swift */,
 				A4B100000000000000000009 /* CommandInboxPermissionTests.swift */,
+				A4B10000000000000000000A /* ItemCommandApplierTests.swift */,
 				A4B100000000000000000004 /* PremiumAccessManagerTests.swift */,
 				A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */,
 				A4B100000000000000000002 /* ProductSearchServiceTests.swift */,
@@ -717,6 +720,7 @@
 				A4B100000000000000000106 /* CommandInboxParsingTests.swift in Sources */,
 				A4B100000000000000000107 /* CommandInboxProcessingTests.swift in Sources */,
 				A4B100000000000000000108 /* CommandInboxPermissionTests.swift in Sources */,
+				A4B100000000000000000109 /* ItemCommandApplierTests.swift in Sources */,
 				A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */,
 				A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */,
 				A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */,
