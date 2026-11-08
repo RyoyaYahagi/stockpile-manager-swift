@@ -14,9 +14,13 @@ import SwiftData
 struct ItemCommandApplier: CommandApplier {
   private let host: ItemCommandApplierHost
 
+  /// - Parameter reschedulesNotifications: 保存後に期限通知を組み直すか。
+  ///   通知の組み直しは非同期で後から ModelContext を読むため、
+  ///   すぐ破棄するインメモリのコンテナを使うテストでは false にする。
   @MainActor
-  init(modelContext: ModelContext) {
-    self.host = ItemCommandApplierHost(modelContext: modelContext)
+  init(modelContext: ModelContext, reschedulesNotifications: Bool = true) {
+    self.host = ItemCommandApplierHost(
+      modelContext: modelContext, reschedulesNotifications: reschedulesNotifications)
   }
 
   func apply(_ command: CommandInboxEnvelope, now: Date) async -> CommandInboxHandlingResult {
@@ -28,13 +32,17 @@ struct ItemCommandApplier: CommandApplier {
 @MainActor
 final class ItemCommandApplierHost {
   private let modelContext: ModelContext
+  private let reschedulesNotifications: Bool
 
-  init(modelContext: ModelContext) {
+  init(modelContext: ModelContext, reschedulesNotifications: Bool = true) {
     self.modelContext = modelContext
+    self.reschedulesNotifications = reschedulesNotifications
   }
 
   func apply(_ command: CommandInboxEnvelope, now: Date) -> CommandInboxHandlingResult {
-    ItemCommandApplication.apply(command, now: now, modelContext: modelContext)
+    ItemCommandApplication.apply(
+      command, now: now, modelContext: modelContext,
+      reschedulesNotifications: reschedulesNotifications)
   }
 }
 
@@ -50,7 +58,8 @@ enum ItemCommandApplication {
   static func apply(
     _ command: CommandInboxEnvelope,
     now: Date,
-    modelContext: ModelContext
+    modelContext: ModelContext,
+    reschedulesNotifications: Bool = true
   ) -> CommandInboxHandlingResult {
     // 承認画面（W-04）から直接呼ばれた場合に備えて、検証をやり直す
     guard CommandInboxPayloadValidator.validate(command) else {
@@ -59,9 +68,13 @@ enum ItemCommandApplication {
 
     switch command.commandType {
     case .itemAdd:
-      return applyAdd(command, now: now, modelContext: modelContext)
+      return applyAdd(
+        command, now: now, modelContext: modelContext,
+        reschedulesNotifications: reschedulesNotifications)
     case .itemUpdate:
-      return applyUpdate(command, now: now, modelContext: modelContext)
+      return applyUpdate(
+        command, now: now, modelContext: modelContext,
+        reschedulesNotifications: reschedulesNotifications)
     default:
       // item.delete / bag.* は W-05 で実装する
       return .unsupported(
@@ -104,7 +117,8 @@ enum ItemCommandApplication {
   private static func applyAdd(
     _ command: CommandInboxEnvelope,
     now: Date,
-    modelContext: ModelContext
+    modelContext: ModelContext,
+    reschedulesNotifications: Bool
   ) -> CommandInboxHandlingResult {
     let payload = command.payload
     guard let itemId = UUID(uuidString: command.commandId),
@@ -177,7 +191,9 @@ enum ItemCommandApplication {
     item.markUpdated(at: now)
     modelContext.insert(item)
 
-    guard InventoryStore.saveAndSync(modelContext, family: scope.family) else {
+    guard InventoryStore.saveAndSync(
+        modelContext, family: scope.family,
+        needsNotificationReschedule: reschedulesNotifications) else {
       modelContext.rollback()
       return internalError()
     }
@@ -193,7 +209,8 @@ enum ItemCommandApplication {
   private static func applyUpdate(
     _ command: CommandInboxEnvelope,
     now: Date,
-    modelContext: ModelContext
+    modelContext: ModelContext,
+    reschedulesNotifications: Bool
   ) -> CommandInboxHandlingResult {
     let payload = command.payload
     guard let idString = payload["id"]?.stringValue,
@@ -241,7 +258,9 @@ enum ItemCommandApplication {
     plan.apply(to: item)
     item.markUpdated(at: now)
 
-    guard InventoryStore.saveAndSync(modelContext, family: scope.family) else {
+    guard InventoryStore.saveAndSync(
+        modelContext, family: scope.family,
+        needsNotificationReschedule: reschedulesNotifications) else {
       modelContext.rollback()
       return internalError()
     }

@@ -63,7 +63,8 @@ private struct ItemCommandTestHarness {
   }
 
   func applier() -> ItemCommandApplier {
-    ItemCommandApplier(modelContext: context)
+    // 通知の組み直しは非同期で後から context を読むため、テストでは止める
+    ItemCommandApplier(modelContext: context, reschedulesNotifications: false)
   }
 
   func allItems() -> [Item] {
