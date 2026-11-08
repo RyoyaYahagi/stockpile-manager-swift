@@ -2,11 +2,45 @@ import Foundation
 import GoogleSignIn
 import SwiftData
 
+// MARK: - 送信先ごとの transport の選択
+
+/// 受信箱の読み書きに使う transport の種類。
+enum CommandInboxTransportKind: Equatable {
+  case googleDrive
+  case worker(WorkerCommandInboxEndpoints)
+}
+
+/// 送信先と前提条件から、使う transport を決める純粋関数。
+/// 使えないときは nil（呼び出し側は `.skipped` にする）。
+enum CommandInboxTransportSelector {
+  static func select(
+    destination: SnapshotDestination,
+    endpoint: URL?,
+    hasWriteToken: Bool,
+    hasDriveUser: Bool
+  ) -> CommandInboxTransportKind? {
+    switch destination {
+    case .googleDrive:
+      // Drive はサインイン済みのときだけ受信箱を読める。
+      return hasDriveUser ? .googleDrive : nil
+    case .customURL:
+      // カスタム URL は、Worker のスナップショット URL と書き込みトークンが
+      // そろっているときだけ受信箱を使う。それ以外の URL はエラーにしない。
+      guard hasWriteToken, let endpoint,
+        let endpoints = WorkerCommandInboxEndpoints(snapshotURL: endpoint)
+      else {
+        return nil
+      }
+      return .worker(endpoints)
+    }
+  }
+}
+
 // MARK: - 受信箱の取り込み（W-01）
 
 /// 起動時・フォアグラウンド復帰時・スナップショット送信成功後に呼ばれる取り込み処理。
-/// 連携が有効・送信先が Google Drive・サインイン済みのときだけ動き、
-/// 同時に 2 つ以上の取り込みを走らせない（仕様 1 章）。
+/// 連携が有効で、送信先（Google Drive または Worker のカスタム URL）の前提を
+/// 満たすときだけ動き、同時に 2 つ以上の取り込みを走らせない（仕様 1 章）。
 @MainActor
 final class CommandInboxService {
   static let shared = CommandInboxService()
@@ -202,20 +236,46 @@ final class CommandInboxService {
     guard !isRunning else { return .skipped }
     guard Self.canProcess(handlerConfigured: handlerIsConfigured) else { return .skipped }
     guard SnapshotLinkSettings.isEnabled else { return .skipped }
-    guard case .googleDrive = SnapshotLinkSettings.destination else { return .skipped }
-    guard let user = GoogleDriveLinkManager.shared.currentUser else { return .skipped }
+
+    let destination = SnapshotLinkSettings.destination
+    let endpoint = SnapshotLinkSettings.validatedEndpoint(SnapshotLinkSettings.endpointURLString)
+    let writeToken = SnapshotLinkKeychain.readWriteToken()
+    let driveUser = GoogleDriveLinkManager.shared.currentUser
+    guard
+      let transportKind = CommandInboxTransportSelector.select(
+        destination: destination,
+        endpoint: endpoint,
+        hasWriteToken: writeToken != nil,
+        hasDriveUser: driveUser != nil)
+    else {
+      return .skipped
+    }
+
+    let transport: any CommandInboxTransport
+    /// Drive 固有のファイル作成を行うか。Worker は未保存でも GET が初期内容を返す。
+    let shouldEnsureFiles: Bool
+    switch transportKind {
+    case .googleDrive:
+      guard let driveUser else { return .skipped }
+      transport = GoogleDriveCommandInboxTransport(user: driveUser)
+      shouldEnsureFiles = true
+    case .worker(let endpoints):
+      guard let writeToken else { return .skipped }
+      transport = WorkerCommandInboxTransport(endpoints: endpoints, writeToken: writeToken)
+      shouldEnsureFiles = false
+    }
 
     isRunning = true
     defer { finishExclusive() }
 
     do {
-      let transport = GoogleDriveCommandInboxTransport(user: user)
       var commandsData = try await transport.readCommands()
       var resultsData = try await transport.readResults()
 
       // ファイルが見つからないときはアプリが作る（仕様 2 章）。
-      // commands.json は作成時以外に書き換えない。
-      if commandsData == nil || resultsData == nil {
+      // commands.json は作成時以外に書き換えない。この処理は Drive だけに必要で、
+      // Worker は未保存のファイルの GET に初期内容を返す。
+      if shouldEnsureFiles && (commandsData == nil || resultsData == nil) {
         try await transport.ensureFiles()
         if commandsData == nil {
           commandsData = CommandInboxParser.emptyCommandsData()
@@ -267,6 +327,10 @@ final class CommandInboxService {
         wroteResults: needsWrite && writeError == nil,
         errorMessage: writeError
       )
+    } catch WorkerCommandInboxError.inboxUnavailable {
+      // Worker 側でコマンド受信箱が無効（404）。受信箱がないだけなので、
+      // 通信の失敗にせず何もしない（仕様 2 章）。
+      return .skipped
     } catch {
       return RunOutcome(
         didRun: true,

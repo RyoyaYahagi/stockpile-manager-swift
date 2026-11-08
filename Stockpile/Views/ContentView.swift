@@ -542,8 +542,8 @@ struct ContentView: View {
         updatePendingSharedFamilyRefreshSchedule()
     }
 
-    /// コマンド受信箱の取り込み（W-01）。
-    /// 連携が有効で送信先が Google Drive かつサインイン済みのときだけ動く。
+    /// コマンド受信箱の取り込み（W-01 / W-06）。
+    /// 連携が有効で、送信先（Google Drive または Worker）の前提を満たすときだけ動く。
     /// 1 件以上適用されたら、自動送信の設定に関係なくスナップショットを送る（仕様 1 章）。
     private func processCommandInboxIfNeeded() async {
         guard !ScreenshotMode.isActive else { return }
