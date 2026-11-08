@@ -31,10 +31,77 @@ enum CommandDescriber {
       return addSentence(command.payload, past: past)
     case .itemUpdate:
       return updateSentence(command.payload, items: items, past: past)
-    case .itemDelete, .bagAdd, .bagRename, .bagDelete, nil:
-      // item.delete / bag.* の説明文は W-05 で具体的にする
+    case .itemDelete:
+      return deleteSentence(command.payload, items: items, past: past)
+    case .bagAdd:
+      return bagAddSentence(command.payload, past: past)
+    case .bagRename:
+      return bagRenameSentence(command.payload, past: past)
+    case .bagDelete:
+      return bagDeleteSentence(command.payload, past: past)
+    case nil:
       return past ? L10n.string("コマンドを適用しました") : L10n.string("コマンドを適用します")
     }
+  }
+
+  // MARK: item.delete
+
+  private static func deleteSentence(
+    _ payload: [String: CommandJSONValue],
+    items: [Item],
+    past: Bool
+  ) -> String {
+    guard let idString = payload["id"]?.stringValue,
+      let itemId = UUID(uuidString: idString),
+      let item = items.first(where: { $0.id == itemId })
+    else {
+      return past ? L10n.string("アイテムを削除しました") : L10n.string("アイテムを削除します")
+    }
+    return past
+      ? L10n.format("%@ を削除しました", display(item.name))
+      : L10n.format("%@ を削除します", display(item.name))
+  }
+
+  // MARK: bag.add / bag.rename / bag.delete
+
+  private static func bagAddSentence(
+    _ payload: [String: CommandJSONValue],
+    past: Bool
+  ) -> String {
+    guard let name = trimmed(payload["name"]?.stringValue) else {
+      return past ? L10n.string("バッグを追加しました") : L10n.string("バッグを追加します")
+    }
+    return past
+      ? L10n.format("バッグ「%@」を追加しました", display(name))
+      : L10n.format("バッグ「%@」を追加します", display(name))
+  }
+
+  private static func bagRenameSentence(
+    _ payload: [String: CommandJSONValue],
+    past: Bool
+  ) -> String {
+    guard let name = trimmed(payload["name"]?.stringValue),
+      let newName = trimmed(payload["newName"]?.stringValue)
+    else {
+      return past
+        ? L10n.string("バッグの名前を変更しました")
+        : L10n.string("バッグの名前を変更します")
+    }
+    return past
+      ? L10n.format("バッグ「%@」を「%@」に名前変更しました", display(name), display(newName))
+      : L10n.format("バッグ「%@」を「%@」に名前変更します", display(name), display(newName))
+  }
+
+  private static func bagDeleteSentence(
+    _ payload: [String: CommandJSONValue],
+    past: Bool
+  ) -> String {
+    guard let name = trimmed(payload["name"]?.stringValue) else {
+      return past ? L10n.string("空のバッグを削除しました") : L10n.string("空のバッグを削除します")
+    }
+    return past
+      ? L10n.format("空のバッグ「%@」を削除しました", display(name))
+      : L10n.format("空のバッグ「%@」を削除します", display(name))
   }
 
   // MARK: item.add

@@ -109,12 +109,19 @@ enum InventoryStore {
     }
 
     /// ローカル保存のあと、通知の再設定と家族への同期を行う
+    ///
+    /// - Parameter sharingBackend: 家族への同期に使う CloudKit の差し替え口。
+    ///   テストで本物の `CKContainer` を作らずに済むよう、偽の実装を渡せる。
+    /// - Parameter syncsFamilyData: 保存後に家族へ同期するか。同期は非同期で後から
+    ///   ModelContext を読むため、すぐ破棄するインメモリのコンテナを使うテストでは false にする。
     @MainActor
     @discardableResult
     static func saveAndSync(
         _ modelContext: ModelContext,
         family: Family?,
-        needsNotificationReschedule: Bool = true
+        needsNotificationReschedule: Bool = true,
+        sharingBackend: (any CloudKitFamilySharingBackend)? = nil,
+        syncsFamilyData: Bool = true
     ) -> Bool {
         do {
             try modelContext.save()
@@ -131,10 +138,11 @@ enum InventoryStore {
 
         // 共有していない家族は同期しても何もしない（syncFamilyDataToCloudKit の先頭で
         // 同じ判定をして戻る）。CloudKit の準備を無駄に作らないよう、ここで止める。
-        guard let family, family.isCloudKitSharedFamily else { return true }
+        guard syncsFamilyData, let family, family.isCloudKitSharedFamily else { return true }
         Task {
             do {
-                let sharingService = CloudKitFamilySharingService(modelContext: modelContext)
+                let sharingService = CloudKitFamilySharingService(
+                    modelContext: modelContext, backend: sharingBackend)
                 try await sharingService.syncFamilyDataToCloudKit(for: family)
             } catch {
                 #if DEBUG
