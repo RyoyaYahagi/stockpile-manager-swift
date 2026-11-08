@@ -2,18 +2,29 @@
 //
 // One deployment serves exactly one user (or one family).
 // Endpoints:
-//   GET  /v1/health   -> { ok: true }                        (no auth)
-//   PUT  /v1/snapshot -> store the latest snapshot           (Bearer WRITE_TOKEN)
-//   GET  /v1/snapshot -> fetch the latest snapshot           (Bearer READ_TOKEN)
+//   GET  /v1/health          -> { ok: true }                      (no auth)
+//   PUT  /v1/snapshot        -> store the latest snapshot         (Bearer WRITE_TOKEN)
+//   GET  /v1/snapshot        -> fetch the latest snapshot         (Bearer READ_TOKEN)
+//   GET  /v1/commands        -> fetch the command inbox           (Bearer COMMANDS_TOKEN or WRITE_TOKEN)
+//   PUT  /v1/commands        -> replace the command inbox         (Bearer COMMANDS_TOKEN)
+//   GET  /v1/command-results -> fetch the command results         (Bearer READ_TOKEN, COMMANDS_TOKEN or WRITE_TOKEN)
+//   PUT  /v1/command-results -> replace the command results       (Bearer WRITE_TOKEN)
 //
 // Tokens are separate on purpose (write token never leaves the app's Keychain;
-// only the read token is handed to the AI assistant).
-// Storage: a single KV entry ("latest"). No history is kept.
+// the read token and the commands token are handed to the AI assistant).
+// When COMMANDS_TOKEN is unset, the four command inbox endpoints return 404.
+// Storage: one KV entry per document ("latest", "commands", "command-results").
+// No history is kept.
 //
 // Snapshot format: docs/snapshot-schema-v1.md (schemaVersion 1).
+// Command inbox format: docs/command-inbox-v1.md (top-level validation only).
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB, aligned with the app's backup limits
 const MAX_ITEMS = 5000;
+const MAX_COMMAND_BYTES = 1 * 1024 * 1024;
+const MAX_COMMANDS = 200;
+const COMMANDS_KEY = "commands";
+const COMMAND_RESULTS_KEY = "command-results";
 
 function jsonResponse(status, obj) {
   return new Response(JSON.stringify(obj), {
@@ -37,6 +48,71 @@ function bearerToken(request) {
   const header = request.headers.get("authorization") || "";
   const match = header.match(/^Bearer\s+(.+)$/i);
   return match ? match[1].trim() : null;
+}
+
+function commandInboxEnabled(env) {
+  return typeof env.COMMANDS_TOKEN === "string" && env.COMMANDS_TOKEN.length > 0;
+}
+
+// Reads a command inbox body, or returns null when it exceeds the 1MB limit.
+async function readCommandBody(request) {
+  const contentLength = Number(request.headers.get("content-length") || 0);
+  if (contentLength > MAX_COMMAND_BYTES) return null;
+  const text = await request.text();
+  if (new TextEncoder().encode(text).length > MAX_COMMAND_BYTES) return null;
+  return text;
+}
+
+// Commands and command results share only the version check at the top level.
+function validateCommandEnvelope(data) {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) {
+    return "top-level must be a JSON object";
+  }
+  if (data.version !== 1) return "unsupported version (expected 1)";
+  return null;
+}
+
+function validateCommandsFile(data) {
+  const envelopeError = validateCommandEnvelope(data);
+  if (envelopeError) return envelopeError;
+  if (!Array.isArray(data.commands)) return "commands must be an array";
+  if (data.commands.length > MAX_COMMANDS) return `commands exceeds ${MAX_COMMANDS}`;
+  return null;
+}
+
+function validateCommandResultsFile(data) {
+  const envelopeError = validateCommandEnvelope(data);
+  if (envelopeError) return envelopeError;
+  if (!Array.isArray(data.results)) return "results must be an array";
+  return null;
+}
+
+async function getCommandDocument(env, key, initialDocument) {
+  const stored = await env.SNAPSHOTS.get(key);
+  if (!stored) return jsonResponse(200, initialDocument);
+  return new Response(stored, {
+    status: 200,
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
+}
+
+async function putCommandDocument(request, env, { key, validate, countField, responseField }) {
+  const text = await readCommandBody(request);
+  if (text === null) {
+    return jsonResponse(413, { error: "document too large" });
+  }
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return jsonResponse(400, { error: "invalid JSON" });
+  }
+  const validationError = validate(data);
+  if (validationError) {
+    return jsonResponse(400, { error: validationError });
+  }
+  await env.SNAPSHOTS.put(key, text);
+  return jsonResponse(200, { ok: true, [responseField]: data[countField].length });
 }
 
 function isValidDateString(value) {
@@ -100,6 +176,58 @@ export default {
 
     if (url.pathname === "/v1/health" && request.method === "GET") {
       return jsonResponse(200, { ok: true });
+    }
+
+    // The command inbox is opt-in: without COMMANDS_TOKEN all four endpoints are 404.
+    if (url.pathname === "/v1/commands" || url.pathname === "/v1/command-results") {
+      if (!commandInboxEnabled(env)) {
+        return jsonResponse(404, { error: "not found" });
+      }
+    }
+
+    if (url.pathname === "/v1/commands" && request.method === "GET") {
+      const token = bearerToken(request);
+      if (!tokenMatches(token, env.COMMANDS_TOKEN) && !tokenMatches(token, env.WRITE_TOKEN)) {
+        return jsonResponse(401, { error: "unauthorized" });
+      }
+      return getCommandDocument(env, COMMANDS_KEY, { version: 1, commands: [] });
+    }
+
+    if (url.pathname === "/v1/commands" && request.method === "PUT") {
+      if (!tokenMatches(bearerToken(request), env.COMMANDS_TOKEN)) {
+        return jsonResponse(401, { error: "unauthorized" });
+      }
+      return putCommandDocument(request, env, {
+        key: COMMANDS_KEY,
+        validate: validateCommandsFile,
+        countField: "commands",
+        responseField: "commandCount",
+      });
+    }
+
+    if (url.pathname === "/v1/command-results" && request.method === "GET") {
+      const token = bearerToken(request);
+      // The app reads back its own results (WRITE_TOKEN) to skip commands another device already handled.
+      if (
+        !tokenMatches(token, env.READ_TOKEN) &&
+        !tokenMatches(token, env.COMMANDS_TOKEN) &&
+        !tokenMatches(token, env.WRITE_TOKEN)
+      ) {
+        return jsonResponse(401, { error: "unauthorized" });
+      }
+      return getCommandDocument(env, COMMAND_RESULTS_KEY, { version: 1, results: [] });
+    }
+
+    if (url.pathname === "/v1/command-results" && request.method === "PUT") {
+      if (!tokenMatches(bearerToken(request), env.WRITE_TOKEN)) {
+        return jsonResponse(401, { error: "unauthorized" });
+      }
+      return putCommandDocument(request, env, {
+        key: COMMAND_RESULTS_KEY,
+        validate: validateCommandResultsFile,
+        countField: "results",
+        responseField: "resultCount",
+      });
     }
 
     if (url.pathname === "/v1/snapshot" && request.method === "PUT") {

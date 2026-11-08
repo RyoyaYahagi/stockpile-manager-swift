@@ -40,12 +40,16 @@ Issue W-01〜W-08（#14〜#21）の実装は本書に従う。Issue 本文と食
 |---|---|---|
 | `GET /v1/commands` | `COMMANDS_TOKEN` または `WRITE_TOKEN` | Muse の追記前の読み出し / アプリの取り込み |
 | `PUT /v1/commands` | `COMMANDS_TOKEN` | Muse がファイル全体を置き換える |
-| `GET /v1/command-results` | `READ_TOKEN` または `COMMANDS_TOKEN` | Muse が結果を読む |
+| `GET /v1/command-results` | `READ_TOKEN`、`COMMANDS_TOKEN` または `WRITE_TOKEN` | Muse が結果を読む / アプリが処理済み判定のために読み直す |
 | `PUT /v1/command-results` | `WRITE_TOKEN` | アプリが結果を書く |
 
 - `COMMANDS_TOKEN` が未設定のデプロイでは、上の4つはすべて 404 を返す（機能オフ）。
 - まだ保存されていないファイルの GET は、初期内容（空の配列）を 200 で返す。
 - 本文の上限は 1MB。形の検証（下記 3 章のトップレベル）だけを行い、中身の意味は検証しない。
+- アプリは設定されたスナップショットの URL から受信箱の URL を求める
+  （`/v1/snapshot` で終わる場合のみ。末尾スラッシュ可）。それ以外のパスの URL は
+  受信箱非対応として取り込まない。`GET /v1/commands` が 404 のときは受信箱なしとして
+  何もせず、401 は認証エラーとして通信失敗にする。
 
 ## 3. commands.json
 

@@ -11,5 +11,8 @@ binding = "SNAPSHOTS"
 id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 
 # Secrets (never commit real values; set them with wrangler):
-#   npx wrangler secret put WRITE_TOKEN
-#   npx wrangler secret put READ_TOKEN
+#   npx wrangler secret put WRITE_TOKEN    # app only: snapshot PUT / command-results PUT
+#   npx wrangler secret put READ_TOKEN     # AI: snapshot GET / command-results GET
+#   npx wrangler secret put COMMANDS_TOKEN # AI: commands GET/PUT / command-results GET
+#
+# When COMMANDS_TOKEN is unset, the four command inbox endpoints return 404.

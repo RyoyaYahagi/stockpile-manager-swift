@@ -47,6 +47,7 @@
 		F0A /* CommandInboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A /* CommandInboxStore.swift */; };
 		F0B /* CommandInboxTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B /* CommandInboxTransport.swift */; };
 		F0C /* GoogleDriveCommandInboxTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C /* GoogleDriveCommandInboxTransport.swift */; };
+		F70 /* WorkerCommandInboxTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71 /* WorkerCommandInboxTransport.swift */; };
 		F0D /* GoogleDriveREST.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D /* GoogleDriveREST.swift */; };
 		F0E /* CommandInboxService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E /* CommandInboxService.swift */; };
 		F0F /* CommandWritePermission.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1F /* CommandWritePermission.swift */; };
@@ -59,6 +60,7 @@
 		F60A00000000000000000001 /* CommandInboxWakePush.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60B00000000000000000001 /* CommandInboxWakePush.swift */; };
 		F60C00000000000000000001 /* CommandInboxRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60D00000000000000000001 /* CommandInboxRunner.swift */; };
 		A4B100000000000000000161 /* CommandInboxWakePushTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000162 /* CommandInboxWakePushTests.swift */; };
+		A4B100000000000000000171 /* WorkerCommandInboxTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000172 /* WorkerCommandInboxTransportTests.swift */; };
 		A4B100000000000000000106 /* CommandInboxParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000007 /* CommandInboxParsingTests.swift */; };
 		A4B100000000000000000107 /* CommandInboxProcessingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000008 /* CommandInboxProcessingTests.swift */; };
 		A4B100000000000000000108 /* CommandInboxPermissionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B100000000000000000009 /* CommandInboxPermissionTests.swift */; };
@@ -162,6 +164,7 @@
 		F1A /* CommandInboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxStore.swift; sourceTree = "<group>"; };
 		F1B /* CommandInboxTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxTransport.swift; sourceTree = "<group>"; };
 		F1C /* GoogleDriveCommandInboxTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveCommandInboxTransport.swift; sourceTree = "<group>"; };
+		F71 /* WorkerCommandInboxTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkerCommandInboxTransport.swift; sourceTree = "<group>"; };
 		F1D /* GoogleDriveREST.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleDriveREST.swift; sourceTree = "<group>"; };
 		F1E /* CommandInboxService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxService.swift; sourceTree = "<group>"; };
 		F1F /* CommandWritePermission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandWritePermission.swift; sourceTree = "<group>"; };
@@ -218,6 +221,7 @@
 		A4B10000000000000000000A /* ItemCommandApplierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCommandApplierTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000142 /* CommandInboxApprovalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxApprovalTests.swift; sourceTree = "<group>"; };
 		A4B100000000000000000162 /* CommandInboxWakePushTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInboxWakePushTests.swift; sourceTree = "<group>"; };
+		A4B100000000000000000172 /* WorkerCommandInboxTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkerCommandInboxTransportTests.swift; sourceTree = "<group>"; };
 		AF14E1C1F18CC52D575E8FE7 /* RenewExpirySheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RenewExpirySheet.swift; sourceTree = "<group>"; };
 		AF966BDA61B4847C53006459 /* ScannerFrame.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScannerFrame.swift; sourceTree = "<group>"; };
 		C176BB208A4D750919424EB0 /* LegacyItemFormSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Legacy/LegacyItemFormSheet.swift; sourceTree = "<group>"; };
@@ -448,6 +452,7 @@
 				F1A /* CommandInboxStore.swift */,
 				F1B /* CommandInboxTransport.swift */,
 				F1C /* GoogleDriveCommandInboxTransport.swift */,
+				F71 /* WorkerCommandInboxTransport.swift */,
 				F1D /* GoogleDriveREST.swift */,
 				F1E /* CommandInboxService.swift */,
 				F1F /* CommandWritePermission.swift */,
@@ -522,6 +527,7 @@
 				A4B10000000000000000000A /* ItemCommandApplierTests.swift */,
 				A4B100000000000000000142 /* CommandInboxApprovalTests.swift */,
 				A4B100000000000000000162 /* CommandInboxWakePushTests.swift */,
+				A4B100000000000000000172 /* WorkerCommandInboxTransportTests.swift */,
 				A4B100000000000000000004 /* PremiumAccessManagerTests.swift */,
 				A4B100000000000000000003 /* CloudKitFamilySharingServiceTests.swift */,
 				A4B100000000000000000002 /* ProductSearchServiceTests.swift */,
@@ -655,6 +661,7 @@
 				F0A /* CommandInboxStore.swift in Sources */,
 				F0B /* CommandInboxTransport.swift in Sources */,
 				F0C /* GoogleDriveCommandInboxTransport.swift in Sources */,
+				F70 /* WorkerCommandInboxTransport.swift in Sources */,
 				F0D /* GoogleDriveREST.swift in Sources */,
 				F0E /* CommandInboxService.swift in Sources */,
 				F0F /* CommandWritePermission.swift in Sources */,
@@ -741,6 +748,7 @@
 				A4B100000000000000000109 /* ItemCommandApplierTests.swift in Sources */,
 				A4B100000000000000000141 /* CommandInboxApprovalTests.swift in Sources */,
 				A4B100000000000000000161 /* CommandInboxWakePushTests.swift in Sources */,
+				A4B100000000000000000171 /* WorkerCommandInboxTransportTests.swift in Sources */,
 				A4B100000000000000000104 /* AppLocalizationTests.swift in Sources */,
 				A4B100000000000000000103 /* PremiumAccessManagerTests.swift in Sources */,
 				A4B100000000000000000102 /* CloudKitFamilySharingServiceTests.swift in Sources */,
