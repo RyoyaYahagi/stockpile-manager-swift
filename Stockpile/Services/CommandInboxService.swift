@@ -41,16 +41,30 @@ final class CommandInboxService {
   /// 実行中の処理が終わるのを待っている呼び出し（承認画面の操作）。
   private var idleWaiters: [CheckedContinuation<Void, Never>] = []
 
+  /// `configure(modelContext:)` か、テストからのハンドラ注入で適用処理が決まっているか。
+  private var handlerIsConfigured: Bool
+
   init(
     store: CommandInboxStore = CommandInboxStore(),
-    handler: any CommandHandler = PermissionedCommandHandler(),
+    handler: (any CommandHandler)? = nil,
     applier: any CommandApplier = UnavailableCommandApplier(),
     now: @escaping () -> Date = Date.init
   ) {
     self.store = store
-    self.handler = handler
+    self.handler = handler ?? PermissionedCommandHandler()
+    self.handlerIsConfigured = handler != nil
     self.applier = applier
     self.now = now
+  }
+
+  /// 取り込みを始められる状態か。
+  ///
+  /// 適用処理が未設定のまま取り込むと、権限が「許可」のコマンドを
+  /// `UnavailableCommandApplier` が「この版ではまだ適用できません」として
+  /// 処理済みにしてしまう。バックグラウンド起動で `configure` が呼ばれない
+  /// 場合にそれを防ぐため、前提条件として判定する。
+  nonisolated static func canProcess(handlerConfigured: Bool) -> Bool {
+    handlerConfigured
   }
 
   /// アプリの `ModelContext` を渡し、アイテム系コマンドを実データへ適用できるようにする。
@@ -60,6 +74,7 @@ final class CommandInboxService {
     let applier = ItemCommandApplier(modelContext: modelContext)
     self.applier = applier
     handler = PermissionedCommandHandler(applier: applier)
+    handlerIsConfigured = true
   }
 
   /// 承認画面の件数表示用。状態ファイルを読むだけで、失効判定はしない。
@@ -185,6 +200,7 @@ final class CommandInboxService {
   /// 受信箱を 1 回取り込む。
   func processIfNeeded() async -> RunOutcome {
     guard !isRunning else { return .skipped }
+    guard Self.canProcess(handlerConfigured: handlerIsConfigured) else { return .skipped }
     guard SnapshotLinkSettings.isEnabled else { return .skipped }
     guard case .googleDrive = SnapshotLinkSettings.destination else { return .skipped }
     guard let user = GoogleDriveLinkManager.shared.currentUser else { return .skipped }

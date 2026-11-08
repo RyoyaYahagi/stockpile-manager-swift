@@ -7,6 +7,9 @@ import GoogleSignIn
 @MainActor
 @Observable
 final class ModelContainerStartup {
+    /// バックグラウンドのサイレントプッシュからもコンテナを参照できるようにする。
+    static let shared = ModelContainerStartup()
+
     private(set) var container: ModelContainer?
     private(set) var errorDescription: String?
 
@@ -22,10 +25,14 @@ final class ModelContainerStartup {
     }
 
     func retry() {
+#if DEBUG
+        // スクリーンショットモードでは実データのコンテナを作らない
+        guard !ScreenshotMode.isActive else { return }
+#endif
         StockpileApp.prepareProtectedApplicationSupportDirectory()
         let configuration = ModelConfiguration(cloudKitDatabase: .none)
         do {
-            container = try ModelContainer(
+            let container = try ModelContainer(
                 for: Family.self,
                 User.self,
                 Bag.self,
@@ -34,7 +41,11 @@ final class ModelContainerStartup {
                 NotificationSettings.self,
                 configurations: configuration
             )
+            self.container = container
             errorDescription = nil
+            // バックグラウンド起動で ContentView が表示されなくても、
+            // 受信箱のコマンドを実データへ適用できるようにする
+            CommandInboxService.shared.configure(modelContext: container.mainContext)
         } catch {
             container = nil
             errorDescription = error.localizedDescription
@@ -57,9 +68,23 @@ final class AppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUser
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        Task { @MainActor in
-            let result = await CloudKitSyncRuntime.shared.handleRemoteNotification(userInfo)
-            completionHandler(result)
+        if CommandInboxWakePush.matches(userInfo) {
+            // 受信箱のプッシュは CloudKit のものではないため、CloudKit へは渡さない。
+            // 完了ハンドラは 1 回だけ、30 秒の制限内に呼ぶ。
+            let gate = BackgroundFetchCompletionGate(handler: completionHandler)
+            Task { @MainActor in
+                let result = await CommandInboxPushReceiver.handle(userInfo)
+                gate.complete(result)
+            }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 25_000_000_000)
+                gate.complete(.failed)
+            }
+        } else {
+            Task { @MainActor in
+                let result = await CloudKitSyncRuntime.shared.handleRemoteNotification(userInfo)
+                completionHandler(result)
+            }
         }
     }
     
@@ -128,7 +153,7 @@ struct StockpileApp: App {
     @State private var localizationController = LocalizationController()
     @State private var premiumAccessManager = PremiumAccessManager.shared
     @State private var googleDriveLinkManager = GoogleDriveLinkManager.shared
-    @State private var modelStartup = ModelContainerStartup()
+    @State private var modelStartup = ModelContainerStartup.shared
 
     var body: some Scene {
         WindowGroup {
