@@ -434,15 +434,23 @@ struct AILinkSettingsView: View {
     }
   }
 
-  /// 送信先に応じたセットアップ依頼文（カスタムURLは v1、Google Driveは v2）
+  /// 送信先と書き込み連携スイッチに応じたセットアップ依頼文
+  /// （OFF は読み取り専用の v1 / v2、ON は書き込みを含む v3）
   private var setupPromptText: String {
-    destination == .googleDrive
-      ? SnapshotLinkPrompt.makeDrivePrompt()
-      : SnapshotLinkPrompt.makePrompt(snapshotURLString: endpointString)
+    SnapshotLinkPrompt.makeSetupPrompt(
+      destination: destination,
+      writesEnabled: writeEnabled,
+      snapshotURLString: endpointString
+    )
   }
 
   private var promptDescription: String {
-    destination == .googleDrive
+    if writeEnabled {
+      return destination == .googleDrive
+        ? L10n.string("下の文をコピーして、あなたのClaudeに貼ると連携設定が始まります。書き込みの案内を含みます。トークンやURLは不要です。")
+        : L10n.string("下の文をコピーして、あなたのClaudeに貼ると連携設定が始まります。書き込みの案内を含みます。トークンはこの文に含まれていません。")
+    }
+    return destination == .googleDrive
       ? L10n.string("下の文をコピーして、あなたのClaudeに貼ると連携設定が始まります。トークンやURLは不要です。")
       : L10n.string("下の文をコピーして、あなたのClaudeに貼ると連携設定が始まります。トークンはこの文に含まれていません。")
   }

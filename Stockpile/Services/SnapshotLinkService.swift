@@ -339,11 +339,32 @@ enum SnapshotUploader {
 
 /// 利用者が自分の AI アシスタント（Muse）に貼るためのセットアップ依頼文。
 /// 文面の正はプロジェクト側の setup-prompt 文案。
-/// カスタムURL向けが v1（トークンは含めず、URL だけを差し込む）、
+/// 読み取り専用は、カスタムURL向けが v1（トークンは含めず、URL だけを差し込む）、
 /// Google Drive向けが v2（差し込む情報はなく、トークンも URL も不要）。
+/// 書き込み連携が ON のときは、送信先ごとの v3（読み取り＋書き込み）を使う。
 enum SnapshotLinkPrompt {
   static let promptVersion = "stockpile-link-prompt v1"
   static let drivePromptVersion = "stockpile-link-prompt v2"
+  static let writePromptVersion = "stockpile-link-prompt v3"
+
+  /// 送信先と書き込み連携スイッチから、表示する依頼文を選ぶ純粋関数。
+  /// スイッチ OFF は従来どおり読み取り専用（v1 / v2）、ON のときだけ v3 を返す。
+  static func makeSetupPrompt(
+    destination: SnapshotDestination,
+    writesEnabled: Bool,
+    snapshotURLString: String
+  ) -> String {
+    switch (destination, writesEnabled) {
+    case (.googleDrive, false):
+      return makeDrivePrompt()
+    case (.googleDrive, true):
+      return makeDriveWritePrompt()
+    case (.customURL, false):
+      return makePrompt(snapshotURLString: snapshotURLString)
+    case (.customURL, true):
+      return makeWritePrompt(snapshotURLString: snapshotURLString)
+    }
+  }
 
   static func makePrompt(snapshotURLString: String) -> String {
     let url = snapshotURLString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -434,5 +455,225 @@ enum SnapshotLinkPrompt {
       まず、私の Drive にフォルダと snapshot.json が見えるか確認するところから
       始めてください。
       """
+  }
+
+  /// Google Drive 送信先向けの依頼文（v3、書き込み連携）。
+  /// 読み取り部分は v2 を引き継ぎ、書き込みの権限・コマンド・結果確認を足す。
+  static func makeDriveWritePrompt() -> String {
+    return """
+      私の防災備蓄アプリ「らくストック」との連携を設定してください。
+      （\(writePromptVersion) / スナップショットスキーマ v1 / コマンド受信箱 v1）
+
+
+      - 私の備蓄スナップショット（JSON）は、私の Google Drive の
+      「らくストック」フォルダ（英語環境では「RakuStock」フォルダ）の中の
+      snapshot.json です。アプリが作ったフォルダで、私の Drive にだけあります。
+      - あなたの Google Drive 連携が、アプリでサインインしたのと同じ
+      Google アカウントに接続されている必要があります。フォルダが
+      見当たらない場合は、アカウントが一致していない可能性を先に確認してください。
+      - この方式にトークンや URL は要りません。
+      - 形式はスキーマ v1 です: 先頭に schemaVersion / generatedAt を持ち、items に
+      name / janCode / quantity / expiryDate(yyyy-MM-dd) / bagName / locationNote /
+      category / id / updatedAt が入っています。
+
+
+      1. 読み取り用のカスタムコネクタ（custom.stockpile）と CLI を作ってください:
+      - status: 生成日時・件数・情報の鮮さ
+      - items: 在庫一覧（保管場所で絞り込み可）
+      - expiring: 期限が近い順の一覧
+      - get: 1件の詳細
+      取得はあなたの Drive 連携経由で行ってください。
+      2. 書き込み用の操作も作ってください:
+      - 追加・編集・削除・バッグ操作のコマンドを作り、commands.json に書く
+      - 書いたコマンドの結果を command-results.json から読む
+      - 注文や購入は行わないでください（読み取り側と同じです）。
+
+
+      書き込みの前提:
+      - アプリ側の「書き込み権限」の設定が必要で、既定はオフです。オフの間は
+      どのコマンドも適用されません。
+      - 能力（アイテム追加 / アイテム編集 / アイテム削除 / バッグ操作）ごとに
+      「不可 / 許可 / 承認制」があります。削除の既定は承認制です。承認制の
+      コマンドは、アプリで私が承認するまで適用されません。
+      - 書き込む前に、必ずチャットで変更内容を私に見せて確認を取ってください。
+      確認なしに書かないでください。
+      - 反映は即時ではありません。私が次にアプリを開いたとき（またはサイレント
+      プッシュで起きたとき）に適用されます。
+
+
+      コマンドの形（コマンド受信箱 v1）:
+      - commands.json 全体は {"version": 1, "commands": [...]} です。
+      - 1件のコマンドは次の封筒です:
+      commandId（新しい UUID）/ issuedAt（ISO 8601）/ origin（"muse"）/
+      type / payload / baseUpdatedAt（item.update と item.delete では必須）
+      - baseUpdatedAt には、私が読んだスナップショットの対象アイテムの
+      updatedAt をそのまま入れてください。競合検出に使われます。
+      - 使える type は item.add / item.update / item.delete / bag.add /
+      bag.rename / bag.delete です。
+      - 主な payload:
+      item.add: name（必須）, janCode, quantity（省略時 1）, expiryDate, bagName,
+      locationNote, category
+      item.update: id（必須）と、変える項目だけ。省略は変更なし、null は空にする
+      item.delete: id（必須）
+      bag.add: name（必須）
+      bag.rename: name（必須）, newName（必須）
+      bag.delete: name（必須）。空のバッグだけを削除できます。
+      - バッグは名前で指定します。同じ名前のバッグが複数あると適用されません。
+
+
+      ファイルと結果の確認:
+      - commands.json と command-results.json は、snapshot.json と同じ
+      「らくストック」フォルダにあります。どちらもアプリが作ります。
+      - commands.json は中身の上書きだけで更新してください。削除や作り直しは
+      絶対にしないでください。作り直すとアプリから読めなくなります。
+      - ファイルが見当たらない場合は、アプリで Drive 連携をやり直してもらって
+      ください。
+      - 結果は command-results.json の results に、1つの commandId につき1件
+      入ります。status は applied / pending_approval / rejected / conflict /
+      expired / invalid / unsupported のいずれかです。status と message を
+      私に伝えてください。
+      - conflict のときは、最新のスナップショットを読み直して updatedAt を
+      確かめ、コマンドを作り直してください。
+      - 結果が返ったコマンドは commands.json から取り除いてかまいません。
+      取り除くのはあなたの役目です。コマンドは発行から7日で失効します。
+
+
+      3. 世帯設定のヒアリングと保存:
+      - 世帯人数と、備蓄の目標日数を私に聞いて、あなた側の設定に保存してください
+      （アプリ側にはこの設定はありません）。
+      - 充足の目安は、前提を明示した上で使ってください（例: 飲料水 3L/人/日）。
+      内容量が分からない品目は概算であることを分けて書いてください。
+      4. 月1回の定期チェック:
+      - 期限切れ・7日以内の期限・30日以上スナップショットが更新されていない時だけ
+      知らせてください。条件に当たらない月は何も送らないでください。
+
+
+      - 在庫について答える時は、必ず generatedAt（いつの情報か）を添えてください。
+      - 期限の区分はアプリに合わせて「7日以内」「30日以内」でお願いします。
+      - 補充の提案はリスト作成と価格比較までで、注文や購入は行わないでください。
+      - 書き込みは、私がチャットで確認した変更だけにしてください。
+
+      まず、私の Drive にフォルダと snapshot.json が見えるか確認するところから
+      始めてください。変更は、私が依頼したときだけ提案してください。
+      """
+  }
+
+  /// カスタムURL送信先向けの依頼文（v3、書き込み連携）。
+  /// 読み取り部分は v1 を引き継ぎ、コマンド受信箱の URL と書き込みの案内を足す。
+  static func makeWritePrompt(snapshotURLString: String) -> String {
+    let url = snapshotURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+    let snapshotURLText = url.isEmpty ? "（設定した送信先URL）" : url
+    let commandsURLText =
+      replacedSnapshotPath(in: url, with: "/v1/commands")
+      ?? "（送信先URLの /v1/snapshot を /v1/commands に置き換えたURL）"
+    let resultsURLText =
+      replacedSnapshotPath(in: url, with: "/v1/command-results")
+      ?? "（送信先URLの /v1/snapshot を /v1/command-results に置き換えたURL）"
+    return """
+      私の防災備蓄アプリ「Stockpile」との連携を設定してください。
+      （\(writePromptVersion) / スナップショットスキーマ v1 / コマンド受信箱 v1）
+
+
+      - 私の備蓄スナップショット（JSON）は次の URL から取得できます:
+      \(snapshotURLText)
+      - 形式はスキーマ v1 です: 先頭に schemaVersion / generatedAt を持ち、items に
+      name / janCode / quantity / expiryDate(yyyy-MM-dd) / bagName / locationNote /
+      category / id / updatedAt が入っています。
+      - コマンドの送受信は、このスナップショット URL の /v1/snapshot を置き換えた
+      次の URL を使います:
+        - コマンドの読み書き: \(commandsURLText)（GET / PUT）
+        - 結果の取得: \(resultsURLText)（GET）
+      - トークンはこのチャットには貼りません。あなたの安全な入力方法
+      （API アクセス設定）で別途渡すので、その手順を案内してください。
+      - 読み取りは READ_TOKEN、コマンドの読み書きは COMMANDS_TOKEN、結果の取得は
+      READ_TOKEN か COMMANDS_TOKEN で行います。
+      - Worker 側で COMMANDS_TOKEN を設定する必要があります。未設定のデプロイでは、
+      これらの URL は 404 を返します。
+
+
+      1. 読み取り用のカスタムコネクタ（custom.stockpile）と CLI:
+      - status: 生成日時・件数・情報の鮮さ
+      - items: 在庫一覧（保管場所で絞り込み可）
+      - expiring: 期限が近い順の一覧
+      - get: 1件の詳細
+      2. 書き込み用の操作:
+      - 追加・編集・削除・バッグ操作のコマンドを作り、/v1/commands に PUT で書く
+      - 書いたコマンドの結果を /v1/command-results から読む
+      - 注文や購入は行わないでください（読み取り側と同じです）。
+
+
+      書き込みの前提:
+      - アプリ側の「書き込み権限」の設定が必要で、既定はオフです。オフの間は
+      どのコマンドも適用されません。
+      - 能力（アイテム追加 / アイテム編集 / アイテム削除 / バッグ操作）ごとに
+      「不可 / 許可 / 承認制」があります。削除の既定は承認制です。承認制の
+      コマンドは、アプリで私が承認するまで適用されません。
+      - 書き込む前に、必ずチャットで変更内容を私に見せて確認を取ってください。
+      確認なしに書かないでください。
+      - 反映は即時ではありません。私が次にアプリを開いたとき（またはサイレント
+      プッシュで起きたとき）に適用されます。
+
+
+      コマンドの形（コマンド受信箱 v1）:
+      - /v1/commands の全体は {"version": 1, "commands": [...]} です。
+      - 1件のコマンドは次の封筒です:
+      commandId（新しい UUID）/ issuedAt（ISO 8601）/ origin（"muse"）/
+      type / payload / baseUpdatedAt（item.update と item.delete では必須）
+      - baseUpdatedAt には、私が読んだスナップショットの対象アイテムの
+      updatedAt をそのまま入れてください。競合検出に使われます。
+      - 使える type は item.add / item.update / item.delete / bag.add /
+      bag.rename / bag.delete です。
+      - 主な payload:
+      item.add: name（必須）, janCode, quantity（省略時 1）, expiryDate, bagName,
+      locationNote, category
+      item.update: id（必須）と、変える項目だけ。省略は変更なし、null は空にする
+      item.delete: id（必須）
+      bag.add: name（必須）
+      bag.rename: name（必須）, newName（必須）
+      bag.delete: name（必須）。空のバッグだけを削除できます。
+      - バッグは名前で指定します。同じ名前のバッグが複数あると適用されません。
+
+
+      結果の確認:
+      - 結果は /v1/command-results の results に、1つの commandId につき1件
+      入ります。status は applied / pending_approval / rejected / conflict /
+      expired / invalid / unsupported のいずれかです。status と message を
+      私に伝えてください。
+      - conflict のときは、最新のスナップショットを読み直して updatedAt を
+      確かめ、コマンドを作り直してください。
+      - 結果が返ったコマンドは、/v1/commands の一覧から取り除いてかまいません。
+      取り除くのはあなたの役目です。コマンドは発行から7日で失効します。
+
+
+      3. 世帯設定のヒアリングと保存:
+      - 世帯人数と、備蓄の目標日数を私に聞いて、あなた側の設定に保存してください
+      （アプリ側にはこの設定はありません）。
+      - 充足の目安は、前提を明示した上で使ってください（例: 飲料水 3L/人/日）。
+      内容量が分からない品目は概算であることを分けて書いてください。
+      4. 月1回の定期チェック:
+      - 期限切れ・7日以内の期限・30日以上スナップショットが更新されていない時だけ
+      知らせてください。条件に当たらない月は何も送らないでください。
+
+
+      - 在庫について答える時は、必ず generatedAt（いつの情報か）を添えてください。
+      - 期限の区分はアプリに合わせて「7日以内」「30日以内」でお願いします。
+      - 補充の提案はリスト作成と価格比較までで、注文や購入は行わないでください。
+      - 書き込みは、私がチャットで確認した変更だけにしてください。
+
+      まず、トークンの安全な受け渡し手順から始めてください。変更は、私が依頼した
+      ときだけ提案してください。
+      """
+  }
+
+  /// スナップショット URL の `/v1/snapshot` をコマンド受信箱のパスに置き換える。
+  /// 置き換えられない URL（未設定・別のパス）では nil を返し、呼び出し側が
+  /// 説明用のプレースホルダーを出す。
+  private static func replacedSnapshotPath(in urlString: String, with path: String) -> String? {
+    guard !urlString.isEmpty,
+      let range = urlString.range(of: "/v1/snapshot", options: .backwards)
+    else {
+      return nil
+    }
+    return urlString.replacingCharacters(in: range, with: path)
   }
 }
