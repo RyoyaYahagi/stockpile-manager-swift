@@ -563,11 +563,13 @@ enum SnapshotLinkPrompt {
   static func makeWritePrompt(snapshotURLString: String) -> String {
     let url = snapshotURLString.trimmingCharacters(in: .whitespacesAndNewlines)
     let snapshotURLText = url.isEmpty ? "（設定した送信先URL）" : url
+    // アプリが実際に取り込みに使う URL と同じ規則で求める（W-06）
+    let endpoints = URL(string: url).flatMap(WorkerCommandInboxEndpoints.init(snapshotURL:))
     let commandsURLText =
-      replacedSnapshotPath(in: url, with: "/v1/commands")
+      endpoints?.commands.absoluteString
       ?? "（送信先URLの /v1/snapshot を /v1/commands に置き換えたURL）"
     let resultsURLText =
-      replacedSnapshotPath(in: url, with: "/v1/command-results")
+      endpoints?.results.absoluteString
       ?? "（送信先URLの /v1/snapshot を /v1/command-results に置き換えたURL）"
     return """
       私の防災備蓄アプリ「Stockpile」との連携を設定してください。
@@ -663,17 +665,5 @@ enum SnapshotLinkPrompt {
       まず、トークンの安全な受け渡し手順から始めてください。変更は、私が依頼した
       ときだけ提案してください。
       """
-  }
-
-  /// スナップショット URL の `/v1/snapshot` をコマンド受信箱のパスに置き換える。
-  /// 置き換えられない URL（未設定・別のパス）では nil を返し、呼び出し側が
-  /// 説明用のプレースホルダーを出す。
-  private static func replacedSnapshotPath(in urlString: String, with path: String) -> String? {
-    guard !urlString.isEmpty,
-      let range = urlString.range(of: "/v1/snapshot", options: .backwards)
-    else {
-      return nil
-    }
-    return urlString.replacingCharacters(in: range, with: path)
   }
 }
