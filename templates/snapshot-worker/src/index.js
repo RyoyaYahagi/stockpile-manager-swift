@@ -7,7 +7,7 @@
 //   GET  /v1/snapshot        -> fetch the latest snapshot         (Bearer READ_TOKEN)
 //   GET  /v1/commands        -> fetch the command inbox           (Bearer COMMANDS_TOKEN or WRITE_TOKEN)
 //   PUT  /v1/commands        -> replace the command inbox         (Bearer COMMANDS_TOKEN)
-//   GET  /v1/command-results -> fetch the command results         (Bearer READ_TOKEN or COMMANDS_TOKEN)
+//   GET  /v1/command-results -> fetch the command results         (Bearer READ_TOKEN, COMMANDS_TOKEN or WRITE_TOKEN)
 //   PUT  /v1/command-results -> replace the command results       (Bearer WRITE_TOKEN)
 //
 // Tokens are separate on purpose (write token never leaves the app's Keychain;
@@ -207,7 +207,12 @@ export default {
 
     if (url.pathname === "/v1/command-results" && request.method === "GET") {
       const token = bearerToken(request);
-      if (!tokenMatches(token, env.READ_TOKEN) && !tokenMatches(token, env.COMMANDS_TOKEN)) {
+      // The app reads back its own results (WRITE_TOKEN) to skip commands another device already handled.
+      if (
+        !tokenMatches(token, env.READ_TOKEN) &&
+        !tokenMatches(token, env.COMMANDS_TOKEN) &&
+        !tokenMatches(token, env.WRITE_TOKEN)
+      ) {
         return jsonResponse(401, { error: "unauthorized" });
       }
       return getCommandDocument(env, COMMAND_RESULTS_KEY, { version: 1, results: [] });

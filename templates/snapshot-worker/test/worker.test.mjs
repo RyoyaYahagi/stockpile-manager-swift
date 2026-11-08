@@ -176,8 +176,8 @@ await check("PUT /v1/command-results with WRITE_TOKEN stores the file", async ()
   assert.deepEqual(await res.json(), { ok: true, resultCount: 1 });
 });
 
-await check("GET /v1/command-results is readable with READ_TOKEN and COMMANDS_TOKEN", async () => {
-  for (const token of ["read-secret", "commands-secret"]) {
+await check("GET /v1/command-results is readable with READ_TOKEN, COMMANDS_TOKEN and WRITE_TOKEN", async () => {
+  for (const token of ["read-secret", "commands-secret", "write-secret"]) {
     const res = await worker.fetch(req("GET", "/v1/command-results", { token }), env);
     assert.equal(res.status, 200);
     const body = await res.json();
@@ -221,8 +221,8 @@ await check("PUT /v1/command-results rejects READ_TOKEN and COMMANDS_TOKEN", asy
   }
 });
 
-await check("GET /v1/command-results with WRITE_TOKEN is 401", async () => {
-  const res = await worker.fetch(req("GET", "/v1/command-results", { token: "write-secret" }), env);
+await check("GET /v1/command-results with an unknown token is 401", async () => {
+  const res = await worker.fetch(req("GET", "/v1/command-results", { token: "wrong-secret" }), env);
   assert.equal(res.status, 401);
 });
 

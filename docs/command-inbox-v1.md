@@ -40,7 +40,7 @@ Issue W-01〜W-08（#14〜#21）の実装は本書に従う。Issue 本文と食
 |---|---|---|
 | `GET /v1/commands` | `COMMANDS_TOKEN` または `WRITE_TOKEN` | Muse の追記前の読み出し / アプリの取り込み |
 | `PUT /v1/commands` | `COMMANDS_TOKEN` | Muse がファイル全体を置き換える |
-| `GET /v1/command-results` | `READ_TOKEN` または `COMMANDS_TOKEN` | Muse が結果を読む |
+| `GET /v1/command-results` | `READ_TOKEN`、`COMMANDS_TOKEN` または `WRITE_TOKEN` | Muse が結果を読む / アプリが処理済み判定のために読み直す |
 | `PUT /v1/command-results` | `WRITE_TOKEN` | アプリが結果を書く |
 
 - `COMMANDS_TOKEN` が未設定のデプロイでは、上の4つはすべて 404 を返す（機能オフ）。

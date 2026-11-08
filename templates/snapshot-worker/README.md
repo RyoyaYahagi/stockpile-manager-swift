@@ -22,7 +22,7 @@ Cloudflare アカウントにこの Worker をデプロイし、自分のデー�
 | GET | `/v1/snapshot` | Bearer READ_TOKEN | 最新スナップショット取得 |
 | GET | `/v1/commands` | Bearer COMMANDS_TOKEN または WRITE_TOKEN | コマンドの取得（未保存なら初期内容） |
 | PUT | `/v1/commands` | Bearer COMMANDS_TOKEN | コマンドの保存（1MB / 200件まで） |
-| GET | `/v1/command-results` | Bearer READ_TOKEN または COMMANDS_TOKEN | コマンド結果の取得（未保存なら初期内容） |
+| GET | `/v1/command-results` | Bearer READ_TOKEN、COMMANDS_TOKEN または WRITE_TOKEN | コマンド結果の取得（未保存なら初期内容） |
 | PUT | `/v1/command-results` | Bearer WRITE_TOKEN | コマンド結果の保存（1MBまで） |
 
 コマンド受信箱の形式は `docs/command-inbox-v1.md` です。Worker はトップレベルの形
