@@ -368,16 +368,11 @@ enum ItemCommandApplication {
     // 削除前の値で説明文を作る
     let message = CommandDescriber.appliedMessage(command, items: scope.items)
 
-    // 画面の削除と同じ経路（家族共有なら削除マーカーを作ってから即時削除）。
-    // 共有していない家族では CloudKit を使わず、deleteItemLocally と同じ結果になる。
+    // 画面の削除と同じ経路（家族共有なら削除マーカーを作ってから即時削除）
     do {
-      if let family = scope.family, family.isCloudKitSharedFamily {
-        let sharingService = CloudKitFamilySharingService(
-          modelContext: modelContext, backend: sharingBackend)
-        try sharingService.deleteItemLocally(item, in: family)
-      } else {
-        modelContext.delete(item)
-      }
+      let sharingService = CloudKitFamilySharingService(
+        modelContext: modelContext, backend: sharingBackend)
+      try sharingService.deleteItemLocally(item, in: scope.family)
     } catch {
       modelContext.rollback()
       return internalError()
@@ -532,16 +527,11 @@ enum ItemCommandApplication {
 
     let message = CommandDescriber.appliedMessage(command, items: scope.items)
 
-    // 画面の BagListView と同じ経路（不要な削除マーカーは作らない）。
-    // 共有していない家族では CloudKit を使わず、deleteBagLocally と同じ結果になる。
+    // 画面の BagListView と同じ経路（不要な削除マーカーは作らない）
     do {
-      if let family = scope.family, family.isCloudKitSharedFamily {
-        let sharingService = CloudKitFamilySharingService(
-          modelContext: modelContext, backend: sharingBackend)
-        try sharingService.deleteBagLocally(bag, in: family)
-      } else {
-        modelContext.delete(bag)
-      }
+      let sharingService = CloudKitFamilySharingService(
+        modelContext: modelContext, backend: sharingBackend)
+      try sharingService.deleteBagLocally(bag, in: scope.family)
     } catch {
       modelContext.rollback()
       return internalError()

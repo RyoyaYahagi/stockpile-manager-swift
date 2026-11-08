@@ -122,7 +122,7 @@ private struct ItemCommandTestHarness {
   }
 
   func applier(
-    sharingBackend: (any CloudKitFamilySharingBackend)? = nil
+    sharingBackend: (any CloudKitFamilySharingBackend)? = UnusedCloudKitFamilySharingBackend()
   ) -> ItemCommandApplier {
     // 通知の組み直しは非同期で後から context を読むため、テストでは止める
     ItemCommandApplier(
